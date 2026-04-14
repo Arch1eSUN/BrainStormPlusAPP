@@ -11,6 +11,7 @@ public struct Profile: Codable, Identifiable, Hashable {
     public let department: String?
     public let role: String?
     public let status: String?
+    public let capabilities: [String]?
     public let createdAt: Date?
     public let updatedAt: Date?
     
@@ -25,6 +26,7 @@ public struct Profile: Codable, Identifiable, Hashable {
         case department
         case role
         case status
+        case capabilities
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

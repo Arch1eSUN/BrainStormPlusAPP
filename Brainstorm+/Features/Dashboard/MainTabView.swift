@@ -22,13 +22,26 @@ struct MainTabView: View {
                 }
                 .tag(1)
                 
-                // Copilot Tab Placeholder
+                // Copilot Tab Placeholder (Protected by RBAC)
                 NavigationStack {
                     ZStack {
                         Color.Brand.background.ignoresSafeArea()
-                        Text("ZY Copilot (Coming Soon)")
-                            .font(.custom("PlusJakartaSans-Medium", size: 16))
-                            .foregroundStyle(Color.Brand.text)
+                        
+                        VStack(spacing: 16) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(Color.gray.opacity(0.5))
+                            
+                            Text("ZY Copilot (Coming Soon)")
+                                .font(.custom("PlusJakartaSans-Bold", size: 20))
+                                .foregroundStyle(Color.Brand.text)
+                            
+                            Text("This feature is currently locked or under development. It will require the AI Chatbot Access capability.")
+                                .font(.custom("PlusJakartaSans-Medium", size: 14))
+                                .foregroundStyle(Color.gray)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                        }
                     }
                     .navigationTitle("Copilot")
                 }
