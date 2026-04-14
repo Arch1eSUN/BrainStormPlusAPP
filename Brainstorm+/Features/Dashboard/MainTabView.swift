@@ -17,13 +17,8 @@ struct MainTabView: View {
                 
                 // Schedule Tab Placeholder
                 NavigationStack {
-                    ZStack {
-                        Color.Brand.background.ignoresSafeArea()
-                        Text("Schedule & Geofence (Coming Soon)")
-                            .font(.custom("PlusJakartaSans-Medium", size: 16))
-                            .foregroundStyle(Color.Brand.text)
-                    }
-                    .navigationTitle("Schedule")
+                    ScheduleView()
+                        .navigationBarHidden(true)
                 }
                 .tag(1)
                 
