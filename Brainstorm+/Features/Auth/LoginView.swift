@@ -140,11 +140,17 @@ struct LoginView: View {
             isLoggingIn = true
         }
         
-        // Mock network delay for UX showcase until actual Supabase connection
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            HapticManager.shared.trigger(.success)
-            sessionManager.login()
-            isLoggingIn = false
+        Task {
+            do {
+                try await sessionManager.login(email: email, password: password)
+                HapticManager.shared.trigger(.success)
+                // We don't need to manually reset `isLoggingIn` on success because the view will disappear
+            } catch {
+                await MainActor.run {
+                    withAnimation { isLoggingIn = false }
+                    triggerErrorShake(message: error.localizedDescription)
+                }
+            }
         }
     }
     
