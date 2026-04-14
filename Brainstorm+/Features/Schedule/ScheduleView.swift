@@ -33,6 +33,11 @@ public struct ScheduleView: View {
                 // List
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
+                        // Attendance Section at the top
+                        AttendanceView()
+                            .padding(.bottom, 16)
+                        
+                        // Schedules section
                         if viewModel.isLoading {
                             ForEach(0..<4, id: \.self) { _ in
                                 RoundedRectangle(cornerRadius: 16)
