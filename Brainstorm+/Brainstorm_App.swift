@@ -10,6 +10,8 @@ import SwiftData
 
 @main
 struct Brainstorm_App: App {
+    @State private var sessionManager = SessionManager()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -26,6 +28,7 @@ struct Brainstorm_App: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(sessionManager)
         }
         .modelContainer(sharedModelContainer)
     }

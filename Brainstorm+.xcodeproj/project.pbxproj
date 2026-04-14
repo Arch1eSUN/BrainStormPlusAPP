@@ -50,11 +50,15 @@
 		};
 		08B4C0AE2F8E85BB00D7E15F /* Brainstorm+Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "Brainstorm+Tests";
 			sourceTree = "<group>";
 		};
 		08B4C0B82F8E85BB00D7E15F /* Brainstorm+UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = "Brainstorm+UITests";
 			sourceTree = "<group>";
 		};
@@ -125,6 +129,8 @@
 			);
 			name = "Brainstorm+";
 			packageProductDependencies = (
+				B8FB5A12862D16D2EB027EDD /* Supabase */,
+				F020672CB44472B1AB2CC136 /* Supabase */,
 			);
 			productName = "Brainstorm+";
 			productReference = 08B4C09A2F8E85BA00D7E15F /* Brainstorm+.app */;
@@ -147,8 +153,6 @@
 				08B4C0AE2F8E85BB00D7E15F /* Brainstorm+Tests */,
 			);
 			name = "Brainstorm+Tests";
-			packageProductDependencies = (
-			);
 			productName = "Brainstorm+Tests";
 			productReference = 08B4C0AB2F8E85BB00D7E15F /* Brainstorm+Tests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -170,8 +174,6 @@
 				08B4C0B82F8E85BB00D7E15F /* Brainstorm+UITests */,
 			);
 			name = "Brainstorm+UITests";
-			packageProductDependencies = (
-			);
 			productName = "Brainstorm+UITests";
 			productReference = 08B4C0B52F8E85BB00D7E15F /* Brainstorm+UITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -208,6 +210,9 @@
 			);
 			mainGroup = 08B4C0912F8E85BA00D7E15F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				08B4C0DC2F8E88BD00D7E15F /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 08B4C09B2F8E85BA00D7E15F /* Products */;
 			projectDirPath = "";
@@ -595,6 +600,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		08B4C0DC2F8E88BD00D7E15F /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B8FB5A12862D16D2EB027EDD /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 08B4C0DC2F8E88BD00D7E15F /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		F020672CB44472B1AB2CC136 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 08B4C0DC2F8E88BD00D7E15F /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 08B4C0922F8E85BA00D7E15F /* Project object */;
 }
