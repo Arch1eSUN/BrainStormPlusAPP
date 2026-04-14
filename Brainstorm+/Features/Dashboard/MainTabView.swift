@@ -7,35 +7,11 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             // Main Content Area
             TabView(selection: $selectedTab) {
-                // Dashboard Tab Placeholder
+                // Real Dashboard Tab
                 NavigationStack {
-                    ZStack {
-                        Color.Brand.background.ignoresSafeArea()
-                        ScrollView {
-                            VStack(spacing: 20) {
-                                ForEach(0..<10) { i in
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(Color.white)
-                                        .frame(height: 120)
-                                        .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 5)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                            // Space for the custom tab bar
-                            .padding(.bottom, 120)
-                        }
+                    DashboardView()
                         .navigationTitle("Dashboard")
-                        .navigationBarTitleDisplayMode(.large)
-                        // Inject our custom font into the Navigation Title
-                        .toolbar {
-                            ToolbarItem(placement: .principal) {
-                                Text("Dashboard")
-                                    .font(.custom("PlusJakartaSans-Bold", size: 18))
-                                    .foregroundStyle(Color.Brand.text)
-                            }
-                        }
-                    }
+                        .navigationBarHidden(true)
                 }
                 .tag(0)
                 
@@ -62,6 +38,13 @@ struct MainTabView: View {
                     .navigationTitle("Copilot")
                 }
                 .tag(2)
+                
+                // Settings Tab
+                NavigationStack {
+                    SettingsView()
+                        .navigationBarHidden(true)
+                }
+                .tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never)) // We handle the tab selection manually
             
@@ -93,7 +76,8 @@ struct FloatingTabBar: View {
     let tabs = [
         (icon: "rectangle.grid.2x2.fill", title: "Dashboard"),
         (icon: "calendar.badge.clock", title: "Schedule"),
-        (icon: "brain.head.profile", title: "Copilot")
+        (icon: "brain.head.profile", title: "Copilot"),
+        (icon: "gearshape.fill", title: "Settings")
     ]
     
     var body: some View {
