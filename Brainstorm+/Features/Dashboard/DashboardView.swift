@@ -127,15 +127,7 @@ struct DashboardView: View {
                         .font(.system(size: 20))
                         .foregroundColor(Color.Brand.text)
                         .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill(Color.Brand.paper.opacity(0.8))
-                                .background(.ultraThinMaterial, in: Circle())
-                                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
-                        )
-                        .overlay(
-                            Circle().stroke(Color.white.opacity(0.5), lineWidth: 1)
-                        )
+                        .zyGlassBackground(cornerRadius: 22, opacity: 0.8)
                     
                     // Unread dot
                     Circle()
@@ -144,7 +136,6 @@ struct DashboardView: View {
                         .offset(x: -2, y: 2)
                 }
             }
-            .buttonStyle(SquishyButtonStyle())
         }
     }
     
@@ -199,8 +190,8 @@ struct DashboardView: View {
                 Spacer()
                 
                 // Exquisite tactile action button
-                Button(action: {
-                    HapticManager.shared.trigger(.medium)
+                ZYMagneticButton(action: {
+                    // Check in action
                 }) {
                     ZStack {
                         Circle()
@@ -213,7 +204,6 @@ struct DashboardView: View {
                             .foregroundColor(.white)
                     }
                 }
-                .buttonStyle(SquishyButtonStyle())
             }
             .padding(24)
             .background(
@@ -232,15 +222,7 @@ struct DashboardView: View {
                     )
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            // Outer double bezel equivalent for dark cards
-            .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(.white.opacity(0.15), lineWidth: 1)
-                    .blendMode(.overlay)
-            )
-            // Ethereal diffuse shadow
-            .shadow(color: Color.Brand.primary.opacity(0.25), radius: 24, y: 12)
+            .zyCardStyle(cornerRadius: 32, shadowRadius: 24, shadowY: 12)
         }
     }
     
@@ -283,16 +265,8 @@ struct DashboardView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.Brand.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous)) // Pro-max: softer, double-bezel-ready shape
-            // md3-subtle shadow, highly diffused ambient shadow
-            .shadow(color: Color.black.opacity(0.03), radius: 10, y: 4)
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.Brand.border, lineWidth: 1) // Using subtle border
-            )
+            .zyCardStyle(cornerRadius: 24)
         }
-        .buttonStyle(SquishyButtonStyle())
     }
     
     // MARK: - Schedule Section
@@ -320,9 +294,7 @@ struct DashboardView: View {
                     emptyStateView
                 } else {
                     // Premium Mock Card
-                    Button(action: {
-                        HapticManager.shared.trigger(.light)
-                    }) {
+                    ZYSpotlightCard {
                         HStack(spacing: 16) {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .fill(Color.Brand.primary)
@@ -347,16 +319,7 @@ struct DashboardView: View {
                         }
                         .padding(.vertical, 16)
                         .padding(.horizontal, 12)
-                        .background(Color.Brand.paper)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        // Ultra subtle depth
-                        .shadow(color: Color.black.opacity(0.02), radius: 10, y: 5)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.Brand.border, lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(SquishyButtonStyle(scaleScale: 0.98)) // Subtle tap shrink
                 }
             }
         }
@@ -380,23 +343,8 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
-        .background(Color.Brand.paper.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.Brand.border.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-        )
-    }
-}
-
-// MARK: - Premium Interactions
-/// Tactile push animation for buttons (Pro-max UX Guideline)
-struct SquishyButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+        .zyCardStyle(cornerRadius: 24, shadowRadius: 5, shadowY: 2)
+        .opacity(0.8)
     }
 }
 
