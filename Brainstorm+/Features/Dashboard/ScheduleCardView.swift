@@ -19,11 +19,11 @@ public struct ScheduleCardView: View {
         let typeStr = schedule.type?.lowercased() ?? "work"
         switch typeStr {
         case "meeting":
-            return Color.blue
+            return Color.Brand.primary // Azure Blue
         case "training":
             return Color.purple
         case "work":
-            return Color.Brand.primary // Teal
+            return Color.Brand.accent // Mint Cyan
         default:
             return Color.gray
         }
@@ -32,81 +32,79 @@ public struct ScheduleCardView: View {
     public var body: some View {
         HStack(alignment: .top, spacing: 16) {
             // Left timeline indicator
-            VStack {
+            VStack(alignment: .trailing, spacing: 4) {
                 Text(timeFormatter.string(from: schedule.startTime))
-                    .font(.custom("PlusJakartaSans-Bold", size: 14))
+                    .font(.custom("Outfit-Bold", size: 14))
                     .foregroundColor(Color.Brand.text)
                 
                 Text(timeFormatter.string(from: schedule.endTime))
-                    .font(.custom("PlusJakartaSans-Regular", size: 12))
-                    .foregroundColor(Color.gray)
+                    .font(.custom("Inter-Medium", size: 12))
+                    .foregroundColor(Color.Brand.textSecondary)
                 
                 Spacer()
             }
-            .frame(width: 60)
+            .frame(width: 70, alignment: .trailing)
+            .padding(.top, 4)
             
             // The Card
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
                     Text(schedule.title)
-                        .font(.custom("PlusJakartaSans-SemiBold", size: 16))
+                        .font(.custom("Outfit-SemiBold", size: 16))
                         .foregroundColor(Color.Brand.text)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     
                     Spacer()
                     
                     // Status Badge
                     if let status = schedule.status, status == "completed" {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color.Brand.secondary)
+                            .foregroundColor(Color.green)
                             .font(.system(size: 16))
                     } else if let status = schedule.status, status == "cancelled" {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(Color.Brand.warning)
                             .font(.system(size: 16))
                     } else {
                         // scheduled
                         Circle()
-                            .fill(Color.Brand.accent)
+                            .fill(Color.Brand.primary)
                             .frame(width: 8, height: 8)
                     }
                 }
                 
                 if let desc = schedule.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.custom("PlusJakartaSans-Regular", size: 14))
-                        .foregroundColor(Color.Brand.text.opacity(0.7))
+                        .font(.custom("Inter-Regular", size: 14))
+                        .foregroundColor(Color.gray)
                         .lineLimit(2)
                 }
                 
                 HStack(spacing: 12) {
                     if let location = schedule.location, !location.isEmpty {
                         Label(location, systemImage: "mappin.and.ellipse")
-                            .font(.custom("PlusJakartaSans-Medium", size: 12))
-                            .foregroundColor(typeColor)
+                            .font(.custom("Inter-Medium", size: 12))
+                            .foregroundColor(Color.Brand.textSecondary)
                     }
                     
                     if let type = schedule.type {
-                        Label(type.capitalized, systemImage: "briefcase")
-                            .font(.custom("PlusJakartaSans-Medium", size: 12))
+                        Label(type.capitalized, systemImage: "briefcase.fill")
+                            .font(.custom("Inter-Medium", size: 12))
                             .foregroundColor(typeColor)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
             }
-            .padding()
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Liquid Glass effect for Card
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(typeColor.opacity(0.1))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
+            // Card Material & Shadow
+            .background(Color.Brand.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(typeColor.opacity(0.3), lineWidth: 1)
+                    .stroke(Color.black.opacity(0.03), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
         }
         .contentShape(Rectangle())
         .onTapGesture {

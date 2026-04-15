@@ -1,165 +1,116 @@
 import SwiftUI
+import Combine
 
 public struct AttendanceView: View {
-    @State private var viewModel = AttendanceViewModel()
-    
-    private let timeFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.timeStyle = .short
-        return df
-    }()
+    @StateObject private var viewModel = AttendanceViewModel()
+    @State private var isPulsing = false
     
     public init() {}
     
     public var body: some View {
         VStack(spacing: 24) {
-            
-            if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(.custom("PlusJakartaSans-Medium", size: 14))
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(12)
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Daily Check-in")
+                        .font(.custom("Outfit-Bold", size: 20))
+                        .foregroundColor(Color.Brand.text)
+                    
+                    Text(Date().formatted(date: .complete, time: .omitted))
+                        .font(.custom("Inter-Medium", size: 14))
+                        .foregroundColor(Color.Brand.textSecondary)
+                }
+                
+                Spacer()
+                
+                // Status Badge
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.canClockIn ? Color.Brand.primary : Color.Brand.warning)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(isPulsing ? 1.2 : 0.8)
+                        .animation(.easeInOut(duration: 1).repeatForever(), value: isPulsing)
+                    
+                    Text(viewModel.canClockIn ? "In Zone" : "Out of Zone")
+                        .font(.custom("Inter-SemiBold", size: 12))
+                        .foregroundColor(viewModel.canClockIn ? Color.Brand.primary : Color.Brand.warning)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((viewModel.canClockIn ? Color.Brand.primary : Color.Brand.warning).opacity(0.1))
+                .clipShape(Capsule())
             }
             
+            // Map or Zone indicator placeholder
             ZStack {
-                // Background Glow
-                Circle()
-                    .fill(buttonColor.opacity(0.2))
-                    .frame(width: 220, height: 220)
-                    .blur(radius: 20)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.Brand.background)
+                    .frame(height: 140)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                    )
                 
-                // Multi-layered Button
-                Button {
-                    HapticManager.shared.trigger(.medium)
-                    Task { await viewModel.toggleClockStatus() }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(buttonColor)
-                            .shadow(color: buttonColor.opacity(0.4), radius: 20, x: 0, y: 10)
-                        
-                        Circle()
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                            .padding(4)
-                        
-                        VStack(spacing: 8) {
-                            if viewModel.isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                                    .scaleEffect(1.5)
-                            } else {
-                                Image(systemName: iconName)
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(.white)
-                                
-                                Text(buttonText)
-                                    .font(.custom("PlusJakartaSans-Bold", size: 24))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                    .frame(width: 180, height: 180)
+                // Pulsing rings indicating current location
+                ZStack {
+                    Circle()
+                        .stroke(Color.Brand.primary.opacity(0.2), lineWidth: 1)
+                        .frame(width: 80, height: 80)
+                        .scaleEffect(isPulsing ? 1.5 : 1.0)
+                        .opacity(isPulsing ? 0 : 1)
+                    
+                    Circle()
+                        .fill(Color.Brand.primary.opacity(0.1))
+                        .frame(width: 60, height: 60)
+                        .scaleEffect(isPulsing ? 1.2 : 1.0)
+                        .opacity(isPulsing ? 0.3 : 1)
+                    
+                    Image(systemName: "location.fill")
+                        .foregroundColor(Color.Brand.primary)
+                        .font(.system(size: 20))
                 }
-                .disabled(viewModel.isLoading || isCompleted)
-                .buttonStyle(ScaleButtonStyle())
+                .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isPulsing)
+                
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text(viewModel.currentLocationName ?? "Locating...")
+                            .font(.custom("Inter-Medium", size: 12))
+                            .foregroundColor(Color.Brand.textSecondary)
+                        Spacer()
+                    }
+                    .padding(12)
+                }
             }
-            .padding(.top, 16)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             
-            // Status Info
-            HStack(spacing: 40) {
-                VStack(spacing: 4) {
-                    Text("Clock In")
-                        .font(.custom("PlusJakartaSans-Medium", size: 14))
-                        .foregroundColor(Color.gray)
-                    
-                    if let inTime = viewModel.currentAttendance?.clockIn {
-                        Text(timeFormatter.string(from: inTime))
-                            .font(.custom("PlusJakartaSans-Bold", size: 18))
-                            .foregroundColor(Color.Brand.text)
-                    } else {
-                        Text("--:--")
-                            .font(.custom("PlusJakartaSans-Bold", size: 18))
-                            .foregroundColor(Color.gray.opacity(0.5))
-                    }
+            // Big Clock In Button
+            Button(action: {
+                HapticManager.shared.trigger(.success)
+                Task { await viewModel.clockIn() }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: viewModel.canClockIn ? "hand.tap.fill" : "lock.fill")
+                        .font(.system(size: 18))
+                    Text(viewModel.canClockIn ? "Clock In" : "Not available")
+                        .font(.custom("Outfit-Bold", size: 16))
                 }
-                
-                Divider()
-                    .frame(height: 40)
-                
-                VStack(spacing: 4) {
-                    Text("Clock Out")
-                        .font(.custom("PlusJakartaSans-Medium", size: 14))
-                        .foregroundColor(Color.gray)
-                    
-                    if let outTime = viewModel.currentAttendance?.clockOut {
-                        Text(timeFormatter.string(from: outTime))
-                            .font(.custom("PlusJakartaSans-Bold", size: 18))
-                            .foregroundColor(Color.Brand.text)
-                    } else {
-                        Text("--:--")
-                            .font(.custom("PlusJakartaSans-Bold", size: 18))
-                            .foregroundColor(Color.gray.opacity(0.5))
-                    }
-                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(viewModel.canClockIn ? Color.Brand.primary : Color.gray.opacity(0.3))
+                .foregroundColor(viewModel.canClockIn ? .white : .gray)
+                .clipShape(Capsule())
+                .shadow(color: viewModel.canClockIn ? Color.Brand.primary.opacity(0.3) : .clear, radius: 8, y: 4)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            )
+            .disabled(!viewModel.canClockIn || viewModel.isLoading)
+            .buttonStyle(SquishyButtonStyle())
         }
-        .task {
-            await viewModel.fetchTodayAttendance()
+        .padding(24)
+        .background(Color.Brand.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
+        .onAppear {
+            isPulsing = true
         }
-    }
-    
-    // UI Helpers
-    private var isClockedIn: Bool {
-        viewModel.currentAttendance?.clockIn != nil
-    }
-    
-    private var isClockedOut: Bool {
-        viewModel.currentAttendance?.clockOut != nil
-    }
-    
-    private var isCompleted: Bool {
-        isClockedIn && isClockedOut
-    }
-    
-    private var buttonText: String {
-        if isCompleted { return "Done" }
-        if isClockedIn { return "Clock \nOut" }
-        return "Clock \nIn"
-    }
-    
-    private var iconName: String {
-        if isCompleted { return "checkmark" }
-        if isClockedIn { return "arrow.uturn.left" }
-        return "hand.tap.fill"
-    }
-    
-    private var buttonColor: Color {
-        if isCompleted { return Color.gray }
-        if isClockedIn { return Color.orange }
-        return Color.Brand.primary
-    }
-}
-
-// Custom Button Style for squishy tactile feel
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.5), value: configuration.isPressed)
-    }
-}
-
-#Preview {
-    ZStack {
-        Color.black.ignoresSafeArea()
-        AttendanceView()
     }
 }

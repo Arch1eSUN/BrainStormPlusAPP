@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		080C6D712F8F3B9200F461F9 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = B8FB5A12862D16D2EB027EDD /* Supabase */; };
+		080C6D722F8F3B9200F461F9 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F020672CB44472B1AB2CC136 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		08B4C0AC2F8E85BB00D7E15F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -50,15 +55,11 @@
 		};
 		08B4C0AE2F8E85BB00D7E15F /* Brainstorm+Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "Brainstorm+Tests";
 			sourceTree = "<group>";
 		};
 		08B4C0B82F8E85BB00D7E15F /* Brainstorm+UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "Brainstorm+UITests";
 			sourceTree = "<group>";
 		};
@@ -69,6 +70,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				080C6D722F8F3B9200F461F9 /* Supabase in Frameworks */,
+				080C6D712F8F3B9200F461F9 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -309,7 +312,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.samuraiplus.Brainstorm-";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.brainstormapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -343,7 +346,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.samuraiplus.Brainstorm-";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.brainstormapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

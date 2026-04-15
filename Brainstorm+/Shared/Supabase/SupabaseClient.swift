@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Supabase
 
 public struct AppEnvironment {
@@ -17,7 +18,7 @@ public class RealtimeSyncManager: ObservableObject {
     
     @Published public var isConnected = false
     
-    private var channels: [String: RealtimeChannel] = [:]
+    private var channels: [String: RealtimeChannelV2] = [:]
     
     private init() {}
     

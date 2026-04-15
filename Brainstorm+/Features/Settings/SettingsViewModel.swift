@@ -33,10 +33,9 @@ public final class SettingsViewModel {
     }
     
     @MainActor
-    public func signOut() async {
+    public func signOut(sessionManager: SessionManager) async {
         do {
-            try await supabase.auth.signOut()
-            SessionManager.shared.isAuthenticated = false
+            try await sessionManager.logout()
         } catch {
             print("Error signing out: \(error)")
         }

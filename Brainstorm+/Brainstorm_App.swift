@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-@main
+// @main
 struct Brainstorm_App: App {
     @State private var sessionManager = SessionManager()
 

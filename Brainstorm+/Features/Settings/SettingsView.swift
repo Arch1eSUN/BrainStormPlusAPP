@@ -4,117 +4,147 @@ import Supabase
 public struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var showingSignOutAlert = false
+    @Environment(SessionManager.self) private var sessionManager
     
     public init() {}
     
     public var body: some View {
-        ZStack {
-            Color.Brand.background
-                .ignoresSafeArea()
-            
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    headerSection
-                    generalSection
-                    supportSection
-                    signOutSection
+        NavigationStack {
+            ZStack(alignment: .top) {
+                Color.Brand.background
+                    .ignoresSafeArea()
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 32) {
+                        // Spacer for custom header
+                        Spacer().frame(height: 80)
+                        
+                        headerSection
+                        generalSection
+                        supportSection
+                        signOutSection
+                        
+                        // Tab bar spacing
+                        Spacer().frame(height: 100)
+                    }
+                    .padding(.horizontal, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 120) // tab bar spacing
-            }
-        }
-        .task {
-            await viewModel.loadProfile()
-        }
-        .alert("Sign Out", isPresented: $showingSignOutAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Sign Out", role: .destructive) {
-                HapticManager.shared.trigger(.medium)
-                Task {
-                    await viewModel.signOut()
+                
+                // Custom Immersive Header
+                VStack {
+                    customHeader
+                    Spacer()
                 }
             }
-        } message: {
-            Text("Are you sure you want to sign out?")
+            .navigationBarHidden(true)
+            .task {
+                await viewModel.loadProfile()
+            }
+            .alert("Sign Out", isPresented: $showingSignOutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    HapticManager.shared.trigger(.medium)
+                    Task {
+                        await viewModel.signOut(sessionManager: sessionManager)
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to sign out from BrainStorm+?")
+            }
         }
     }
     
     @ViewBuilder
-    private var headerSection: some View {
-        HStack(spacing: 16) {
-            if viewModel.isLoading {
+    private var customHeader: some View {
+        HStack {
+            Text("Settings")
+                .font(.custom("Outfit-Bold", size: 28))
+                .foregroundColor(Color.Brand.text)
+            
+            Spacer()
+            
+            // Decorative settings cog
+            ZStack {
                 Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 80, height: 80)
-                    .shimmer()
+                    .fill(Color.Brand.primary.opacity(0.1))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color.Brand.primary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea(edges: .top)
+        )
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color.white.opacity(0.4))
+                .padding(.top, -1),
+            alignment: .top
+        )
+    }
+    
+    @ViewBuilder
+    private var headerSection: some View {
+        HStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(Color.Brand.accent.opacity(0.2))
+                    .frame(width: 88, height: 88)
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 140, height: 24)
-                        .shimmer()
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 100, height: 16)
-                        .shimmer()
-                }
-            } else {
-                ZStack {
-                    Circle()
-                        .fill(Color.Brand.accent.opacity(0.2))
-                    
-                    Text(String(viewModel.profile?.fullName?.prefix(1) ?? "U"))
-                        .font(.custom("PlusJakartaSans-Bold", size: 36))
-                        .foregroundColor(Color.Brand.primary)
-                }
-                .frame(width: 80, height: 80)
+                Text(String(viewModel.profile?.fullName?.prefix(1) ?? "U"))
+                    .font(.custom("Outfit-Bold", size: 36))
+                    .foregroundColor(Color.Brand.primary)
+            }
+            .shadow(color: Color.Brand.accent.opacity(0.3), radius: 12, x: 0, y: 6)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(viewModel.profile?.fullName ?? "User")
+                    .font(.custom("Outfit-Bold", size: 24))
+                    .foregroundColor(Color.Brand.text)
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(viewModel.profile?.fullName ?? "User")
-                        .font(.custom("PlusJakartaSans-Bold", size: 24))
-                        .foregroundColor(Color.Brand.text)
-                    
-                    Text(viewModel.profile?.role?.capitalized ?? "Team Member")
-                        .font(.custom("PlusJakartaSans-Medium", size: 14))
-                        .foregroundColor(Color.Brand.primary)
-                }
+                Text(viewModel.profile?.role?.capitalized ?? "Team Member")
+                    .font(.custom("Inter-Medium", size: 14))
+                    .foregroundColor(Color.Brand.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.Brand.primary.opacity(0.1))
+                    .clipShape(Capsule())
             }
             
             Spacer()
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
+        .padding(24)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 4)
     }
     
     @ViewBuilder
     private var generalSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("General")
-                .font(.custom("PlusJakartaSans-SemiBold", size: 16))
-                .foregroundColor(Color.gray)
+                .font(.custom("Outfit-SemiBold", size: 14))
+                .foregroundColor(Color.Brand.textSecondary)
+                .textCase(.uppercase)
                 .padding(.leading, 8)
             
             VStack(spacing: 0) {
-                SettingsRowView(icon: "bell.badge", title: "Notifications", showChevron: true)
-                Divider().background(Color.white.opacity(0.1)).padding(.leading, 56)
-                SettingsRowView(icon: "lock.shield", title: "Privacy & Security", showChevron: true)
-                Divider().background(Color.white.opacity(0.1)).padding(.leading, 56)
-                SettingsRowView(icon: "paintpalette", title: "Appearance", showChevron: true)
+                SettingsRowView(icon: "bell.badge.fill", iconColor: .blue, title: "Notifications", showChevron: true)
+                Divider().background(Color.gray.opacity(0.1)).padding(.leading, 64)
+                SettingsRowView(icon: "lock.shield.fill", iconColor: .green, title: "Privacy & Security", showChevron: true)
+                Divider().background(Color.gray.opacity(0.1)).padding(.leading, 64)
+                SettingsRowView(icon: "paintpalette.fill", iconColor: .purple, title: "Appearance", showChevron: true)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.Brand.surface)
-            )
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
         }
     }
     
@@ -122,19 +152,19 @@ public struct SettingsView: View {
     private var supportSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Support")
-                .font(.custom("PlusJakartaSans-SemiBold", size: 16))
-                .foregroundColor(Color.gray)
+                .font(.custom("Outfit-SemiBold", size: 14))
+                .foregroundColor(Color.Brand.textSecondary)
+                .textCase(.uppercase)
                 .padding(.leading, 8)
             
             VStack(spacing: 0) {
-                SettingsRowView(icon: "questionmark.circle", title: "Help Center", showChevron: true)
-                Divider().background(Color.white.opacity(0.1)).padding(.leading, 56)
-                SettingsRowView(icon: "doc.text", title: "Terms of Service", showChevron: true)
+                SettingsRowView(icon: "questionmark.circle.fill", iconColor: Color.Brand.accent, title: "Help Center", showChevron: true)
+                Divider().background(Color.gray.opacity(0.1)).padding(.leading, 64)
+                SettingsRowView(icon: "doc.text.fill", iconColor: .gray, title: "Terms of Service", showChevron: true)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.Brand.surface)
-            )
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
         }
     }
     
@@ -144,26 +174,29 @@ public struct SettingsView: View {
             HapticManager.shared.trigger(.light)
             showingSignOutAlert = true
         } label: {
-            HStack {
+            HStack(spacing: 12) {
                 Spacer()
                 Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 16, weight: .bold))
                 Text("Sign Out")
-                    .font(.custom("PlusJakartaSans-SemiBold", size: 16))
+                    .font(.custom("Outfit-Bold", size: 16))
                 Spacer()
             }
-            .foregroundColor(.red)
-            .padding()
+            .foregroundColor(Color.Brand.warning)
+            .padding(.vertical, 18)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.red.opacity(0.1))
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.Brand.warning.opacity(0.1))
             )
         }
-        .padding(.top, 10)
+        .buttonStyle(SquishyButtonStyle())
+        .padding(.top, 16)
     }
 }
 
 public struct SettingsRowView: View {
     let icon: String
+    var iconColor: Color = Color.Brand.primary
     let title: String
     let showChevron: Bool
     
@@ -174,16 +207,16 @@ public struct SettingsRowView: View {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.Brand.primary.opacity(0.1))
+                        .fill(iconColor.opacity(0.15))
                         .frame(width: 40, height: 40)
                     
                     Image(systemName: icon)
                         .font(.system(size: 18))
-                        .foregroundColor(Color.Brand.primary)
+                        .foregroundColor(iconColor)
                 }
                 
                 Text(title)
-                    .font(.custom("PlusJakartaSans-Medium", size: 16))
+                    .font(.custom("Inter-Medium", size: 16))
                     .foregroundColor(Color.Brand.text)
                 
                 Spacer()
@@ -191,13 +224,25 @@ public struct SettingsRowView: View {
                 if showChevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Color.gray)
+                        .foregroundColor(Color.gray.opacity(0.5))
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
             .padding(.horizontal, 16)
+            // Make the whole row tappable consistently
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Use a simple plain style or opacity-changing style internally
+        .buttonStyle(SettingsRowButtonStyle())
+    }
+}
+
+// A subtle button style for rows that just dims slightly on press
+struct SettingsRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.gray.opacity(0.05) : Color.clear)
+            .animation(.easeInOut(duration: 0.2), value: configuration.isPressed)
     }
 }
 

@@ -25,22 +25,26 @@ struct MainTabView: View {
                 // Copilot Tab Placeholder (Protected by RBAC)
                 NavigationStack {
                     ZStack {
-                        Color.Brand.background.ignoresSafeArea()
-                        
-                        VStack(spacing: 16) {
-                            Image(systemName: "lock.shield.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(Color.gray.opacity(0.5))
+                        if true /* TODO: Replace with RBACManager.shared.hasCapability(...) when auth allows */ {
+                            AICopilotView()
+                        } else {
+                            Color.Brand.background.ignoresSafeArea()
                             
-                            Text("ZY Copilot (Coming Soon)")
-                                .font(.custom("PlusJakartaSans-Bold", size: 20))
-                                .foregroundStyle(Color.Brand.text)
-                            
-                            Text("This feature is currently locked or under development. It will require the AI Chatbot Access capability.")
-                                .font(.custom("PlusJakartaSans-Medium", size: 14))
-                                .foregroundStyle(Color.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
+                            VStack(spacing: 16) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(Color.gray.opacity(0.5))
+                                
+                                Text("BrainStorm+ Copilot (Coming Soon)")
+                                    .font(.custom("Outfit-Bold", size: 20))
+                                    .foregroundStyle(Color.Brand.text)
+                                
+                                Text("This feature is currently locked or under development. It will require the AI Chatbot Access capability.")
+                                    .font(.custom("Inter-Medium", size: 14))
+                                    .foregroundStyle(Color.gray)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 40)
+                            }
                         }
                     }
                     .navigationTitle("Copilot")
@@ -102,7 +106,7 @@ struct FloatingTabBar: View {
                         
                         if isSelected {
                             Circle()
-                                .fill(Color.Brand.accent)
+                                .fill(Color.Brand.primary) // Updated from accent/teal to primary Azure Blue
                                 .frame(width: 4, height: 4)
                         } else {
                             Circle()

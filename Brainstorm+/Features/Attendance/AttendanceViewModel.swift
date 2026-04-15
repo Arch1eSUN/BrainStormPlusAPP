@@ -1,130 +1,86 @@
 import Foundation
+import Combine
+import CoreLocation
 import Supabase
 
-@Observable
-public final class AttendanceViewModel {
-    public var currentAttendance: Attendance?
-    public var isLoading = false
-    public var errorMessage: String?
+@MainActor
+public class AttendanceViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published public var canClockIn: Bool = true
+    @Published public var isLoading: Bool = false
+    @Published public var currentLocationName: String? = "Fetching Location..."
+    @Published public var errorMessage: String? = nil
+    @Published public var currentStatus: String? = nil
     
-    // Internal date formatter for Supabase 'date' column
-    private let dateFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        return df
-    }()
+    private let locationManager = CLLocationManager()
+    private var currentLocation: CLLocation?
+
+    override public init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+    }
     
-    @MainActor
-    public func fetchTodayAttendance() async {
-        isLoading = true
-        errorMessage = nil
+    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let loc = locations.last {
+            self.currentLocation = loc
+            self.currentLocationName = "Location acquired (WGS84)"
+            self.canClockIn = true
+        }
+    }
+    
+    public func clockIn(isOut: Bool = false) async {
+        guard let location = currentLocation else {
+            self.errorMessage = "GPS location disabled or not found."
+            return
+        }
+        
+        self.isLoading = true
+        self.errorMessage = nil
+        self.currentStatus = nil
         
         do {
             let session = try await supabase.auth.session
-            let userId = session.user.id
-            let todayStr = dateFormatter.string(from: Date())
+            let currentToken = session.accessToken
             
-            // Check if there is already a record for today
-            let records: [Attendance] = try await supabase
-                .from("attendance")
-                .select()
-                .eq("user_id", value: userId)
-                .eq("date", value: todayStr)
-                .execute()
-                .value
+            // API Route url
+            let urlStr = "http://127.0.0.1:3000/api/mobile/attendance/clock"
+            guard let url = URL(string: urlStr) else { return }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(currentToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             
-            self.currentAttendance = records.first
-        } catch {
-            self.errorMessage = "Failed to fetch attendance: \(error.localizedDescription)"
-        }
-        
-        isLoading = false
-    }
-    
-    @MainActor
-    public func toggleClockStatus() async {
-        guard !isLoading else { return }
-        
-        if currentAttendance == nil {
-            await clockIn()
-        } else if currentAttendance?.clockOut == nil {
-            await clockOut()
-        } else {
-            // Already clocked out
-            self.errorMessage = "You have already clocked out for today."
-        }
-    }
-    
-    @MainActor
-    private func clockIn() async {
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            let session = try await supabase.auth.session
-            let userId = session.user.id
-            let todayStr = dateFormatter.string(from: Date())
+            let payload: [String: Any] = [
+                "type": isOut ? "out" : "in",
+                "location": [
+                    "latitude": location.coordinate.latitude,
+                    "longitude": location.coordinate.longitude
+                ],
+                "device_info": "iOS App"
+            ]
             
-            struct InsertMode: Codable {
-                let user_id: UUID
-                let date: String
-                let clock_in: Date
-                let status: String
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpRes = response as? HTTPURLResponse {
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                if httpRes.statusCode == 200, let result = json?["data"] as? [String: Any] {
+                    let status = result["status"] as? String ?? "unknown"
+                    let dist = result["distance"] as? Double ?? 0
+                    self.currentStatus = "Success (\(status)). Distance: \(Int(dist))m"
+                } else {
+                    let err = json?["error"] as? String ?? "Unknown error"
+                    self.errorMessage = "Failed: \(err)"
+                }
             }
-            
-            let newRecord = InsertMode(
-                user_id: userId,
-                date: todayStr,
-                clock_in: Date(),
-                status: "normal"
-            )
-            
-            let result: Attendance = try await supabase
-                .from("attendance")
-                .insert(newRecord)
-                .select()
-                .single()
-                .execute()
-                .value
-            
-            self.currentAttendance = result
-            HapticManager.shared.trigger(.heavy)
+                
         } catch {
-            self.errorMessage = "Clock in failed: \(error.localizedDescription)"
-            HapticManager.shared.trigger(.error)
+            self.errorMessage = "Network error: \(error.localizedDescription)"
         }
         
-        isLoading = false
-    }
-    
-    @MainActor
-    private func clockOut() async {
-        guard let id = currentAttendance?.id else { return }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            struct UpdateMode: Codable {
-                let clock_out: Date
-            }
-            
-            let result: Attendance = try await supabase
-                .from("attendance")
-                .update(UpdateMode(clock_out: Date()))
-                .eq("id", value: id)
-                .select()
-                .single()
-                .execute()
-                .value
-            
-            self.currentAttendance = result
-            HapticManager.shared.trigger(.success)
-        } catch {
-            self.errorMessage = "Clock out failed: \(error.localizedDescription)"
-            HapticManager.shared.trigger(.error)
-        }
-        
-        isLoading = false
+        self.isLoading = false
     }
 }

@@ -1,48 +1,52 @@
 import SwiftUI
+import Combine
 import Supabase
 
 @main
 struct BrainStormApp: App {
-    @StateObject private var authState = AuthStateManager()
+    @State private var sessionManager = SessionManager()
     @StateObject private var realtimeSync = RealtimeSyncManager.shared
     
     var body: some Scene {
         WindowGroup {
-            if authState.isAuthenticated {
-                DashboardView()
-                    .environmentObject(authState)
-                    .environmentObject(realtimeSync)
-            } else {
-                LoginView()
-                    .environmentObject(authState)
+            Group {
+                if sessionManager.isLoadingSession {
+                    SplashView()
+                } else if sessionManager.isAuthenticated {
+                    MainTabView()
+                        .environment(sessionManager)
+                        .environmentObject(realtimeSync)
+                } else {
+                    LoginView()
+                        .environment(sessionManager)
+                }
+            }
+            .task {
+                await sessionManager.checkSession()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SupabaseAuthChange"))) { notification in
+                // Global fallback for auth states out of band
+                Task {
+                    await sessionManager.checkSession()
+                }
             }
         }
     }
 }
 
-// MARK: - Auth State Mock
-@MainActor
-class AuthStateManager: ObservableObject {
-    @Published var isAuthenticated: Bool = false
-    @Published var currentUser: User? = nil
-    
-    init() {
-        Task {
-            // Check existing session
-            if let session = try? await supabase.auth.session {
-                self.isAuthenticated = true
-                self.currentUser = session.user
-            }
-            
-            // Listen to auth changes
-            for await authEvent in supabase.auth.authStateChanges {
-                if authEvent.event == .signedIn {
-                    self.isAuthenticated = true
-                    self.currentUser = authEvent.session?.user
-                } else if authEvent.event == .signedOut {
-                    self.isAuthenticated = false
-                    self.currentUser = nil
-                }
+// Simple splash view while checking session
+struct SplashView: View {
+    var body: some View {
+        ZStack {
+            Color.Brand.background.ignoresSafeArea()
+            VStack {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 64, weight: .semibold))
+                    .foregroundStyle(Color.Brand.primary)
+                Text("BrainStorm+")
+                    .font(.custom("Outfit-Bold", size: 32))
+                    .foregroundStyle(Color.Brand.text)
+                    .padding(.top, 16)
             }
         }
     }
