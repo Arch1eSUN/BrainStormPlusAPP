@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+
+# Xcode
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xcworkspace/xcuserdata/
+**/DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
+
+# Fastlane / CI artifacts
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Local build logs
+build*.log
+build_log*.txt
+build-verification.log
+*.log
+
+# Temporary migration/patch scripts (one-off automation)
+*.rb

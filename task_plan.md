@@ -1,0 +1,67 @@
+# Brainstorm+ iOS Project Plan
+
+## Phase 1.0: Sprint 1.0 Navigation & Tasks Create Flow
+- [x] Analyze Web source of truth for Tasks (`tasks` schema, keys, types).
+- [x] Typed Dashboard Routing:
+  - Migrate DashboardView quick actions to strictly use `ActionItemHelper.destination(for module:)`.
+  - Mark `destination(for title: String)` as deprecated in ActionItemHelper.
+- [x] Tasks New Task Create Flow:
+  - Find and address the `TODO: Open New Task Sheet` in `TaskListView.swift`.
+  - Design a functional Create Task UI Sheet covering required variables (title, optional description, priority, due date).
+  - Update `TaskListViewModel` to execute insert into Supabase `tasks` table with Encodable object conforming to database schema.
+
+- [x] 1.0-0.1 code repair completed.
+- [x] 1.0-0.2 ledger sync completed.
+- [x] 1.0-0.3 final ledger wording fix completed.
+- [x] 1.0-0.4 task plan next-step sync completed.
+- [x] 1.1 Enum Parity and Picker Parity completed.
+- [x] 1.1-0.1 Project Picker Data Load & Ledger Sync completed.
+- [x] 1.1-0.2 Ledger Normalization completed.
+- [x] 1.2 Dashboard Destination Parity completed.
+- [x] 1.3 Projects List Foundation completed.
+- [x] Winston 1.3 audit completed — `docs/parity/22-winston-audit-1.3.md` PASS.
+- [x] 1.4 Projects Filter + Detail Foundation completed.
+- [x] Winston 1.4 audit completed — `docs/parity/24-winston-audit-1.4.md` PASS.
+- [x] 1.5 Projects Server-Side Filter + Membership Scope Foundation completed.
+- [x] Winston 1.5 audit completed — `docs/parity/26-winston-audit-1.5.md` PASS.
+- [x] 1.6 Projects Detail Membership Gate + Ordering Alignment Foundation completed.
+- [x] Winston 1.6 audit completed — `docs/parity/28-winston-audit-1.6.md` PASS.
+- [x] 1.7 Projects Owner Profile Join + Detail Enrichment Foundation prompt created.
+- [x] 1.7 Projects Owner Profile Join + Detail Enrichment Foundation completed.
+- [x] Winston 1.7 audit completed — `docs/parity/30-winston-audit-1.7.md` PASS.
+- [x] 1.8 Projects Nested Profile Join + Avatar Rendering Foundation prompt created.
+- [x] 1.8 Projects Nested Profile Join + Avatar Rendering Foundation completed.
+- [x] Winston 1.8 audit completed — `docs/parity/32-winston-audit-1.8.md` PASS.
+- [x] 1.9 Projects Edit + Member Management Foundation prompt created.
+- [x] 1.9 Projects Edit + Member Management Foundation completed.
+- [x] Winston 1.9 audit completed — `docs/parity/34-winston-audit-1.9.md` PASS.
+- [x] 2.0 Projects Delete Foundation prompt created.
+- [x] 2.0 Projects Delete Foundation completed.
+- [x] Winston 2.0 audit completed — `docs/parity/36-winston-audit-2.0.md` PASS.
+- [x] 2.1 Projects Task Count List Parity prompt created.
+- [x] 2.1 Projects Task Count List Parity completed.
+- [x] Winston 2.1 audit completed — `docs/parity/38-winston-audit-2.1.md` PASS.
+- [x] 2.2 Projects AI Summary Foundation prompt created.
+- [x] 2.2 Projects AI Summary Foundation completed.
+- [x] Winston 2.2 audit completed — `docs/parity/40-winston-audit-2.2.md` PASS.
+- [x] 2.3 Projects Risk Analysis Foundation prompt created.
+- [x] 2.3 Projects Risk Analysis Foundation completed.
+- [x] Winston 2.3 audit completed — `docs/parity/42-winston-audit-2.3.md` PASS.
+- [x] 2.4 Projects Linked Risk Actions Foundation prompt created.
+- [x] 2.4 Projects Linked Risk Actions Foundation completed.
+- [x] Winston 2.4 audit completed — `docs/parity/44-winston-audit-2.4.md` PASS.
+- [x] 2.5 Projects Resolution Feedback Foundation prompt created.
+- [x] 2.5 Projects Resolution Feedback Foundation completed.
+- [x] Winston 2.5 audit completed — `docs/parity/46-winston-audit-2.5.md` FAIL.
+- [x] 2.5.1 minimum fix prompt created — `devprompt/2.5.1-resolution-feedback-governance-priority-fix.md`.
+- [x] 2.5.1 Resolution Feedback Governance Priority Fix completed.
+- [x] Winston 2.5.1 audit completed — `docs/parity/48-winston-audit-2.5.1.md` PASS.
+- [x] 2.6 Projects Risk Action Sync Write Path Foundation prompt created.
+- [x] 2.6 Projects Risk Action Sync Write Path Foundation completed.
+- [x] Winston 2.6 audit completed — `docs/parity/50-winston-audit-2.6.md` PASS (with 3 non-blocking doc corrections folded into next sprint).
+- Next step is open 2.7 Resolution Write-Back MVP prompt; fold the three doc corrections from audit §8 into that sprint or a 2.6.1 micro-patch first.
+
+## Phase 1.x: Subsequent Features
+- [ ] Migrate remaining Dashboard navigation components to strict module.
+- [ ] Projects parity beyond list-scope + detail-gate + owner-join + read-only detail-enrichment + nested-profile-names + owner-avatar + edit + member-management + delete + task-count-on-list + AI-summary-foundation + risk-analysis-foundation + linked-risk-actions-foundation + resolution-feedback-foundation + risk-action-sync-write-path-foundation foundations: resolution write-back (close / reopen / effectiveness / governance note) / real LLM-generated narrative / generate-risk-from-iOS. 2.0 closed native delete flow. 2.1 closed task-count-on-list via a batched non-N+1 aggregate (source-of-truth discrepancy recorded: Web's `task_count` typed field is vestigial). 2.2 closed AI summary foundation on detail via parallel `async let` PostgREST reads + deterministic facts-only local synthesis + isolated `summaryErrorMessage`; recorded a second-order source-of-truth discrepancy because Web's `generateProjectSummary` is a server action with no HTTP exposure, so iOS cannot call `askAI()` directly and must not embed decrypted provider credentials on-device — LLM-generated narrative deferred until a server-side `/api/ai/project-summary` endpoint is published. 2.3 closed risk-analysis-foundation on detail via a cache-first read of `project_risk_summaries` + read-only risk-level badge + provenance caption + isolated `riskAnalysisErrorMessage`; recorded a second-order source-of-truth discrepancy WITH persistence parity — iOS reads actual Web-generated analysis rather than synthesizing locally, but cannot generate fresh analyses until Web exposes `/api/ai/project-risk` (or a Supabase Edge Function). 2.4 closed linked-risk-actions-foundation on detail via two-step anchor-then-filter PostgREST reads (`project_risk_summaries.select("id")` → `risk_actions.eq("ai_source_id", anchor.id).order(desc).limit(20)`) + 5-phase state machine (idle / loading / noRiskAnalysisSource / empty / loaded) + isolated `linkedRiskActionsErrorMessage` + `priorPhase` revert on failure + 3-row render cap matching Web exactly. **No source-of-truth discrepancy** — `getLinkedRiskActions` is a pure read flow. 2.5 delivered most resolution-feedback-foundation mechanics on detail via the same two-step anchor-then-filter PostgREST read pattern (`project_risk_summaries.select("id")` → `risk_actions.select(...8 columns...).eq("ai_source_id", anchor.id).order("resolved_at", ascending: false, nullsFirst: false).limit(50)`) + client-side aggregation (counts + `dominantCategory` with first-encountered tie-break + top-3 `recentResolutions` filtered to `{resolved, dismissed}`) + predictive `isProneToReopen` (mirrors Web's "易重开" trigger) + 5-phase state machine + isolated `resolutionFeedbackErrorMessage` + `priorPhase` revert on failure. However Winston 2.5 audit found one blocking source-of-truth parity issue: Web governance intervention status is `hasEffective`-first, while iOS 2.5 made `.needsIntervention` win when both signals fire. 2.5.1 closed the fix via two minimal edits: `ProjectDetailModels.swift` `governanceSignal` now evaluates `effective` first and only checks `needs` when `effective` is false (matches Web's `hasEffective` short-circuit), and `ProjectDetailView.swift` switched the prone-to-reopen subline tint to `Color.Brand.warning` so the predictive "易重开" indicator stays on an independent semantic rail regardless of which governance banner tone is active. `isProneToReopen` trigger unchanged. 2.6 closed the first iOS write path via **Path A** (direct Supabase INSERT): `ProjectDetailViewModel.syncRiskActionFromDetail(rawRole:)` does RBAC gate (raw-string check against `{super_admin, admin, hr_admin, manager}` — `RBACManager.migrateLegacyRole` drops `hr_admin` and over-maps `chairperson`/`team_lead`, so `PrimaryRole` could not be used directly) → anchor re-fetch → `profiles.select("org_id")` → `risk_actions.insert(...).select("id").single()` with 11 hard-coded / user-supplied columns (Chinese `风险项` + `从项目风险分析生成` persistence parity with Web) → best-effort `risk_action_events` audit (swallowed on failure) → fire-and-forget `refreshLinkedRiskActions()` + `refreshResolutionFeedback()`. UI: `@ViewBuilder riskActionSyncAffordance` inside `riskAnalysisSection` with `.confirmationDialog` showing title/severity/detail preview, 3-phase `RiskActionSyncPhase { idle, syncing, succeeded }`, isolated `riskActionSyncErrorMessage`, 3-second auto-clear via `scheduleRiskActionSyncSuccessClear()` (mirrors Web's `setTimeout(..., 3000)`). Resolution write-back (close / reopen / effectiveness / governance note) + generate-risk-from-iOS + LLM narrative remain explicitly deferred by scope.
+- [ ] Approvals, Admin.

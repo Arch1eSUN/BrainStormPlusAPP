@@ -1,0 +1,130 @@
+# 01 Web Module Map
+
+## 执行中心 (Execution)
+- **Tasks**
+  - Web Route: `/dashboard/tasks`
+  - Page File: `src/app/dashboard/tasks/page.tsx`
+  - Roles/Cap: View/Manage Tasks
+  - iOS Status: ✅ Have `Features/Tasks`
+  - Migration Priority: P0 (Primary)
+- **Projects**
+  - Web Route: `/dashboard/projects`
+  - Page File: `src/app/dashboard/projects/page.tsx`
+  - Roles/Cap: Manage Projects
+  - iOS Status: 🟡 Partial Model
+  - Migration Priority: P0
+- **OKR**
+  - Web Route: `/dashboard/okr`
+  - Page File: `src/app/dashboard/okr/page.tsx`
+  - Roles/Cap: View/Manage OKRs
+  - iOS Status: ✅ Have `Features/OKRs`
+  - Migration Priority: P1
+- **Deliverables**
+  - Web Route: `/dashboard/deliverables`
+  - Page File: `src/app/dashboard/deliverables/page.tsx`
+  - Roles/Cap: Manage Deliverables
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+
+## 日常汇报 (Reporting)
+- **Daily**
+  - Web Route: `/dashboard/daily`
+  - Roles/Cap: Create Logs
+  - iOS Status: ✅ `Features/Reporting`
+  - Migration Priority: P1
+- **Weekly**
+  - Web Route: `/dashboard/weekly`
+  - Roles/Cap: Create Weekly
+  - iOS Status: ✅ `Features/Reporting`
+  - Migration Priority: P1
+
+## 行政人事 (Admin & HR)
+- **Approval** & **Approval Request**
+  - Web Route: `/dashboard/approval` and `/dashboard/request`
+  - Roles/Cap: Manage Approvals
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P0
+- **Schedules**
+  - Web Route: `/dashboard/schedules`
+  - Roles/Cap: View/Manage Schedules
+  - iOS Status: ✅ `Features/Schedule`
+  - Migration Priority: P1
+- **Leaves**
+  - Web Route: `/dashboard/leaves`
+  - Roles/Cap: Manage Leaves
+  - iOS Status: ✅ `Features/Leaves`
+  - Migration Priority: P1
+- **Attendance**
+  - Web Route: `/dashboard/attendance`
+  - Roles/Cap: Manage Attendance
+  - iOS Status: ✅ `Features/Attendance`
+  - Migration Priority: P1
+- **Hiring**
+  - Web Route: `/dashboard/hiring`
+  - Roles/Cap: HR Role / Manage Hiring
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+- **Team**
+  - Web Route: `/dashboard/team`
+  - Roles/Cap: View Org
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P1
+
+## 沟通协作 (Communication)
+- **Chat**
+  - Web Route: `/dashboard/chat`
+  - Roles/Cap: Standard
+  - iOS Status: ✅ `Features/Chat`
+  - Migration Priority: P1
+- **Announcements**
+  - Web Route: `/dashboard/announcements`
+  - Roles/Cap: Broadcast
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P1
+- **Knowledge**
+  - Web Route: `/dashboard/knowledge`
+  - Roles/Cap: View KBS
+  - iOS Status: ✅ `Features/KnowledgeBase`
+  - Migration Priority: P1
+- **Notifications**
+  - Web Route: `/dashboard/notifications`
+  - Roles/Cap: Standard
+  - iOS Status: ✅ `Features/Notifications`
+  - Migration Priority: P1
+- **Activity**
+  - Web Route: `/dashboard/activity`
+  - Roles/Cap: Admin/Audit
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+
+## 智能 & 管理 (Smart & Admin)
+- **AI Analysis**
+  - Web Route: `/dashboard/ai-analysis`
+  - Roles/Cap: View AI Tools
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+- **Finance AI**
+  - Web Route: `/dashboard/finance`
+  - Roles/Cap: Finance
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+- **Analytics**
+  - Web Route: `/dashboard/analytics`
+  - Roles/Cap: View Org Analytics
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P1
+- **Payroll**
+  - Web Route: `/dashboard/payroll`
+  - Roles/Cap: HR/Finance
+  - iOS Status: ✅ `Features/Payroll`
+  - Migration Priority: P1
+- **Admin Config** & **Admin**
+  - Web Route: `/dashboard/admin`
+  - Roles/Cap: Superadmin
+  - iOS Status: ❌ Backlog
+  - Migration Priority: P2
+- **Settings** & **Profile Settings**
+  - Web Route: `/dashboard/settings`
+  - Roles/Cap: All
+  - iOS Status: ✅ `Features/Settings`
+  - Migration Priority: P0
