@@ -15,9 +15,8 @@ public struct TaskModel: Identifiable, Codable, Hashable {
     public enum TaskStatus: String, Codable, Hashable {
         case todo = "todo"
         case inProgress = "in_progress"
-        case inReview = "in_review"
+        case review = "review"
         case done = "done"
-        case canceled = "canceled"
     }
 
     public enum TaskPriority: String, Codable, Hashable {

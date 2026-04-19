@@ -1,14 +1,39 @@
 import SwiftUI
 
-// MARK: - Feature Dependencies Placeholder (Assuming these exist, replace with real views later)
-struct PlaceholderDestination: View {
-    let title: String
-    var body: some View {
+// MARK: - Parity Backlog Placeholder
+public struct ParityBacklogDestination: View {
+    public let moduleName: String
+    public let webRoute: String
+    
+    public init(moduleName: String, webRoute: String = "") {
+        self.moduleName = moduleName
+        self.webRoute = webRoute
+    }
+    
+    public var body: some View {
         ZStack {
             Color.Brand.background.ignoresSafeArea()
-            Text(title).font(.custom("Outfit-Bold", size: 24)).foregroundColor(Color.Brand.text)
+            VStack(spacing: 16) {
+                Image(systemName: "wrench.and.screwdriver")
+                    .font(.system(size: 60))
+                    .foregroundColor(Color.gray.opacity(0.5))
+                
+                Text(moduleName)
+                    .font(.custom("Outfit-Bold", size: 24))
+                    .foregroundColor(Color.Brand.text)
+                
+                Text("Web Route: \(webRoute.isEmpty ? "Unknown" : webRoute)")
+                    .font(.custom("Inter-Medium", size: 14))
+                    .foregroundColor(Color.gray)
+                
+                Text("This module is currently in the iOS migration backlog.\nIt will be addressed in subsequent development cycles.")
+                    .font(.custom("Inter-Regular", size: 14))
+                    .foregroundColor(Color.Brand.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
         }
-        .navigationTitle(title)
+        .navigationTitle(moduleName)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -121,7 +146,7 @@ struct DashboardView: View {
             Spacer()
             
             // Notification Bell (Glassmorphism)
-            NavigationLink(destination: PlaceholderDestination(title: "Notifications")) {
+            NavigationLink(destination: ActionItemHelper.destination(for: .notifications)) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell.fill")
                         .font(.system(size: 20))
@@ -236,30 +261,32 @@ struct DashboardView: View {
             
             // Refined Bento-style grid structure
             LazyVGrid(columns: columns, spacing: 16) {
-                actionItem(title: "Tasks", icon: "checkmark.square", color: Color.Brand.primary)
-                actionItem(title: "Team Chat", icon: "message", color: Color.Brand.accent)
-                actionItem(title: "OKRs", icon: "target", color: .purple)
-                actionItem(title: "Docs", icon: "book.pages", color: .teal)
-                actionItem(title: "Leaves", icon: "calendar.badge.exclamationmark", color: Color.Brand.warning)
-                actionItem(title: "News", icon: "megaphone", color: .indigo)
+                actionItem(module: .tasks, color: Color.Brand.primary)
+                actionItem(module: .chat, titleOverride: "Team Chat", color: Color.Brand.accent)
+                actionItem(module: .okr, color: .purple)
+                actionItem(module: .knowledge, titleOverride: "Docs", color: .teal)
+                actionItem(module: .leaves, color: Color.Brand.warning)
+                actionItem(module: .announcements, titleOverride: "News", color: .indigo)
+
             }
         }
     }
     
-    private func actionItem(title: String, icon: String, color: Color) -> some View {
-        NavigationLink(destination: ActionItemHelper.destination(for: title)) {
+    private func actionItem(module: AppModule, titleOverride: String? = nil, color: Color) -> some View {
+        NavigationLink(destination: ActionItemHelper.destination(for: module)) {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
                         .fill(color.opacity(0.1))
                         .frame(width: 48, height: 48)
                     
-                    Image(systemName: icon)
+                    Image(systemName: module.iconName)
                         .font(.system(size: 20, weight: .regular)) // Pro-max: Lighter, non-filled icons
                         .foregroundColor(color)
                 }
                 
-                Text(title)
+                Text(titleOverride ?? module.displayName)
+
                     .font(.custom("Inter-Medium", size: 12))
                     .foregroundColor(Color.Brand.text)
             }
@@ -280,7 +307,7 @@ struct DashboardView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: PlaceholderDestination(title: "Calendar")) {
+                NavigationLink(destination: ScheduleView()) {
                     Text("See All")
                         .font(.custom("Inter-Medium", size: 14))
                         .foregroundColor(Color.Brand.primary)

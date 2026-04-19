@@ -1,7 +1,15 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @Environment(SessionManager.self) private var sessionManager
     @State private var selectedTab = 0
+
+    // Compute effective capabilities
+    private var hasCopilotAccess: Bool {
+        guard let profile = sessionManager.currentProfile else { return false }
+        let caps = RBACManager.shared.getEffectiveCapabilities(for: profile)
+        return RBACManager.shared.hasCapability(.ai_chatbot_access, in: caps)
+    }
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -25,7 +33,7 @@ struct MainTabView: View {
                 // Copilot Tab Placeholder (Protected by RBAC)
                 NavigationStack {
                     ZStack {
-                        if true /* TODO: Replace with RBACManager.shared.hasCapability(...) when auth allows */ {
+                        if hasCopilotAccess {
                             AICopilotView()
                         } else {
                             Color.Brand.background.ignoresSafeArea()
