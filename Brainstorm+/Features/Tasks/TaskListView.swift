@@ -4,6 +4,7 @@ import Combine
 public struct TaskListView: View {
     @StateObject private var viewModel: TaskListViewModel
     @State private var selectedFilter: TaskFilter = .all
+    @State private var isShowingCreateTask = false
     @Namespace private var segmentAnimation
     
     enum TaskFilter: String, CaseIterable {
@@ -18,7 +19,7 @@ public struct TaskListView: View {
         case .all:
             return viewModel.tasks
         case .pending:
-            return viewModel.tasks.filter { $0.status != .done && $0.status != .canceled }
+            return viewModel.tasks.filter { $0.status != .done  }
         case .done:
             return viewModel.tasks.filter { $0.status == .done }
         }
@@ -76,8 +77,8 @@ public struct TaskListView: View {
                                                 Task { await viewModel.updateTaskStatus(task: task, newStatus: .inProgress) }
                                             }
                                         }
-                                        Button("Cancel Task", systemImage: "xmark.circle", role: .destructive) {
-                                            Task { await viewModel.updateTaskStatus(task: task, newStatus: .canceled) }
+                                        Button("Delete Task", systemImage: "trash", role: .destructive) {
+                                            Task { await viewModel.deleteTask(task: task) }
                                         }
                                     }
                                 }
@@ -91,13 +92,19 @@ public struct TaskListView: View {
                 .refreshable {
                     HapticManager.shared.trigger(.soft)
                     await viewModel.fetchTasks()
+                    await viewModel.fetchProjects()
                 }
                 .task {
                     await viewModel.fetchTasks()
+                    await viewModel.fetchProjects()
+                }
+                .sheet(isPresented: $isShowingCreateTask) {
+                    CreateTaskView(viewModel: viewModel)
                 }
             }
         }
     }
+
     
     // MARK: - Subviews
     
@@ -113,7 +120,7 @@ public struct TaskListView: View {
                 
                 Button(action: {
                     HapticManager.shared.trigger(.light)
-                    // TODO: Open New Task Sheet
+                    isShowingCreateTask = true
                 }) {
                     ZStack {
                         Circle()
@@ -195,5 +202,131 @@ public struct TaskListView: View {
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .shadow(color: Color.black.opacity(0.03), radius: 10, y: 4)
         .padding(.horizontal, 24)
+    }
+}
+import SwiftUI
+
+public struct CreateTaskView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: TaskListViewModel
+    
+    @State private var title: String = ""
+    @State private var description: String = ""
+    @State private var priority: TaskModel.TaskPriority = .medium
+    @State private var projectId: UUID? = nil
+    @State private var dueDate: Date = Date()
+    @State private var includeDueDate: Bool = false
+    
+    @State private var isSubmitting: Bool = false
+    @State private var submissionError: String? = nil
+    
+    public var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Task Details").font(.custom("Inter-Medium", size: 14)).foregroundColor(.gray)) {
+                    TextField("Task Title", text: $title)
+                        .font(.custom("Inter-Regular", size: 16))
+                    
+                    TextField("Description (Optional)", text: $description, axis: .vertical)
+                        .font(.custom("Inter-Regular", size: 16))
+                        .lineLimit(3...6)
+                }
+                
+                Section(header: Text("Configuration").font(.custom("Inter-Medium", size: 14)).foregroundColor(.gray)) {
+                    Picker("Priority", selection: $priority) {
+                        Text("Low").tag(TaskModel.TaskPriority.low)
+                        Text("Medium").tag(TaskModel.TaskPriority.medium)
+                        Text("High").tag(TaskModel.TaskPriority.high)
+                        Text("Urgent").tag(TaskModel.TaskPriority.urgent)
+                    }
+                    .font(.custom("Inter-Regular", size: 16))
+                    
+                    Picker("Project (Optional)", selection: $projectId) {
+    Text("None").tag(nil as UUID?)
+    ForEach(viewModel.projects) { project in
+        Text(project.name).tag(project.id as UUID?)
+    }
+}
+.font(.custom("Inter-Regular", size: 16))
+
+Toggle("Set Due Date", isOn: $includeDueDate)
+                        .font(.custom("Inter-Regular", size: 16))
+                    
+                    if includeDueDate {
+                        DatePicker("Date", selection: $dueDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                    }
+                }
+                
+                if let error = submissionError {
+                    Section {
+                        Text(error)
+                            .font(.custom("Inter-Medium", size: 14))
+                            .foregroundColor(Color.Brand.warning)
+                    }
+                }
+            }
+            .navigationTitle("New Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        HapticManager.shared.trigger(.light)
+                        dismiss()
+                    }
+                    .font(.custom("Inter-Medium", size: 16))
+                    .foregroundColor(.gray)
+                    .disabled(isSubmitting)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Create") {
+                        submitTask()
+                    }
+                    .font(.custom("Inter-SemiBold", size: 16))
+                    .foregroundColor(title.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : Color.Brand.primary)
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
+                }
+            }
+            .overlay {
+                if isSubmitting {
+                    ZStack {
+                        Color.black.opacity(0.4).ignoresSafeArea()
+                        ProgressView()
+                            .padding()
+                            .background(Color.Brand.paper)
+                            .cornerRadius(12)
+                            .shadow(radius: 10)
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+    
+    private func submitTask() {
+        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        
+        isSubmitting = true
+        submissionError = nil
+        HapticManager.shared.trigger(.rigid)
+        
+        Task {
+            do {
+                try await viewModel.createTask(
+                    title: title.trimmingCharacters(in: .whitespaces),
+                    description: description.trimmingCharacters(in: .whitespaces).isEmpty ? nil : description.trimmingCharacters(in: .whitespaces),
+                    priority: priority,
+                projectId: projectId,
+                    dueDate: includeDueDate ? dueDate : nil
+                )
+                HapticManager.shared.trigger(.success)
+                dismiss()
+            } catch {
+                submissionError = error.localizedDescription
+                HapticManager.shared.trigger(.error)
+                isSubmitting = false
+            }
+        }
     }
 }

@@ -141,9 +141,8 @@ public struct TaskCardView: View {
         switch status {
         case .todo: return Color.gray
         case .inProgress: return Color.Brand.primary     // Azure Blue
-        case .inReview: return Color.Brand.accent        // Mint Cyan
+        case .review: return Color.Brand.accent        // Mint Cyan
         case .done: return Color.green
-        case .canceled: return Color.gray.opacity(0.5)
         }
     }
 }
