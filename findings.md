@@ -104,7 +104,7 @@ carry-forward debt; the persisted strings are a data-integrity concern, not a UI
 
 ## 2.6 Debt Carry-Forward (updated)
 
-- **Audit doc error to correct in 2.7 (or 2.6.1)**: `49-winston-ready-2.6-notes.md`
+- ~~**Audit doc error to correct in 2.7 (or 2.6.1)**: `49-winston-ready-2.6-notes.md`
   references `BrainStorm+-Web/src/lib/security/rbac.ts` — that file does not exist; real
   path is `src/lib/rbac.ts`. Same doc claims `serverGuard({requiredRole:'manager'})`
   resolves to `{super_admin, admin, hr_admin, manager}` — **false**: `ROLE_LEVEL` has no
@@ -112,12 +112,23 @@ carry-forward debt; the persisted strings are a data-integrity concern, not a UI
   superadmin, chairperson}`. iOS's whitelist actually mirrors **DB RLS policies
   (migrations 014 / 037)**, strictly narrower than Web server guard. The code is safe
   (RLS is ground truth for writes), but the narrative must be corrected before 2.7
-  reuses it as reference. Full analysis: `docs/parity/50-winston-audit-2.6.md` §8.
-- **RBAC unification debt for 2.7**: fold `canSyncRiskAction` + any new
+  reuses it as reference. Full analysis: `docs/parity/50-winston-audit-2.6.md` §8.~~
+  **Closed in Sprint 3.0 Task H**: `49-winston-ready-2.6-notes.md` §2.3 / §2.4 rewritten
+  against re-read Web sources — path corrected to `src/lib/rbac.ts` and the server-guard
+  role set now reads the actual 6-role set (manager / team_lead / admin / super_admin /
+  superadmin / chairperson at level ≥ 2). iOS 4-role whitelist is re-contextualized as a
+  DB-RLS mirror, intentionally narrower than server guard.
+- ~~**RBAC unification debt for 2.7**: fold `canSyncRiskAction` + any new
   `canUpdateRiskAction` into `RBACManager.canManageRiskActions(profile:)` routed through
   `PrimaryRole` + capability lookup — retires the raw-string whitelist shortcut 2.6
   took (which was correct given `migrateLegacyRole` drops `hr_admin`, but is no longer
-  necessary once the helper is added).
+  necessary once the helper is added).~~ **Closed in Sprint 3.0 Task G**:
+  `RBACManager.canManageRiskActions(rawRole:)` + `canManageRiskActions(profile:)` added
+  (DB-RLS-mirror raw-string whitelist owned by the shared manager, not Projects-local).
+  `ProjectDetailViewModel.canSyncRiskAction` + `syncEnabledRoles` deleted; all call
+  sites now route through `RBACManager.shared.canManageRiskActions(...)`. Did not route
+  through `PrimaryRole` lookup because `migrateLegacyRole` deliberately drops `hr_admin`
+  (which DB RLS accepts) — raw-string remains the right shape for THIS particular gate.
 - **Resolution write-back** (close / reopen / effectiveness / governance note): still
   absent on iOS. Write gated to `['super_admin', 'admin', 'hr_admin', 'manager']` via
   the same RLS that 2.6 passes — the gate is ready; the UI / VM are not.

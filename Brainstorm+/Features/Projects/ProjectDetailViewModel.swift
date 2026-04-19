@@ -415,7 +415,7 @@ public class ProjectDetailViewModel: ObservableObject {
 
     private static func isAdmin(role: PrimaryRole?) -> Bool {
         switch role {
-        case .admin, .superadmin, .chairperson: return true
+        case .admin, .superadmin: return true
         case .employee, .none: return false
         }
     }
@@ -1389,37 +1389,6 @@ public class ProjectDetailViewModel: ObservableObject {
         }
     }
 
-    /// 2.6 RBAC gate. Mirrors Web's `serverGuard({ requiredRole: 'manager' })` which
-    /// resolves to the role set `['super_admin', 'admin', 'hr_admin', 'manager']` in
-    /// `BrainStorm+-Web/src/lib/security/rbac.ts`.
-    ///
-    /// **Why raw-string check rather than `Self.isAdmin(role: PrimaryRole?)`**: iOS's
-    /// `RBACManager.migrateLegacyRole(_:)` does NOT map `hr_admin` (it falls through to
-    /// `.employee`), and DOES map `chairperson → .chairperson` / `team_lead → .admin`.
-    /// Routing this gate through `PrimaryRole` would therefore:
-    /// - false-negative for `hr_admin` (locked out of sync even though Web allows it)
-    /// - false-positive for `chairperson` / `team_lead` (granted even though Web's manager
-    ///   role set does not include them — Web `chairperson` grants are issued via higher
-    ///   tiers via the `isSuperAdmin` / `isAdmin` helpers, not by the `manager`-or-above
-    ///   check)
-    ///
-    /// Checking the raw string lower-cased against Web's exact role set sidesteps both
-    /// migrations and keeps the client-side gate in lockstep with server-side RLS.
-    public static func canSyncRiskAction(role: String?) -> Bool {
-        guard let role else { return false }
-        return syncEnabledRoles.contains(role.lowercased())
-    }
-
-    /// Web's exact `manager`-or-above role set, lower-cased. The server policy at
-    /// `BrainStorm+-Web/supabase/migrations/...` enforces the same membership via RLS, so
-    /// the client-side set must not drift.
-    private static let syncEnabledRoles: Set<String> = [
-        "super_admin",
-        "admin",
-        "hr_admin",
-        "manager"
-    ]
-
     /// Maps the iOS `ProjectRiskAnalysis.RiskLevel` enum into the three-value `severity`
     /// vocabulary Web's risk-action insert accepts. Mirrors the ternary at
     /// `BrainStorm+-Web/src/app/dashboard/projects/page.tsx` lines 692-695:
@@ -1473,9 +1442,14 @@ public class ProjectDetailViewModel: ObservableObject {
     /// end-to-end without introducing any server-only dependency.
     ///
     /// **Preconditions** (all enforced here, not by UI alone):
-    /// 1. `rawRole` passes `canSyncRiskAction(...)` — client-side mirror of Web's
-    ///    `serverGuard({ requiredRole: 'manager' })`. Failing this sets
-    ///    `riskActionSyncErrorMessage` and returns false without contacting Supabase.
+    /// 1. `rawRole` passes `RBACManager.shared.canManageRiskActions(rawRole:)` —
+    ///    client-side mirror of DB RLS policies for `risk_actions` (migrations
+    ///    014 + 037: `['super_admin', 'admin', 'hr_admin', 'manager']`, with
+    ///    canonical `superadmin` alias added for Phase 2). Intentionally narrower
+    ///    than Web's `serverGuard({ requiredRole: 'manager' })` (which admits 6
+    ///    roles at level ≥ 2); RLS is the authoritative write-time gate either
+    ///    way. Failing this sets `riskActionSyncErrorMessage` and returns false
+    ///    without contacting Supabase.
     /// 2. `project != nil && riskAnalysis != nil` — the confirmation dialog cannot render
     ///    without these, but we re-check at the top of the method so a race between the
     ///    user tapping "Convert" and a concurrent `applyDeniedState()` can't corrupt state.
@@ -1517,7 +1491,7 @@ public class ProjectDetailViewModel: ObservableObject {
     /// VM writes the scoped error and leaves the view in the reverted phase.
     public func syncRiskActionFromDetail(rawRole: String?) async -> Bool {
         // 1. RBAC gate. Mirrors Web's server guard before any Supabase contact.
-        guard Self.canSyncRiskAction(role: rawRole) else {
+        guard RBACManager.shared.canManageRiskActions(rawRole: rawRole) else {
             self.riskActionSyncErrorMessage = "Converting a risk into a risk action requires admin or manager privileges."
             return false
         }

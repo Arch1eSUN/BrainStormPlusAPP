@@ -105,15 +105,27 @@ const handleSyncToRiskAction = async (title, riskDetail, severity) => {
 
 No client-side RBAC pre-check on Web — Web relies on RLS post-error.
 
-### 2.3 `BrainStorm+-Web/src/lib/security/rbac.ts`
+### 2.3 `BrainStorm+-Web/src/lib/rbac.ts`
 
-`serverGuard({ requiredRole: 'manager' })` resolves to the role set
-`['super_admin', 'admin', 'hr_admin', 'manager']`.
+`serverGuard({ requiredRole: 'manager' })` resolves via the `getRoleLevel`
+hierarchy — `manager` is level 2, so the guard admits every role at level ≥ 2:
+`['manager', 'team_lead', 'admin', 'super_admin', 'superadmin', 'chairperson']`
+(6 roles total).
+
+The narrower 4-role set `['super_admin', 'admin', 'hr_admin', 'manager']` that
+iOS 2.6 uses for its client-side pre-gate is **not** a mirror of Web's
+server-guard hierarchy — it is a mirror of the DB RLS policy on `risk_actions`
+(see §2.4). iOS is intentionally aligning with the server-side ground truth
+(RLS) rather than Web's looser server-guard allow-list, so the client pre-gate
+never produces a false positive that RLS would subsequently reject.
 
 ### 2.4 Supabase migrations
 
-- `risk_actions.INSERT` RLS policy gates the same role set as `serverGuard('manager')`:
-  `['super_admin', 'admin', 'hr_admin', 'manager']`.
+- `risk_actions.INSERT` RLS policy (Supabase migrations 014 + 037) gates the
+  role set `['super_admin', 'admin', 'hr_admin', 'manager']`. This is
+  security-equivalent to — and strictly narrower than — Web's
+  `serverGuard('manager')` hierarchy; `team_lead` / `chairperson` pass the Web
+  server guard but are rejected by RLS on the INSERT.
 - FK constraints on `org_id`, `source_id` (project UUID), `ai_source_id`
   (`project_risk_summaries.id`), `created_by` (`auth.users.id`) all satisfiable from
   client-side data.

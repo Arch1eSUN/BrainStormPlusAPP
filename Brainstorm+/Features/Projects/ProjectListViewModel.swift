@@ -97,9 +97,9 @@ public class ProjectListViewModel: ObservableObject {
     /// - status pushes to server-side `eq('status', s)`
     ///
     /// Role admin predicate mirrors `isAdmin()` in `BrainStorm+-Web/src/lib/rbac.ts`:
-    /// `['admin', 'superadmin', 'chairperson', 'super_admin']`.
-    /// On iOS, `PrimaryRole` is already normalized by `RBACManager.migrateLegacyRole()`,
-    /// which folds `super_admin` into `.superadmin`, so we compare against the three canonical values.
+    /// `['admin', 'superadmin']`. Legacy `chairperson` / `super_admin` strings are
+    /// already folded into `.superadmin` by `RBACManager.migrateLegacyRole()`, so
+    /// this switch only enumerates the two canonical admin tiers.
     public func fetchProjects(role: PrimaryRole?, userId: UUID?) async {
         isLoading = true
         errorMessage = nil
@@ -162,7 +162,7 @@ public class ProjectListViewModel: ObservableObject {
 
     private static func isAdmin(role: PrimaryRole?) -> Bool {
         switch role {
-        case .admin, .superadmin, .chairperson: return true
+        case .admin, .superadmin: return true
         case .employee, .none: return false
         }
     }

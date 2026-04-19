@@ -192,17 +192,17 @@ public struct ProjectDetailView: View {
     }
 
     /// 2.6: raw role string straight from the session profile. Distinct from `primaryRole`
-    /// because `ProjectDetailViewModel.canSyncRiskAction(role:)` gates against Web's exact
-    /// role set (`['super_admin', 'admin', 'hr_admin', 'manager']`), and iOS's
-    /// `RBACManager.migrateLegacyRole(_:)` drops `hr_admin` and over-maps
-    /// `chairperson` / `team_lead`. Using the raw string here keeps the client gate in
-    /// lockstep with server-side RLS; see the VM docstring for the full rationale.
+    /// because `RBACManager.canManageRiskActions(rawRole:)` gates against Web's exact
+    /// role set (`['super_admin', 'superadmin', 'admin', 'hr_admin', 'manager']`), and
+    /// iOS's `RBACManager.migrateLegacyRole(_:)` drops `hr_admin` and folds legacy
+    /// `chairperson` / `super_admin` into `.superadmin`. Using the raw string here keeps
+    /// the client gate in lockstep with server-side RLS (migrations 014 + 037).
     private var rawRole: String? {
         sessionManager.currentProfile?.role
     }
 
     private var canSyncRiskAction: Bool {
-        ProjectDetailViewModel.canSyncRiskAction(role: rawRole)
+        RBACManager.shared.canManageRiskActions(rawRole: rawRole)
     }
 
     private func reload() async {
