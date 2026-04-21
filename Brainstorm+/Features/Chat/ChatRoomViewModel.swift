@@ -163,7 +163,12 @@ public class ChatRoomViewModel: ObservableObject {
         )
         self.realtimeChannel = ch
 
-        await ch.subscribe()
+        do {
+            try await ch.subscribeWithError()
+        } catch {
+            errorMessage = "实时连接失败，新消息可能延迟送达"
+            // 不 return —— 依然启动 for-await Task，subscribe 底层重连后会续上
+        }
 
         self.realtimeTask = Task { [weak self] in
             for await change in changes {
@@ -189,7 +194,7 @@ public class ChatRoomViewModel: ObservableObject {
         realtimeTask?.cancel()
         realtimeTask = nil
         if let ch = realtimeChannel {
-            Task { await ch.unsubscribe() }
+            Task { [client] in await client.removeChannel(ch) }
             realtimeChannel = nil
         }
     }

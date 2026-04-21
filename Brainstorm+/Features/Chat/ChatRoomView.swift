@@ -110,11 +110,10 @@ public struct ChatRoomView: View {
     }
 
     private func sendTapped() {
-        let text = messageText
-        Task {
-            await viewModel.sendMessage(text)
-            messageText = ""
-        }
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        messageText = ""  // optimistic 清，用户立即可以打新消息
+        Task { await viewModel.sendMessage(text) }
     }
 
     @ViewBuilder
