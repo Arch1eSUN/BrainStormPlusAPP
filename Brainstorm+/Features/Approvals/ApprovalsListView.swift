@@ -2,17 +2,23 @@ import SwiftUI
 import Supabase
 
 /// Sprint 4.1 — "我提交的" list screen (read-only foundation) +
-/// Sprint 4.2 — detail push + "申请撤回" self-service.
+/// Sprint 4.2 — detail push + "申请撤回" self-service +
+/// Sprint 4.3 — embedded as the `mine` tab body inside
+/// `ApprovalCenterView`.
 ///
 /// 1:1 port of Web `src/app/dashboard/approval/_tabs/my-submissions.tsx`
 /// with these intentional deltas:
-///   - No tab switcher (Web's page.tsx has 7 tabs for approver queues);
-///     this sprint still only surfaces the user-centric "我提交的".
-///     4.3 lands the approver queues.
-///
-/// Navigation entry is via `ActionItemHelper.destination(for: .approval)`
-/// which was previously a `ParityBacklogDestination` placeholder. Rows
-/// push `ApprovalDetailView` via a value-based NavigationLink.
+///   - No tab switcher lives in *this* file; the 7-tab shell is
+///     `ApprovalCenterView` (4.3). This view is now a content body
+///     that assumes it's embedded inside an outer NavigationStack
+///     which also owns the `.navigationDestination(for: UUID.self)`
+///     registration. We do not declare the destination here anymore
+///     to avoid a duplicate-registration SwiftUI runtime warning;
+///     the outer center view handles UUID deep links for both
+///     `mine` and the 6 approver queues uniformly.
+///   - Similarly, the navigation title/chrome is set by the center
+///     view, not this body — the title there is "审批中心" with the
+///     pill bar identifying the current tab.
 public struct ApprovalsListView: View {
     @StateObject private var viewModel: MySubmissionsViewModel
     private let client: SupabaseClient
@@ -37,17 +43,15 @@ public struct ApprovalsListView: View {
                 submissionsList
             }
         }
-        .navigationTitle("我提交的")
-        .navigationBarTitleDisplayMode(.inline)
+        // Nav title + UUID deep-link destination are owned by the outer
+        // `ApprovalCenterView` (4.3). This body just handles content +
+        // pull-to-refresh.
         .zyErrorBanner($viewModel.errorMessage)
         .refreshable {
             await viewModel.listMySubmissions()
         }
         .task {
             await viewModel.listMySubmissions()
-        }
-        .navigationDestination(for: UUID.self) { id in
-            ApprovalDetailView(requestId: id, client: client)
         }
     }
 
@@ -184,10 +188,18 @@ public struct ApprovalsListView: View {
 }
 
 #Preview {
+    // Preview shell: mirrors what ApprovalCenterView provides at
+    // runtime — an outer NavigationStack + the UUID destination
+    // registration — so row taps resolve during preview.
     NavigationStack {
         ApprovalsListView(
             viewModel: MySubmissionsViewModel(client: supabase),
             client: supabase
         )
+        .navigationTitle("我提交的")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: UUID.self) { id in
+            ApprovalDetailView(requestId: id, client: supabase)
+        }
     }
 }

@@ -713,3 +713,200 @@ public struct ApprovalAuditLogEntry: Identifiable, Codable, Hashable {
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Sprint 4.3 — Approver queue domain
+//
+// Layered on top of 4.1 / 4.2. Backs `ApprovalCenterView` (tab
+// switcher) + `ApprovalQueueView` (per-tab approver list) + the
+// apply-action write path.
+//
+// Web source of truth:
+//   - `src/app/dashboard/approval/page.tsx` — 7-tab layout
+//   - `src/app/dashboard/approval/_tabs/*-list.tsx` — per-tab template
+//   - `src/lib/actions/approval-requests.ts:343-358 ApprovalListRow`
+//   - `src/lib/actions/approval-requests.ts:389-533 fetchApprovalsByType`
+//   - `src/lib/actions/approval-requests.ts:672-818 approveWithAudit/rejectWithAudit`
+//
+// Writes go through the SECURITY DEFINER RPC
+// `approvals_apply_action(p_request_id, p_decision, p_comment)` (see
+// migration `20260421170000_approvals_apply_action_rpc.sql`). The RPC
+// rejects `request_type='leave'` because Web's `decideLeaveRequest`
+// dispatches side-effects (comp_time quota debit + DWS refresh) via the
+// Next.js hook layer that cannot run from SQL. Leave rows are still
+// SELECTable here so approvers see the queue; the action buttons wire
+// through the same RPC and surface the Chinese error if tapped.
+// ══════════════════════════════════════════════════════════════════
+
+/// Approver-queue row. Equivalent of Web `ApprovalListRow`
+/// (approval-requests.ts:343-358) — flattens the 1:1 leave detail into
+/// four nullable columns and carries a `requesterProfile` field we
+/// post-inject after a batch `profiles` fetch (requester_id FKs to
+/// auth.users, so PostgREST can't embed the join).
+///
+/// Distinct from `ApprovalMySubmissionRow` (4.1): that one is for the
+/// viewer's own submissions and doesn't need requester identity; this
+/// one shows someone else's submission to an approver and needs name +
+/// avatar.
+public struct ApprovalListRow: Identifiable, Codable, Hashable {
+    public let id: UUID
+    public let requestType: ApprovalRequestType
+    public let status: ApprovalStatus
+    public let priorityByRequester: RequestPriority
+    public let businessReason: String?
+    public let requesterId: UUID
+    public let reviewerId: UUID?
+    public let reviewerNote: String?
+    public let reviewedAt: Date?
+    public let createdAt: Date
+
+    /// Flattened leave preview — same shape as Web's flat columns.
+    public let leaveType: LeaveType?
+    public let startDate: String?
+    public let endDate: String?
+    public let days: Double?
+
+    /// Post-injected by the ViewModel after a batch `profiles` fetch.
+    /// Never present in decoded payload.
+    public var requesterProfile: ApprovalActorProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case requestType = "request_type"
+        case status
+        case priorityByRequester = "priority_by_requester"
+        case businessReason = "business_reason"
+        case requesterId = "requester_id"
+        case reviewerId = "reviewer_id"
+        case reviewerNote = "reviewer_note"
+        case reviewedAt = "reviewed_at"
+        case createdAt = "created_at"
+        case leaveDetails = "approval_request_leave"
+    }
+
+    /// Decoder eats the nested `approval_request_leave` array (1-element
+    /// left-join) and flattens its four fields up to the row. Mirrors
+    /// the Web mapping step in `fetchApprovalsByType` (approval-requests.ts:494-515).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.requestType = try c.decode(ApprovalRequestType.self, forKey: .requestType)
+        self.status = try c.decode(ApprovalStatus.self, forKey: .status)
+        self.priorityByRequester = try c.decode(RequestPriority.self, forKey: .priorityByRequester)
+        self.businessReason = try c.decodeIfPresent(String.self, forKey: .businessReason)
+        self.requesterId = try c.decode(UUID.self, forKey: .requesterId)
+        self.reviewerId = try c.decodeIfPresent(UUID.self, forKey: .reviewerId)
+        self.reviewerNote = try c.decodeIfPresent(String.self, forKey: .reviewerNote)
+        self.reviewedAt = try c.decodeIfPresent(Date.self, forKey: .reviewedAt)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+
+        // Nested leave details — three accepted shapes.
+        let leave: ApprovalLeaveDetail?
+        if let arr = try? c.decodeIfPresent([ApprovalLeaveDetail].self, forKey: .leaveDetails) {
+            leave = arr.first
+        } else if let single = try? c.decodeIfPresent(ApprovalLeaveDetail.self, forKey: .leaveDetails) {
+            leave = single
+        } else {
+            leave = nil
+        }
+        self.leaveType = leave?.leaveType
+        self.startDate = leave?.startDate
+        self.endDate = leave?.endDate
+        self.days = leave?.days
+
+        self.requesterProfile = nil
+    }
+
+    /// Encode-side — kept flat, not expected to round-trip through the
+    /// queue fetch. Safe stub so the Codable synth remains usable for
+    /// snapshot/testing.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(requestType, forKey: .requestType)
+        try c.encode(status, forKey: .status)
+        try c.encode(priorityByRequester, forKey: .priorityByRequester)
+        try c.encodeIfPresent(businessReason, forKey: .businessReason)
+        try c.encode(requesterId, forKey: .requesterId)
+        try c.encodeIfPresent(reviewerId, forKey: .reviewerId)
+        try c.encodeIfPresent(reviewerNote, forKey: .reviewerNote)
+        try c.encodeIfPresent(reviewedAt, forKey: .reviewedAt)
+        try c.encode(createdAt, forKey: .createdAt)
+    }
+
+    public static func == (lhs: ApprovalListRow, rhs: ApprovalListRow) -> Bool {
+        lhs.id == rhs.id
+            && lhs.status == rhs.status
+            && lhs.reviewerId == rhs.reviewerId
+            && lhs.reviewerNote == rhs.reviewerNote
+            && lhs.reviewedAt == rhs.reviewedAt
+    }
+
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// The 6 approver-queue tabs. Mirrors Web's `ApprovalTabKey` minus
+/// `mine` (which routes to `ApprovalsListView` / `MySubmissionsViewModel`
+/// from 4.1).
+///
+/// The mappings on this enum are the source of truth for
+/// `typeToRequestTypes` (DB filter) and `tabToCapTypes` (capability
+/// gate) — kept as struct-level static data so both the ViewModel and
+/// the tab header can read the same definition.
+public enum ApprovalQueueKind: String, CaseIterable, Identifiable, Hashable {
+    case leave
+    case fieldWork = "field_work"
+    case businessTrip = "business_trip"
+    case expense
+    case report
+    case generic
+
+    public var id: String { rawValue }
+
+    /// Chinese tab label. Matches page.tsx:120-150 tab labels.
+    public var displayLabel: String {
+        switch self {
+        case .leave:        return "请假"
+        case .fieldWork:    return "外勤"
+        case .businessTrip: return "出差"
+        case .expense:      return "报销/采购"
+        case .report:       return "日报/周报"
+        case .generic:      return "通用"
+        }
+    }
+
+    /// DB `request_type` values included in this queue. Mirrors
+    /// `typeToRequestTypes` (approval-requests.ts:361-371).
+    public var requestTypes: [String] {
+        switch self {
+        case .leave:        return ["leave"]
+        case .fieldWork:    return ["field_work"]
+        case .businessTrip: return ["business_trip"]
+        case .expense:      return ["reimbursement", "procurement"]
+        case .report:       return ["daily_log", "weekly_report"]
+        case .generic:      return ["generic"]
+        }
+    }
+
+    /// Whether apply-action writes are supported for this queue on
+    /// iOS. Leave is intentionally read-only (see RPC rationale in the
+    /// migration header). UI disables approve/reject and surfaces a
+    /// Chinese hint on the leave queue.
+    public var supportsWriteOnIOS: Bool {
+        self != .leave
+    }
+}
+
+/// The two decisions the approve/reject buttons can post. Serialized
+/// as the `p_decision` TEXT arg of the `approvals_apply_action` RPC.
+public enum ApprovalActionDecision: String, Codable, Hashable {
+    case approve
+    case reject
+
+    public var displayLabel: String {
+        switch self {
+        case .approve: return "批准"
+        case .reject:  return "拒绝"
+        }
+    }
+}

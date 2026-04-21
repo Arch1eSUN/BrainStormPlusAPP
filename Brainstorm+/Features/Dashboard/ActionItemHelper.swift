@@ -20,10 +20,11 @@ public struct ActionItemHelper {
         case .chat:
             ChatListView(viewModel: ChatListViewModel(client: supabase))
         case .approval:
-            ApprovalsListView(
-                viewModel: MySubmissionsViewModel(client: supabase),
-                client: supabase
-            )
+            // Sprint 4.3 — routes to the 7-tab approval center
+            // (mine + 6 approver queues). ApprovalsListView (4.1) is
+            // now the "我提交的" body *inside* the center, not a
+            // top-level destination.
+            ApprovalCenterView(client: supabase)
         case .knowledge:
             KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase))
         case .notifications:
