@@ -63,19 +63,44 @@ Five items carry forward into the next chat sprint. Full diagnosis lives in
 - **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**: Web ships
   `@mentions`, message search, conversation creation, DM find-or-create. iOS defers all
   four; `ChatListView` shows only already-joined channels with no creation entry point.
-- **3.1-debt-05 Web RLS tightening (system-level security debt — UNRESOLVED)**:
-  Web `chat_channels` / `chat_messages` SELECT RLS remains `USING (true)` because Web
-  uses `createAdminClient()` server-side to bypass RLS and apply access control in
-  server actions. iOS cannot reuse that posture with a user JWT, so 3.1 replicates
-  access gating client-side (`getAccessibleChannelMap` / `ensureChannelAccess`). The
+- **3.1-debt-05 Web RLS tightening (system-level security debt)**:
+  Sprint 3.2a IN PROGRESS under repeated "你自己决定" delegation. Context: Web
+  `chat_channels` / `chat_messages` SELECT RLS was `USING (true)` because Web uses
+  `createAdminClient()` server-side to bypass RLS and apply access control in server
+  actions. iOS cannot reuse that posture with a user JWT, so 3.1 replicated access
+  gating client-side (`getAccessibleChannelMap` / `ensureChannelAccess`). The
   client-side gate only shapes rendering — a forged client (jailbroken iOS, DevTools
   direct to Supabase, custom app shell) would still receive the full tables from the
-  DB. Winston audit of 3.1 flagged this as a real security debt, not accepted trade-off.
-  Converted from vague "architectural debt" to a concrete spec:
-  `devprompt/3.2a-chat-rls-tightening.md` (3.2a sprint). That sprint migrates
-  SELECT to membership-scoped predicates (announcement ∪ owned ∪ membership, mirroring
-  Web `chat.ts:252-282`), regresses Web server actions, shadow-verifies on staging,
-  and optionally simplifies iOS client-side gating once DB is authoritative.
+  DB. Winston audit of 3.1 flagged as real security debt.
+  - **Task A ✅** migration authored:
+    `BrainStorm+-Web/supabase/migrations/20260421000000_chat_rls_tightening.sql`.
+    DROPs `"Anyone can view channels"` / `"Users can view messages"`, CREATEs
+    `chat_channels_select_membership` (announcement ∪ owned ∪ member-of) +
+    `chat_messages_select_membership` (containing-channel visibility via `EXISTS`).
+    Mirrors Web `chat.ts:252-282` so DB predicate is textually equivalent to the
+    application-layer one.
+  - **Task B ✅** Web read-path regression audit:
+    `docs/parity/54-3.2a-task-b-web-regression-audit.md`. 23 admin-client reads in
+    `src/lib/actions/chat.ts` unaffected (service_role bypass). 2 user-role Realtime
+    reads: chat page subscription is channel-filtered → RLS-compatible; global
+    `@mention` listener narrows to member-channels → strict UX improvement (no more
+    dead-link notifications for non-member channels). Zero pre-migration code
+    changes required.
+  - **Task C1 ✅ (native-PG approximation)**: Docker daemon unavailable for
+    `supabase start`. Verified via native Postgres 15 + `auth.uid()` stub (session
+    GUC `request.jwt.claim.sub`) in `/tmp/chat_rls_test.sh`. Four-user scenario
+    matrix (DM member A, DM member B, C-team owner C, stranger D) all green;
+    stranger sees only the announcement channel with 0 non-announcement leakage.
+    Evidence: `docs/parity/55-3.2a-task-c1-local-verification.md`. Full-stack
+    verification (PostgREST + Realtime + GoTrue) deferred to Docker-available run
+    or folds into C3 staging shadow.
+  - **Remaining**: C2 (iOS staging smoke), C3 (staging shadow ≥24h), Task D (D1
+    annotate iOS client gate vs D2 aggressive collapse), Winston 3.2a re-audit.
+  - **Related follow-ups**: debt-10 (membership row leak via
+    `chat_channel_members` SELECT = `auth.uid() IS NOT NULL`) — precondition for
+    the new `EXISTS` subqueries; tightening requires SECURITY DEFINER or redesign;
+    tracked separately. Notification provider naive `content.includes('@<name>')`
+    mention detection — structured mention handling in a future sprint.
 - **3.1-debt-06 Realtime connection failure visibility — ✅ CLOSED** in closeout pass.
   `ChatRoomViewModel` writes `errorMessage` on `subscribeWithError()` throw (commit
   `06b7f99`); `ChatRoomView` now surfaces it via shared
