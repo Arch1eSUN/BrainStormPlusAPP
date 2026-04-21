@@ -910,3 +910,389 @@ public enum ApprovalActionDecision: String, Codable, Hashable {
         }
     }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Sprint 4.4 — Submission form input DTOs
+//
+// One `*SubmitInput` struct per submission type, matching its
+// SECURITY DEFINER RPC parameter list 1:1. The CodingKeys are the
+// exact `p_*` param names the Postgres function declares — the
+// Supabase Swift SDK's `client.rpc(fn, params:)` serializes the
+// payload to a JSON object whose keys become the positional-or-named
+// RPC args.
+//
+// Why separate from the read-side detail models above: the decoded
+// forms (`ApprovalLeaveFullDetail`, `ApprovalReimbursementDetail`,
+// `ApprovalProcurementDetail`, `ApprovalFieldWorkDetail`) are
+// shaped for the *detail dialog*'s consumption — lots of optionals,
+// forgiving decoders. Submission inputs are the opposite shape:
+// tightly-typed non-optionals reflecting what the form validator
+// enforces before sending. Mixing them into one model creates
+// ambiguity about which fields a call site is allowed to omit.
+//
+// Enum additions below (`ReimbursementCategory`, `PaymentMethod`,
+// `ProcurementType`) are new in 4.4. The read-side models kept
+// these as `String?` for decoder forgiveness (the column is an
+// enum but we don't want to crash on unknown categories); on the
+// write side we want the SwiftUI Picker to bind to a typed enum,
+// so we define the cases here. If a future DB migration adds a new
+// case we update this enum and the Picker — server-side the enum
+// coercion (`::reimbursement_category`) would raise on mismatch.
+//
+// Migration reference: `20260421180000_approvals_submit_rpcs.sql`.
+// ══════════════════════════════════════════════════════════════════
+
+// ─── Shared submit enums ────────────────────────────────────────
+
+/// Reimbursement category — mirrors DB enum
+/// `reimbursement_category` (migration 020:37-41).
+public enum ReimbursementCategory: String, CaseIterable, Codable, Hashable, Identifiable {
+    case travel
+    case meals
+    case officeSupplies = "office_supplies"
+    case equipment
+    case software
+    case training
+    case entertainment
+    case transportation
+    case other
+
+    public var id: String { rawValue }
+
+    public var displayLabel: String {
+        switch self {
+        case .travel:         return "差旅"
+        case .meals:          return "餐饮"
+        case .officeSupplies: return "办公用品"
+        case .equipment:      return "设备"
+        case .software:       return "软件"
+        case .training:       return "培训"
+        case .entertainment:  return "招待"
+        case .transportation: return "交通"
+        case .other:          return "其他"
+        }
+    }
+}
+
+/// Payment method — mirrors DB enum `payment_method` (020:44-48).
+public enum PaymentMethod: String, CaseIterable, Codable, Hashable, Identifiable {
+    case personalCash = "personal_cash"
+    case personalCard = "personal_card"
+    case corporateCard = "corporate_card"
+    case wechat
+    case alipay
+    case other
+
+    public var id: String { rawValue }
+
+    public var displayLabel: String {
+        switch self {
+        case .personalCash:  return "个人现金"
+        case .personalCard:  return "个人银行卡"
+        case .corporateCard: return "公司卡"
+        case .wechat:        return "微信"
+        case .alipay:        return "支付宝"
+        case .other:         return "其他"
+        }
+    }
+}
+
+/// Procurement type — mirrors DB enum `procurement_type` (020:51-55).
+public enum ProcurementType: String, CaseIterable, Codable, Hashable, Identifiable {
+    case equipment
+    case softwareSubscription = "software_subscription"
+    case saasAccount = "saas_account"
+    case platformTopup = "platform_topup"
+    case officeSupplies = "office_supplies"
+    case marketing
+    case other
+
+    public var id: String { rawValue }
+
+    public var displayLabel: String {
+        switch self {
+        case .equipment:            return "设备"
+        case .softwareSubscription: return "软件订阅"
+        case .saasAccount:          return "SaaS 账号"
+        case .platformTopup:        return "平台充值"
+        case .officeSupplies:       return "办公用品"
+        case .marketing:            return "营销"
+        case .other:                return "其他"
+        }
+    }
+}
+
+// ─── Submit input DTOs ──────────────────────────────────────────
+
+/// `approvals_submit_leave(p_leave_type, p_start_date, p_end_date,
+/// p_days, p_reason, p_priority) RETURNS UUID`.
+///
+/// `days` can be fractional (DB column is `NUMERIC(4,1)`, allowing
+/// half-day steps). `priority` is optional — the RPC defaults to
+/// `medium` when NULL/blank, matching Web's pattern.
+public struct LeaveSubmitInput: Encodable, Hashable {
+    public let leaveType: LeaveType
+    public let startDate: String   // "YYYY-MM-DD"
+    public let endDate: String
+    public let days: Double
+    public let reason: String
+    public let priority: RequestPriority?
+
+    public init(
+        leaveType: LeaveType,
+        startDate: String,
+        endDate: String,
+        days: Double,
+        reason: String,
+        priority: RequestPriority? = .medium
+    ) {
+        self.leaveType = leaveType
+        self.startDate = startDate
+        self.endDate = endDate
+        self.days = days
+        self.reason = reason
+        self.priority = priority
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case leaveType = "p_leave_type"
+        case startDate = "p_start_date"
+        case endDate   = "p_end_date"
+        case days      = "p_days"
+        case reason    = "p_reason"
+        case priority  = "p_priority"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(leaveType.rawValue, forKey: .leaveType)
+        try c.encode(startDate, forKey: .startDate)
+        try c.encode(endDate, forKey: .endDate)
+        try c.encode(days, forKey: .days)
+        try c.encode(reason, forKey: .reason)
+        try c.encodeIfPresent(priority?.rawValue, forKey: .priority)
+    }
+}
+
+/// `approvals_submit_reimbursement(...)` — 13 params. `amountCents`
+/// is pre-converted via `Int((yuan * 100).rounded())` on the caller
+/// side, matching Web's `Math.round(data.amount * 100)` convention
+/// at approval-requests.ts:178.
+public struct ReimbursementSubmitInput: Encodable, Hashable {
+    public let itemDescription: String
+    public let category: ReimbursementCategory
+    public let purchaseDate: String       // "YYYY-MM-DD"
+    public let amountCents: Int
+    public let currency: String?          // nil → RPC defaults to "CNY"
+    public let merchant: String
+    public let paymentMethod: PaymentMethod
+    public let purpose: String
+    public let priority: RequestPriority?
+    public let businessReason: String?
+    public let relatedProject: String?
+    public let attachments: [ApprovalAttachment]
+    public let receiptUrls: [String]
+
+    public init(
+        itemDescription: String,
+        category: ReimbursementCategory,
+        purchaseDate: String,
+        amountCents: Int,
+        currency: String? = nil,
+        merchant: String,
+        paymentMethod: PaymentMethod,
+        purpose: String,
+        priority: RequestPriority? = .medium,
+        businessReason: String? = nil,
+        relatedProject: String? = nil,
+        attachments: [ApprovalAttachment] = [],
+        receiptUrls: [String] = []
+    ) {
+        self.itemDescription = itemDescription
+        self.category = category
+        self.purchaseDate = purchaseDate
+        self.amountCents = amountCents
+        self.currency = currency
+        self.merchant = merchant
+        self.paymentMethod = paymentMethod
+        self.purpose = purpose
+        self.priority = priority
+        self.businessReason = businessReason
+        self.relatedProject = relatedProject
+        self.attachments = attachments
+        self.receiptUrls = receiptUrls
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case itemDescription = "p_item_description"
+        case category        = "p_category"
+        case purchaseDate    = "p_purchase_date"
+        case amountCents     = "p_amount_cents"
+        case currency        = "p_currency"
+        case merchant        = "p_merchant"
+        case paymentMethod   = "p_payment_method"
+        case purpose         = "p_purpose"
+        case priority        = "p_priority"
+        case businessReason  = "p_business_reason"
+        case relatedProject  = "p_related_project"
+        case attachments     = "p_attachments"
+        case receiptUrls     = "p_receipt_urls"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(itemDescription, forKey: .itemDescription)
+        try c.encode(category.rawValue, forKey: .category)
+        try c.encode(purchaseDate, forKey: .purchaseDate)
+        try c.encode(amountCents, forKey: .amountCents)
+        try c.encodeIfPresent(currency, forKey: .currency)
+        try c.encode(merchant, forKey: .merchant)
+        try c.encode(paymentMethod.rawValue, forKey: .paymentMethod)
+        try c.encode(purpose, forKey: .purpose)
+        try c.encodeIfPresent(priority?.rawValue, forKey: .priority)
+        try c.encodeIfPresent(businessReason, forKey: .businessReason)
+        try c.encodeIfPresent(relatedProject, forKey: .relatedProject)
+        // attachments / receipt_urls are serialized as JSON arrays —
+        // the RPC param is `JSONB`, and Supabase serializes Encodable
+        // arrays as JSON. Empty arrays become `[]`, matching the RPC's
+        // `COALESCE(..., '[]'::jsonb)` fallback so NULL isn't strictly
+        // required.
+        try c.encode(attachments, forKey: .attachments)
+        try c.encode(receiptUrls, forKey: .receiptUrls)
+    }
+}
+
+/// `approvals_submit_procurement(...)` — 17 params. Unit and total
+/// prices are pre-converted to cents (Web line 261-262).
+///
+/// Client-side convention: the form computes `total = unit * quantity`
+/// but sends both to the RPC as cents so the server can validate
+/// each independently (DB constraint requires both > 0).
+public struct ProcurementSubmitInput: Encodable, Hashable {
+    public let procurementType: ProcurementType
+    public let itemDescription: String
+    public let vendor: String
+    public let quantity: Int
+    public let unitPriceCents: Int
+    public let totalPriceCents: Int
+    public let currency: String?
+    public let userOrDepartment: String
+    public let purpose: String
+    public let alternatives: String?
+    public let justification: String
+    public let budgetAvailable: Bool
+    public let expectedPurchaseDate: String?   // "YYYY-MM-DD" or nil
+    public let priority: RequestPriority?
+    public let businessReason: String?
+    public let relatedProject: String?
+    public let attachments: [ApprovalAttachment]
+
+    public init(
+        procurementType: ProcurementType,
+        itemDescription: String,
+        vendor: String,
+        quantity: Int,
+        unitPriceCents: Int,
+        totalPriceCents: Int,
+        currency: String? = nil,
+        userOrDepartment: String,
+        purpose: String,
+        alternatives: String? = nil,
+        justification: String,
+        budgetAvailable: Bool,
+        expectedPurchaseDate: String? = nil,
+        priority: RequestPriority? = .medium,
+        businessReason: String? = nil,
+        relatedProject: String? = nil,
+        attachments: [ApprovalAttachment] = []
+    ) {
+        self.procurementType = procurementType
+        self.itemDescription = itemDescription
+        self.vendor = vendor
+        self.quantity = quantity
+        self.unitPriceCents = unitPriceCents
+        self.totalPriceCents = totalPriceCents
+        self.currency = currency
+        self.userOrDepartment = userOrDepartment
+        self.purpose = purpose
+        self.alternatives = alternatives
+        self.justification = justification
+        self.budgetAvailable = budgetAvailable
+        self.expectedPurchaseDate = expectedPurchaseDate
+        self.priority = priority
+        self.businessReason = businessReason
+        self.relatedProject = relatedProject
+        self.attachments = attachments
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case procurementType       = "p_procurement_type"
+        case itemDescription       = "p_item_description"
+        case vendor                = "p_vendor"
+        case quantity              = "p_quantity"
+        case unitPriceCents        = "p_unit_price_cents"
+        case totalPriceCents       = "p_total_price_cents"
+        case currency              = "p_currency"
+        case userOrDepartment      = "p_user_or_department"
+        case purpose               = "p_purpose"
+        case alternatives          = "p_alternatives"
+        case justification         = "p_justification"
+        case budgetAvailable       = "p_budget_available"
+        case expectedPurchaseDate  = "p_expected_purchase_date"
+        case priority              = "p_priority"
+        case businessReason        = "p_business_reason"
+        case relatedProject        = "p_related_project"
+        case attachments           = "p_attachments"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(procurementType.rawValue, forKey: .procurementType)
+        try c.encode(itemDescription, forKey: .itemDescription)
+        try c.encode(vendor, forKey: .vendor)
+        try c.encode(quantity, forKey: .quantity)
+        try c.encode(unitPriceCents, forKey: .unitPriceCents)
+        try c.encode(totalPriceCents, forKey: .totalPriceCents)
+        try c.encodeIfPresent(currency, forKey: .currency)
+        try c.encode(userOrDepartment, forKey: .userOrDepartment)
+        try c.encode(purpose, forKey: .purpose)
+        try c.encodeIfPresent(alternatives, forKey: .alternatives)
+        try c.encode(justification, forKey: .justification)
+        try c.encode(budgetAvailable, forKey: .budgetAvailable)
+        try c.encodeIfPresent(expectedPurchaseDate, forKey: .expectedPurchaseDate)
+        try c.encodeIfPresent(priority?.rawValue, forKey: .priority)
+        try c.encodeIfPresent(businessReason, forKey: .businessReason)
+        try c.encodeIfPresent(relatedProject, forKey: .relatedProject)
+        try c.encode(attachments, forKey: .attachments)
+    }
+}
+
+/// `approvals_submit_field_work(p_target_date, p_location, p_reason,
+/// p_expected_return) RETURNS UUID`. The RPC enforces the "at least
+/// one day in advance" guard — the form can preempt for a nicer
+/// UX but the server is the source of truth.
+public struct FieldWorkSubmitInput: Encodable, Hashable {
+    public let targetDate: String              // "YYYY-MM-DD"
+    public let location: String
+    public let reason: String
+    public let expectedReturn: String?         // e.g. "17:30" / "当日返回"
+
+    public init(
+        targetDate: String,
+        location: String,
+        reason: String,
+        expectedReturn: String? = nil
+    ) {
+        self.targetDate = targetDate
+        self.location = location
+        self.reason = reason
+        self.expectedReturn = expectedReturn
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case targetDate     = "p_target_date"
+        case location       = "p_location"
+        case reason         = "p_reason"
+        case expectedReturn = "p_expected_return"
+    }
+}

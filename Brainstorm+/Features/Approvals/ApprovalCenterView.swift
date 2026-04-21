@@ -8,6 +8,12 @@ import Supabase
 ///   - 请假 / 外勤 / 出差 / 报销/采购 / 日报/周报 / 通用
 ///     → `ApprovalQueueView(kind:)` + `ApprovalQueueViewModel`
 ///
+/// Sprint 4.4 — "+" toolbar button opens a type-picker sheet, which
+/// routes to one of 4 submit forms (leave / reimbursement /
+/// procurement / field_work). On successful submit we refresh the
+/// "我提交的" list and switch to that tab — the user immediately sees
+/// their new row.
+///
 /// Parity target: Web `src/app/dashboard/approval/page.tsx`. Deltas:
 ///
 ///   - Web hides approver tabs when
@@ -23,6 +29,11 @@ import Supabase
 ///   - Badge counts (pending per tab) are skipped this sprint. They
 ///     need either 6 parallel fetches on mount or a single
 ///     `GROUP BY request_type` count query. Revisit as a polish item.
+///   - 4.4 adds only 4 submit types (the MVP set). Business trip,
+///     daily/weekly log submission, generic, attendance exception are
+///     all deferred — business trip is a separate domain model,
+///     daily/weekly flow through a different pipeline, generic has no
+///     server-side RPC yet.
 ///
 /// Owning the `NavigationStack` here means both `ApprovalsListView`
 /// and `ApprovalQueueView` can push `ApprovalDetailView` the same
@@ -60,10 +71,19 @@ public struct ApprovalCenterView: View {
     }
 
     @State private var selectedTab: Tab = .mine
+    @State private var showTypePicker: Bool = false
+    @State private var pendingSubmitKind: ApprovalSubmitKind?
     private let client: SupabaseClient
+
+    // Hoisted so submit-success handlers can call `listMySubmissions()`
+    // directly. Previously this was instantiated inline inside
+    // `tabContent` — that created a fresh VM every tab switch, which
+    // meant we'd lose the just-submitted row's visibility on switch.
+    @StateObject private var mineViewModel: MySubmissionsViewModel
 
     public init(client: SupabaseClient = supabase) {
         self.client = client
+        _mineViewModel = StateObject(wrappedValue: MySubmissionsViewModel(client: client))
     }
 
     public var body: some View {
@@ -75,8 +95,30 @@ public struct ApprovalCenterView: View {
             }
             .navigationTitle("审批中心")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showTypePicker = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("新建审批")
+                }
+            }
             .navigationDestination(for: UUID.self) { id in
                 ApprovalDetailView(requestId: id, client: client)
+            }
+            // Type picker → sets `pendingSubmitKind` on selection; that
+            // drives the per-type sheet below via `.sheet(item:)`.
+            // Using two separate sheets (rather than one with inner
+            // switch) avoids a jarring same-sheet content swap.
+            .sheet(isPresented: $showTypePicker) {
+                ApprovalSubmitTypePickerSheet { kind in
+                    pendingSubmitKind = kind
+                }
+            }
+            .sheet(item: $pendingSubmitKind) { kind in
+                submitSheet(for: kind)
             }
         }
     }
@@ -122,16 +164,15 @@ public struct ApprovalCenterView: View {
     private var tabContent: some View {
         switch selectedTab {
         case .mine:
-            // Reuse 4.1's list. Its own `.navigationDestination(for: UUID.self)`
-            // would compete with the one registered on this stack; we
-            // consolidate deep linking here. That's why
-            // `ApprovalsListView` wasn't wrapped in its own NavigationStack
-            // in 4.1 (see ApprovalsListView.swift:49-51 where the destination
-            // is still declared — the outer stack takes precedence, which is
-            // fine because both registrations produce the same
-            // `ApprovalDetailView` and SwiftUI resolves the nearest one).
+            // Uses the hoisted `mineViewModel` so submit-success
+            // handlers can refresh it without depending on `.task`
+            // re-firing. ApprovalsListView's own
+            // `.navigationDestination(for: UUID.self)` would compete
+            // with the one registered on this stack; the nearest
+            // registration wins, and both produce the same detail
+            // view, so the behavior is identical either way.
             ApprovalsListView(
-                viewModel: MySubmissionsViewModel(client: client),
+                viewModel: mineViewModel,
                 client: client
             )
         case .queue(let kind):
@@ -141,6 +182,40 @@ public struct ApprovalCenterView: View {
             // the user reload without leaving the tab).
             ApprovalQueueView(kind: kind, client: client)
                 .id(kind.rawValue)
+        }
+    }
+
+    // MARK: - Submit sheets
+
+    @ViewBuilder
+    private func submitSheet(for kind: ApprovalSubmitKind) -> some View {
+        switch kind {
+        case .leave:
+            LeaveSubmitView(client: client) { _ in
+                handleSubmitted()
+            }
+        case .reimbursement:
+            ReimbursementSubmitView(client: client) { _ in
+                handleSubmitted()
+            }
+        case .procurement:
+            ProcurementSubmitView(client: client) { _ in
+                handleSubmitted()
+            }
+        case .fieldWork:
+            FieldWorkSubmitView(client: client) { _ in
+                handleSubmitted()
+            }
+        }
+    }
+
+    /// Called from each submit form's `onSubmitted` callback. Switches
+    /// to the "我提交的" tab and reloads the list so the user sees
+    /// their new row at the top (rows are ordered `created_at DESC`).
+    private func handleSubmitted() {
+        selectedTab = .mine
+        Task {
+            await mineViewModel.listMySubmissions()
         }
     }
 }
