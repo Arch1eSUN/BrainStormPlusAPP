@@ -1,22 +1,25 @@
 import SwiftUI
 import Supabase
 
-/// Sprint 4.1 — "我提交的" list screen (read-only foundation).
+/// Sprint 4.1 — "我提交的" list screen (read-only foundation) +
+/// Sprint 4.2 — detail push + "申请撤回" self-service.
 ///
 /// 1:1 port of Web `src/app/dashboard/approval/_tabs/my-submissions.tsx`
 /// with these intentional deltas:
-///   - No detail dialog — 4.2 ships it.
-///   - No "申请撤回" self-service button — 4.2 ships the revoke path too.
 ///   - No tab switcher (Web's page.tsx has 7 tabs for approver queues);
-///     this iOS sprint only lands the user-centric "我提交的".
+///     this sprint still only surfaces the user-centric "我提交的".
+///     4.3 lands the approver queues.
 ///
 /// Navigation entry is via `ActionItemHelper.destination(for: .approval)`
-/// which was previously a `ParityBacklogDestination` placeholder.
+/// which was previously a `ParityBacklogDestination` placeholder. Rows
+/// push `ApprovalDetailView` via a value-based NavigationLink.
 public struct ApprovalsListView: View {
     @StateObject private var viewModel: MySubmissionsViewModel
+    private let client: SupabaseClient
 
-    public init(viewModel: MySubmissionsViewModel) {
+    public init(viewModel: MySubmissionsViewModel, client: SupabaseClient) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.client = client
     }
 
     public var body: some View {
@@ -43,6 +46,9 @@ public struct ApprovalsListView: View {
         .task {
             await viewModel.listMySubmissions()
         }
+        .navigationDestination(for: UUID.self) { id in
+            ApprovalDetailView(requestId: id, client: client)
+        }
     }
 
     // MARK: - List
@@ -50,9 +56,12 @@ public struct ApprovalsListView: View {
     @ViewBuilder
     private var submissionsList: some View {
         List(viewModel.rows) { row in
-            submissionRow(row)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            NavigationLink(value: row.id) {
+                submissionRow(row)
+            }
+            .buttonStyle(.plain)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
         .listStyle(.plain)
     }
@@ -176,6 +185,9 @@ public struct ApprovalsListView: View {
 
 #Preview {
     NavigationStack {
-        ApprovalsListView(viewModel: MySubmissionsViewModel(client: supabase))
+        ApprovalsListView(
+            viewModel: MySubmissionsViewModel(client: supabase),
+            client: supabase
+        )
     }
 }
