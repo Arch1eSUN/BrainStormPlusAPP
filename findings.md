@@ -63,25 +63,41 @@ Five items carry forward into the next chat sprint. Full diagnosis lives in
 - **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**: Web ships
   `@mentions`, message search, conversation creation, DM find-or-create. iOS defers all
   four; `ChatListView` shows only already-joined channels with no creation entry point.
-- **3.1-debt-05 Web RLS tightening (architectural)**: Web `chat_channels` /
-  `chat_messages` SELECT RLS is `USING (true)` because Web uses `createAdminClient()`
-  server-side to bypass RLS and apply access control in server actions. iOS cannot
-  reuse that posture with a user JWT and therefore replicates access gating client-side
-  (`getAccessibleChannelMap` / `ensureChannelAccess`). This is **architectural debt**,
-  not a 3.1-scoped item: long-term SELECT RLS should tighten so iOS and Web share one
-  security model; otherwise every new chat feature re-does access control on iOS. Owned
-  by cross-end security alignment, not a single sprint.
-- **3.1-debt-06 Realtime connection failure visibility**: `ChatRoomViewModel` now writes
-  `errorMessage` on `subscribeWithError()` throw (commit `06b7f99`) but `ChatRoomView`
-  does not render it — users still get no visible signal that realtime is degraded.
-  Paired with 3.1-debt-07 for a shared error-banner pass.
-- **3.1-debt-07 Chat error surfacing**: fetch/send/list error paths all set
-  `errorMessage` on the respective ViewModels; no view consumes it. Needs reusable
-  banner / toast threaded through both chat views.
+- **3.1-debt-05 Web RLS tightening (system-level security debt — UNRESOLVED)**:
+  Web `chat_channels` / `chat_messages` SELECT RLS remains `USING (true)` because Web
+  uses `createAdminClient()` server-side to bypass RLS and apply access control in
+  server actions. iOS cannot reuse that posture with a user JWT, so 3.1 replicates
+  access gating client-side (`getAccessibleChannelMap` / `ensureChannelAccess`). The
+  client-side gate only shapes rendering — a forged client (jailbroken iOS, DevTools
+  direct to Supabase, custom app shell) would still receive the full tables from the
+  DB. Winston audit of 3.1 flagged this as a real security debt, not accepted trade-off.
+  Converted from vague "architectural debt" to a concrete spec:
+  `devprompt/3.2a-chat-rls-tightening.md` (3.2a sprint). That sprint migrates
+  SELECT to membership-scoped predicates (announcement ∪ owned ∪ membership, mirroring
+  Web `chat.ts:252-282`), regresses Web server actions, shadow-verifies on staging,
+  and optionally simplifies iOS client-side gating once DB is authoritative.
+- **3.1-debt-06 Realtime connection failure visibility — ✅ CLOSED** in closeout pass.
+  `ChatRoomViewModel` writes `errorMessage` on `subscribeWithError()` throw (commit
+  `06b7f99`); `ChatRoomView` now surfaces it via shared
+  `.zyErrorBanner($viewModel.errorMessage)` modifier
+  (`Shared/DesignSystem/Modifiers/ZYErrorBannerModifier.swift`).
+- **3.1-debt-07 Chat error surfacing — ✅ CLOSED** in closeout pass. Same shared
+  `ZYErrorBannerModifier` attached to both `ChatRoomView` and `ChatListView`; fetch,
+  send, and list-load failures now render as a top-aligned red banner with 5s
+  auto-dismiss + manual close. Realtime subscribe failures (debt-06) ride the same
+  channel so one UI primitive closes both.
 - **3.1-debt-08 Nav-destination laziness**: `ChatListView` NavigationLink eagerly
   constructs `ChatRoomViewModel` for every list row. Cheap init so no runtime impact,
   but wasted allocation. Fix is value-based nav (`NavigationLink(value:)` +
   `.navigationDestination(for:)`).
+- **3.1-debt-09 Mock-Supabase testability harness**: zero automated coverage on chat
+  viewmodels (access-gate union, empty-result handling, decode failure, send failure,
+  realtime decode/subscribe failure) — all manual-only. Blocker is `SupabaseClient` /
+  `PostgrestQueryBuilder` / `RealtimeChannelV2` have no protocol seam for fakes.
+  Originally folded into debt-05 in the ready-notes draft; split out here so
+  "add tests" stops coupling to "tighten RLS." Revisit first sprint that either adds
+  a non-trivial chat codepath or budgets a dedicated testability pass; introduce a
+  minimal `ChatDataSource` protocol in `Core/Services/` with fake implementation.
 
 ## 3.1 Verification
 

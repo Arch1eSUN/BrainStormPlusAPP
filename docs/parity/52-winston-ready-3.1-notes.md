@@ -138,23 +138,29 @@ Five responsibilities:
   (L134-137). `last_message_at` uses
   `ISO8601DateFormatter().string(from: Date())` — PostgREST accepts
   ISO-8601 for `TIMESTAMPTZ`.
-- **Realtime** (`subscribeRealtime`, L153-180): `teardown()` first as
+- **Realtime** (`subscribeRealtime`): `teardown()` first as
   double-subscribe guard; channel name
   `"realtime-chat_messages-<uuid>"`; registers
   `postgresChange(InsertAction.self, schema:, table:, filter: .eq(...))`;
-  `await ch.subscribe()`; spins a `Task` consuming `for await change in
+  subscribes via `try await ch.subscribeWithError()` (the non-deprecated
+  API; failures are caught and written to `errorMessage` rather than
+  swallowed by a `try?`); spins a `Task` consuming `for await change in
   changes`. Each payload decodes via
   `change.record.decode(as: ChatMessage.self)` (Supabase's configured
   decoder, matches `fetchMessages` timestamp parsing).
-  `handleRealtimeInsert` (L182-186) dedupes on `msg.id`.
-- **teardown** (L188-195): cancels task, schedules `ch.unsubscribe()` on a
-  detached `Task`, nils the channel. `deinit` (L197-199) only cancels the
-  task: `@MainActor` types can't synchronously touch non-Sendable channel
-  state from a nonisolated `deinit`, so **the View layer MUST call
+  `handleRealtimeInsert` dedupes on `msg.id`.
+- **teardown**: cancels task, then schedules
+  `client.removeChannel(ch)` on a detached `Task` (full cleanup — both
+  unsubscribes the socket topic **and** evicts the channel from
+  `RealtimeClientV2`'s topic cache, preventing the "re-enter same room
+  returns stale cached channel with layered filters" bug). Nils the
+  stored reference. `deinit` only cancels the task: `@MainActor` types
+  can't synchronously touch non-Sendable channel state from a
+  nonisolated `deinit`, so **the View layer MUST call
   `viewModel.teardown()` from `.onDisappear`**. Honored at
-  `ChatRoomView.swift:28`.
+  `ChatRoomView.swift`'s `.onDisappear` hook.
 
-commit `f591231`.
+commit `f591231`; Realtime / teardown hardening landed in `06b7f99`.
 
 ### 3.4 `Brainstorm+/Features/Chat/ChatRoomView.swift`
 
@@ -205,10 +211,12 @@ non-Sendable `RealtimeChannelV2` which a mock would have to stand in for.
 MVP verification is manual two-simulator smoke (devprompt §4): A sends → B
 renders < 2s, own message appears immediately without duplicating on echo,
 deep-link into a non-member channel lands on access-denied. A
-mock-Supabase harness is **possible** (not "impossible") — tracked in the
-follow-up to 3.1-debt-05. `ChatDateFormatter.format` was manually
-verified via three discarded one-off assertions (today / yesterday /
-older) per devprompt §4 L529; worth promoting to Swift Testing next sprint.
+mock-Supabase harness is **possible** (not "impossible") — adding one is
+its own chore, unrelated to the RLS-scoped 3.1-debt-05; tracked
+separately as a testability follow-up (see §6 3.1-debt-09).
+`ChatDateFormatter.format` was manually verified via three discarded
+one-off assertions (today / yesterday / older) per devprompt §4 L529;
+worth promoting to Swift Testing next sprint.
 
 ## 5. Audit Checklist for Winston
 
@@ -305,38 +313,39 @@ Scope-creep reverse checks — should find nothing:
   capability gate; not MVP for "can chat at all."
   **When to revisit**: 3.3+ after Attachments.
 
-- **3.1-debt-05 Web RLS tightening**（**跨端安全对齐 / 架构债**）. Web
-  `chat_channels` / `chat_messages` SELECT are literally `USING (true)`
+- **3.1-debt-05 Web RLS tightening**（**跨端安全对齐 / 系统级安全债 — 未解决**）.
+  Web `chat_channels` / `chat_messages` SELECT are literally `USING (true)`
   (`schema.sql:347, 375`); safety lives in `createAdminClient()` +
-  server-side gate functions. iOS has to replicate those gates
-  client-side because it has no admin client. Any JWT-bearing client can
-  read every channel + every message at the DB layer. Long-term fix is
-  membership-scoped RLS so iOS, Web, and future SDKs share one access
-  model.
-  **Why deferred**: requires a Web server-action rewrite to stop using
-  admin client for reads — not a single-sprint change.
-  **When to revisit**: dedicated Web security sprint, likely post-3.x
-  feature parity.
+  server-side gate functions. **Any JWT-bearing client can SELECT every
+  channel and every message directly at the DB layer.** The iOS
+  client-side access gate only decides what the app *renders*, not what
+  the database *returns* — a forged client bypasses it entirely. This is
+  a real unresolved security exposure, not an accepted engineering
+  trade-off.
+  **Why not fixed in 3.1**: cross-repo change (Web schema migration + Web
+  server-action regression pass + iOS simplification) with rollout risk
+  on a live channel set; out of 3.1 scope.
+  **When to revisit**: spec drafted and queued as
+  `devprompt/3.2a-chat-rls-tightening.md` (commit `<filled by closeout>`)
+  — awaiting user approval to schedule.
 
-- **3.1-debt-06 Realtime connection failure visibility (partial)**. Fix
-  `06b7f99` swapped deprecated `subscribe()` for `subscribeWithError()` and
-  writes `errorMessage = "实时连接失败，新消息可能延迟送达"` on throw, but
-  `ChatRoomView` does not yet render `errorMessage`. User still gets no
-  visible signal that realtime is degraded; fetch-only history continues
-  to display.
-  **Why deferred**: shared remedy with 3.1-debt-07 (error-banner
-  component). Folding both into one UI pass is cheaper.
-  **When to revisit**: 3.2 sprint, paired with debt-07.
+- **3.1-debt-06 Realtime connection failure visibility** ✅ **CLOSED**
+  in closeout pass. Fix `06b7f99` swapped deprecated `subscribe()` for
+  `subscribeWithError()` and writes
+  `errorMessage = "实时连接失败，新消息可能延迟送达"` on throw; the
+  shared `.zyErrorBanner($viewModel.errorMessage)` modifier (Task 3.1-K)
+  now surfaces it on-screen with an auto-dismiss (default 5s) and a
+  manual X.
 
-- **3.1-debt-07 Chat error surfacing**. `ChatRoomViewModel.fetchMessages`
-  and `.sendMessage` both set `errorMessage` on failure, and
-  `ChatListViewModel.fetchChannels` does the same. No view currently
-  reads `errorMessage` — network failures manifest as empty states or
-  silent send no-ops. Needs a reusable error banner / toast component
-  threaded through both chat views.
-  **Why deferred**: debt-06 + debt-07 share the same banner; designing
-  that once is out of 3.1's minimal-surface scope.
-  **When to revisit**: 3.2 sprint.
+- **3.1-debt-07 Chat error surfacing** ✅ **CLOSED** in closeout pass.
+  `ChatRoomViewModel.fetchMessages` / `.sendMessage` and
+  `ChatListViewModel.fetchChannels` all publish to
+  `@Published var errorMessage: String?`; both views now attach
+  `.zyErrorBanner($viewModel.errorMessage)` (see
+  `Shared/DesignSystem/Modifiers/ZYErrorBannerModifier.swift`) so fetch,
+  send, and list-load failures surface as a top-aligned red banner with
+  5s auto-dismiss + manual close. Realtime subscribe failures
+  (debt-06) ride the same channel, so a single UI primitive closes both.
 
 - **3.1-debt-08 Navigation-destination laziness for chat room**.
   `ChatListView.swift:21` eagerly constructs
@@ -352,16 +361,36 @@ Scope-creep reverse checks — should find nothing:
   **When to revisit**: opportunistically alongside a broader navigation
   pass, or when the list grows large enough to measure.
 
+- **3.1-debt-09 Mock-Supabase testability harness**. This sprint has
+  zero automated coverage on the chat viewmodels — access-gate union,
+  empty-result handling, decode failure, send failure, and realtime
+  decode-or-subscribe failure are all verified only by manual
+  two-simulator smoke. The blocker is that `SupabaseClient` is a
+  concrete class with no protocol seam; wrapping `PostgrestQueryBuilder`
+  / `RealtimeChannelV2` for fake-driven unit tests is a multi-hour
+  infra task unrelated to 3.1's user-visible deliverable.
+  **Why deferred**: pure testability infra; independent of RLS
+  security work (debt-05), which must be solved at the DB layer not
+  the client. Was erroneously folded into debt-05 in the original
+  draft; split out here to stop coupling "add tests" to "tighten RLS."
+  **When to revisit**: first sprint that either adds a non-trivial
+  chat codepath (3.2+ features: reactions, attachments, threading) or
+  that budgets a dedicated testability pass. At that point, introduce
+  a minimal `ChatDataSource` protocol in `Core/Services/` with a fake
+  implementation in tests, and backfill coverage for the five cases
+  above.
+
 ## 7. Artifacts
 
 - Source (new): `Brainstorm+/Features/Chat/ChatRoomViewModel.swift`,
-  `Brainstorm+/Features/Chat/ChatDateFormatter.swift`.
+  `Brainstorm+/Features/Chat/ChatDateFormatter.swift`,
+  `Brainstorm+/Shared/DesignSystem/Modifiers/ZYErrorBannerModifier.swift`.
 - Source (edited): `Brainstorm+/Core/Models/ChatModel.swift`,
   `Brainstorm+/Features/Chat/ChatListViewModel.swift`,
   `Brainstorm+/Features/Chat/ChatRoomView.swift`,
   `Brainstorm+/Features/Chat/ChatListView.swift`.
 - Tests: none this sprint (rationale §4); mock-Supabase harness follow-up
-  tracked via 3.1-debt-05.
+  tracked via 3.1-debt-09.
 - Devprompt: `devprompt/3.1-team-chat-foundation.md` (commit `fdaf782`).
 - Commits:
   - `fdaf782` — devprompt.
@@ -377,6 +406,11 @@ Scope-creep reverse checks — should find nothing:
     `client.removeChannel(ch)`; `subscribeWithError()` replaces
     deprecated `subscribe()`; `ChatRoomView.sendTapped` clears input
     optimistically before awaiting send.
+  - `a1ab1f7` — ledger: record 3.1-debt-06/07/08 from reviewer
+    follow-up.
+  - `97d64ad` — closeout: new `ZYErrorBannerModifier` + wire
+    `.zyErrorBanner` into `ChatRoomView` + `ChatListView`; closes
+    3.1-debt-06 + 3.1-debt-07.
 - Ledger sync: `findings.md`, `progress.md`, `task_plan.md`.
 - Web references cited: `BrainStorm+-Web/src/lib/actions/chat.ts`
   L252-282 / 284-305 / 539-576; `BrainStorm+-Web/src/hooks/use-realtime.ts`
