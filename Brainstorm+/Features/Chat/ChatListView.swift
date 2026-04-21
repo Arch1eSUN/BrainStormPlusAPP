@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Supabase
 
 public struct ChatListView: View {
     @StateObject private var viewModel: ChatListViewModel
@@ -17,7 +18,7 @@ public struct ChatListView: View {
                     ContentUnavailableView("No Messages", systemImage: "message", description: Text("You have no active chats yet."))
                 } else {
                     List(viewModel.channels) { channel in
-                        NavigationLink(destination: ChatRoomView(channel: channel)) {
+                        NavigationLink(destination: ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))) {
                             HStack(spacing: 16) {
                                 // Avatar
                                 ZStack {
@@ -35,11 +36,9 @@ public struct ChatListView: View {
                                             .font(.headline)
                                             .foregroundColor(.primary)
                                         Spacer()
-                                        if let date = channel.lastMessageAt {
-                                            Text(date, style: .time)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
+                                        Text(ChatDateFormatter.format(channel.lastMessageAt))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
                                     
                                     Text(channel.lastMessage ?? "No messages yet")
