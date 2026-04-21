@@ -48,7 +48,7 @@ architectural decision.
 ## 3.1 Debt Carry-Forward (summary — details in Winston ready-notes)
 
 Five items carry forward into the next chat sprint. Full diagnosis lives in
-`docs/parity/53-winston-ready-3.1-notes.md` (authored under Task G); summary here:
+`docs/parity/52-winston-ready-3.1-notes.md` (authored under Task G); summary here:
 
 - **3.1-debt-01 Attachments / images / files**: `ChatMessage` intentionally ships as
   text-only. Web has `chat-files` storage bucket policy + message-type `image` / `file`

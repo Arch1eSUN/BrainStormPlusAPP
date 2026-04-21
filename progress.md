@@ -230,7 +230,7 @@
 - **Why 3.0 blocks XL-tier feature work**: Parity table Task #12 (Auth/RBAC) is the foundation under every other module. 3.1 Chat gates on `ai_chatbot_access`, 3.2 Dashboard templates gate on primary role + capability flags, 3.3 Attendance gates on `attendance_admin` + attendance rules, 3.4 Reporting gates on `daily_log_approval` / `weekly_report_approval`, 3.5 Copilot gates on multiple AI caps. Running any of them on the pre-3.0 26-capability model would bake in drift that would have to be ripped out later.
 
 ## Sprint 3.1 Team Chat Foundation — 2026-04-21
-- Devprompt: `devprompt/3.1-team-chat-foundation.md`. Ready-notes: `docs/parity/53-winston-ready-3.1-notes.md` (authored under Task G).
+- Devprompt: `devprompt/3.1-team-chat-foundation.md`. Ready-notes: `docs/parity/52-winston-ready-3.1-notes.md` (authored under Task G).
 - **Scope**: First usable Team Chat surface on iOS — channel list (Web-parity access-filtered), message read (`created_at ASC limit 50`), message send (insert + optimistic append + best-effort `chat_channels` tail update), and Supabase Realtime v2 `INSERT` subscription. Attachments / reactions / withdraw / reply threading / mentions / search / create-conversation / DM find-or-create / AI Copilot explicitly deferred per devprompt §6.
 - **Deltas landed** (6 Tasks A–F; Task G ready-notes authored after; Task D subagent committed first, Tasks A/B/C filled in afterward — chronological landing order A → B/C → D):
   - **Task A**: `Brainstorm+/Core/Models/ChatModel.swift` adds `ChatChannelMember: Identifiable, Codable, Hashable` struct + nested `MemberRole` enum (`owner` / `admin` / `member`) with `channel_id` / `user_id` / `joined_at` snake-case CodingKeys. `ChatMessage` intentionally unchanged — `attachments` / `reactions` / `reply_to` still deferred per 3.1 scope exclusion.
@@ -247,7 +247,7 @@
     - `0e6e456` feat(chat): add ChatChannelMember model for membership access checks
     - `f591231` feat(chat): replicate web access gate and realtime stream in chat viewmodels
     - `7b0b135` feat(chat): bind ChatRoomView to ChatRoomViewModel with realtime teardown
-- **Debt carry-forward (5 items — summary only; full diagnosis in `53-winston-ready-3.1-notes.md`)**:
+- **Debt carry-forward (5 items — summary only; full diagnosis in `52-winston-ready-3.1-notes.md`)**:
   - **3.1-debt-01 Attachments / images / files**: `ChatMessage` is text-only by design; Web has `chat-files` storage bucket policy + `image` / `file` message-type enum. 3.2 Attachments sprint.
   - **3.1-debt-02 Message withdraw**: `is_withdrawn` / `withdrawn_at` on the model but no UI path, no server-side RLS UPDATE test. Web has the flow; iOS lags.
   - **3.1-debt-03 Reply threading**: `reply_to: UUID?` present on model, not consumed at render. Web `fetchMessages` does reply-to second query; iOS skips per devprompt §6 scope exclusion. 3.2+.
@@ -256,7 +256,7 @@
 - **Why 3.1 matters**: First Realtime usage in the iOS codebase (Supabase Swift SDK v2 `postgresChange` + `InsertAction` + `.eq` filter + `JSONObject.decode(as:)` inheriting `JSONDecoder.supabase()` fractional-second ISO8601 handling). Pattern becomes the reference for future Realtime surfaces (Notifications, Activity Feed, live approvals). Also establishes the client-side-access-gate pattern for every module where Web bypasses RLS via admin client — chat is the first of several.
 
 ## Active
-- Next active step: Task G authors `docs/parity/53-winston-ready-3.1-notes.md`; then Winston independent audit of sprint 3.1; then open the next XL-tier sprint (candidate order: 3.2 Team Chat Attachments OR 3.2 Dashboard Templates — Winston's recommendation in the 3.1 audit drives the decision). The three 49-ready-notes doc corrections closed by 3.0 Task H are already folded into findings.md.
+- Next active step: Task G authors `docs/parity/52-winston-ready-3.1-notes.md`; then Winston independent audit of sprint 3.1; then open the next XL-tier sprint (candidate order: 3.2 Team Chat Attachments OR 3.2 Dashboard Templates — Winston's recommendation in the 3.1 audit drives the decision). The three 49-ready-notes doc corrections closed by 3.0 Task H are already folded into findings.md.
 
 ## Blocked / Pending
 - 13 modules remain on `ParityBacklogDestination`: `okr`, `deliverables`, `approval`, `request`, `leaves`, `hiring`, `team`, `announcements`, `activity`, `aiAnalysis`, `finance`, `analytics`, `admin`.
