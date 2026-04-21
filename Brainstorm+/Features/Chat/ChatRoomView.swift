@@ -16,6 +16,12 @@ public struct ChatRoomView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showFileImporter = false
 
+    // MARK: - Sprint 3.4 回复状态
+    //
+    // 被回复的原消息 —— 用户从 contextMenu 选 "回复" 后塞进来，输入栏上方会
+    // 出现一个预览条，发送时把 id 作为 reply_to 写入 chat_messages。
+    @State private var replyingTo: ChatMessage? = nil
+
     public init(viewModel: ChatRoomViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
@@ -29,6 +35,9 @@ public struct ChatRoomView: View {
                 content
 
                 if !viewModel.accessDenied {
+                    if let parent = replyingTo {
+                        replyPreviewStrip(parent: parent)
+                    }
                     if !pendingUploads.isEmpty {
                         pendingAttachmentsStrip
                     }
@@ -215,12 +224,14 @@ public struct ChatRoomView: View {
     private func sendTapped() {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         let uploads = pendingUploads
+        let replyToId = replyingTo?.id
         guard !text.isEmpty || !uploads.isEmpty else { return }
 
         // 乐观清 UI —— 如果上传/发送失败，errorMessage 会弹出 banner，
         // 用户可以重新选文件再发。Web 行为一致（page.tsx:301-306）。
         messageText = ""
         pendingUploads = []
+        replyingTo = nil
 
         Task {
             var attached: [ChatAttachment] = []
@@ -237,7 +248,7 @@ public struct ChatRoomView: View {
                     return
                 }
             }
-            await viewModel.sendMessage(text, attachments: attached)
+            await viewModel.sendMessage(text, attachments: attached, replyTo: replyToId)
         }
     }
 
@@ -297,6 +308,13 @@ public struct ChatRoomView: View {
             if isCurrentUser { Spacer(minLength: 50) }
 
             VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
+                // Sprint 3.4: 如果这是一条回复消息，先画一条 "reply-to" 块。
+                // 原消息可能已被撤回（isWithdrawn）或查不到（从 replyLookup 缺席），
+                // 两种情况都要降级成占位文本，跟 Web 保持一致。
+                if let parentId = msg.replyTo {
+                    replyBlock(parentId: parentId, isCurrentUser: isCurrentUser)
+                }
+
                 if msg.isWithdrawn {
                     // Web `MessageItem` (page.tsx 渲染逻辑) —— 撤回后只留占位。
                     Text("此消息已撤回")
@@ -334,9 +352,107 @@ public struct ChatRoomView: View {
                         .foregroundColor(.secondary)
                 }
             }
+            // contextMenu: 长按消息气泡弹出 "回复" / "撤回" 菜单。
+            // `Withdraw` 只在 own-message + 未撤回 + 2 分钟内 显示 ——
+            // 跟 RPC 和 Web page.tsx:386-390 的判据严格一致，避免用户
+            // 点出来再被服务端拒绝。
+            .contextMenu {
+                if !msg.isWithdrawn {
+                    Button {
+                        replyingTo = msg
+                    } label: {
+                        Label("回复", systemImage: "arrowshape.turn.up.left")
+                    }
+                    if isCurrentUser && canWithdraw(msg) {
+                        Button(role: .destructive) {
+                            Task { await viewModel.withdrawMessage(msg.id) }
+                        } label: {
+                            Label("撤回", systemImage: "arrow.uturn.backward")
+                        }
+                    }
+                }
+            }
 
             if !isCurrentUser { Spacer(minLength: 50) }
         }
+    }
+
+    /// 2 分钟窗口，跟 Web `page.tsx:386-390` + RPC 保持一致。
+    /// `createdAt` 是 Optional —— 若 nil（理论上不会，但模型允许）我们保守
+    /// 返回 false，避免让用户点开一个注定会被 RPC 拒绝的入口。
+    private func canWithdraw(_ msg: ChatMessage) -> Bool {
+        guard let created = msg.createdAt else { return false }
+        return Date().timeIntervalSince(created) < 120
+    }
+
+    /// Sprint 3.4: 回复块。引用原消息一行预览 —— 被撤回 / 找不到 时降级。
+    @ViewBuilder
+    private func replyBlock(parentId: UUID, isCurrentUser: Bool) -> some View {
+        let parent = viewModel.replyLookup[parentId]
+        let preview: String = {
+            guard let p = parent else { return "原消息不可用" }
+            if p.isWithdrawn { return "消息已撤回" }
+            if !p.content.isEmpty { return p.content }
+            if !p.attachments.isEmpty {
+                return p.attachments.allSatisfy({ $0.isImage }) ? "[图片]" : "[文件]"
+            }
+            return "[消息]"
+        }()
+
+        HStack(spacing: 6) {
+            Rectangle()
+                .frame(width: 2)
+                .foregroundColor(.gray.opacity(0.4))
+            Text(preview)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(UIColor.tertiarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: - Reply preview strip (above input bar)
+
+    private func replyPreviewStrip(parent: ChatMessage) -> some View {
+        let preview: String = {
+            if parent.isWithdrawn { return "消息已撤回" }
+            if !parent.content.isEmpty { return parent.content }
+            if !parent.attachments.isEmpty {
+                return parent.attachments.allSatisfy({ $0.isImage }) ? "[图片]" : "[文件]"
+            }
+            return "[消息]"
+        }()
+        return HStack(spacing: 8) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.caption)
+                .foregroundColor(.blue)
+            Text("回复: \(preview)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer()
+            Button {
+                replyingTo = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color.gray.opacity(0.15)),
+            alignment: .top
+        )
     }
 
     @ViewBuilder

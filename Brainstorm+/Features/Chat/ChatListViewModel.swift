@@ -2,11 +2,25 @@ import Foundation
 import Combine
 import Supabase
 
+/// Sprint 3.4: cross-channel message search result. Bundles the raw message
+/// with its resolved channel so the UI can render "频道名 › 消息预览" rows
+/// without a second lookup.
+public struct ChatSearchResult: Identifiable, Hashable {
+    public let message: ChatMessage
+    public let channel: ChatChannel
+    public var id: UUID { message.id }
+}
+
 @MainActor
 public class ChatListViewModel: ObservableObject {
     @Published public var channels: [ChatChannel] = []
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
+
+    // MARK: - Sprint 3.4 search state
+    @Published public var searchQuery: String = ""
+    @Published public var searchResults: [ChatSearchResult] = []
+    @Published public var isSearching: Bool = false
 
     private let client: SupabaseClient
 
@@ -149,6 +163,69 @@ public class ChatListViewModel: ObservableObject {
     public func appendChannelIfMissing(_ channel: ChatChannel) {
         guard !channels.contains(where: { $0.id == channel.id }) else { return }
         channels.insert(channel, at: 0)
+    }
+
+    // MARK: - Sprint 3.4: Cross-channel message search
+    //
+    // Web has no first-class message search UI — iOS adds this because
+    // iPhone screens shove the room-list to the default entry point, so
+    // without search users can't find old messages in an announcement
+    // they're subscribed to across dozens of groups. Strategy:
+    //   1. restrict to accessible channels via `.in("channel_id", ...)` —
+    //      uses the union already loaded in `self.channels`, so if the user
+    //      searches before `fetchChannels()` completes we return empty.
+    //   2. `.ilike("content", "%q%")` — case-insensitive LIKE; Web uses the
+    //      same pattern for user search (chat.ts:307-353).
+    //   3. order DESC, limit 20 — chat search is exploratory; rank by
+    //      recency, don't try to paginate until a user asks.
+    //   4. Join channels in-memory so the UI renders "频道 › 消息" without
+    //      a second fetch.
+    //
+    // Withdrawn messages: `content` is overwritten to `'此消息已撤回'` by the
+    // withdraw RPC, so they *could* match a query for "撤回". We exclude
+    // `is_withdrawn = true` at the DB level so search never surfaces
+    // withdrawn messages — mirrors the intent of withdraw (content is gone).
+
+    public func searchMessages(query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            // 短查询（0-1 字符）几乎必然全集匹配 —— 直接清掉，避免浪费带宽。
+            searchResults = []
+            return
+        }
+
+        isSearching = true
+        defer { isSearching = false }
+
+        let channelIds = channels.map { $0.id.uuidString }
+        guard !channelIds.isEmpty else {
+            searchResults = []
+            return
+        }
+
+        do {
+            let pattern = "%\(trimmed)%"
+            let rows: [ChatMessage] = try await client
+                .from("chat_messages")
+                .select()
+                .in("channel_id", values: channelIds)
+                .ilike("content", pattern: pattern)
+                .eq("is_withdrawn", value: false)
+                .order("created_at", ascending: false)
+                .limit(20)
+                .execute()
+                .value
+
+            // In-memory join: channel id → channel.
+            let channelLookup = Dictionary(uniqueKeysWithValues: channels.map { ($0.id, $0) })
+            searchResults = rows.compactMap { msg in
+                guard let ch = channelLookup[msg.channelId] else { return nil }
+                return ChatSearchResult(message: msg, channel: ch)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            searchResults = []
+        }
     }
 
     /// Mirrors Web `fetchChatUsers` (src/lib/actions/chat.ts:307-353): profile
