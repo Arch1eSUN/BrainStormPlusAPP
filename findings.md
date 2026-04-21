@@ -71,6 +71,17 @@ Five items carry forward into the next chat sprint. Full diagnosis lives in
   not a 3.1-scoped item: long-term SELECT RLS should tighten so iOS and Web share one
   security model; otherwise every new chat feature re-does access control on iOS. Owned
   by cross-end security alignment, not a single sprint.
+- **3.1-debt-06 Realtime connection failure visibility**: `ChatRoomViewModel` now writes
+  `errorMessage` on `subscribeWithError()` throw (commit `06b7f99`) but `ChatRoomView`
+  does not render it — users still get no visible signal that realtime is degraded.
+  Paired with 3.1-debt-07 for a shared error-banner pass.
+- **3.1-debt-07 Chat error surfacing**: fetch/send/list error paths all set
+  `errorMessage` on the respective ViewModels; no view consumes it. Needs reusable
+  banner / toast threaded through both chat views.
+- **3.1-debt-08 Nav-destination laziness**: `ChatListView` NavigationLink eagerly
+  constructs `ChatRoomViewModel` for every list row. Cheap init so no runtime impact,
+  but wasted allocation. Fix is value-based nav (`NavigationLink(value:)` +
+  `.navigationDestination(for:)`).
 
 ## 3.1 Verification
 

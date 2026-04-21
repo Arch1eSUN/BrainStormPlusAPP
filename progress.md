@@ -247,12 +247,15 @@
     - `0e6e456` feat(chat): add ChatChannelMember model for membership access checks
     - `f591231` feat(chat): replicate web access gate and realtime stream in chat viewmodels
     - `7b0b135` feat(chat): bind ChatRoomView to ChatRoomViewModel with realtime teardown
-- **Debt carry-forward (5 items — summary only; full diagnosis in `52-winston-ready-3.1-notes.md`)**:
+- **Debt carry-forward (8 items — summary only; full diagnosis in `52-winston-ready-3.1-notes.md`)**:
   - **3.1-debt-01 Attachments / images / files**: `ChatMessage` is text-only by design; Web has `chat-files` storage bucket policy + `image` / `file` message-type enum. 3.2 Attachments sprint.
   - **3.1-debt-02 Message withdraw**: `is_withdrawn` / `withdrawn_at` on the model but no UI path, no server-side RLS UPDATE test. Web has the flow; iOS lags.
   - **3.1-debt-03 Reply threading**: `reply_to: UUID?` present on model, not consumed at render. Web `fetchMessages` does reply-to second query; iOS skips per devprompt §6 scope exclusion. 3.2+.
   - **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**: Web has `@mentions`, message search, conversation creation, DM find-or-create. iOS defers all four; `ChatListView` browses already-joined channels only, no creation entry.
   - **3.1-debt-05 Web RLS tightening (architectural)**: Web `chat_channels` / `chat_messages` SELECT RLS is `USING (true)` because Web uses `createAdminClient()` server-side. iOS holds only a user JWT and cannot reuse that posture, so it replicates `getAccessibleChannelMap` + `ensureChannelAccess` client-side. Architectural debt spanning both ends — long-term SELECT RLS should tighten so the security model is shared; owned by cross-end security alignment, not a single sprint.
+  - **3.1-debt-06 Realtime connection failure visibility**: post-`06b7f99` `subscribeWithError()` writes `errorMessage` on throw, but `ChatRoomView` does not surface it. Paired with debt-07.
+  - **3.1-debt-07 Chat error surfacing**: `ChatRoomViewModel.fetchMessages` / `.sendMessage` / `ChatListViewModel.fetchChannels` set `errorMessage` but no view reads it. Needs shared error-banner in 3.2.
+  - **3.1-debt-08 Nav-destination laziness**: `ChatListView` NavigationLink eagerly builds `ChatRoomViewModel` per row; migrate to `NavigationLink(value:)` + `.navigationDestination(for:)`.
 - **Why 3.1 matters**: First Realtime usage in the iOS codebase (Supabase Swift SDK v2 `postgresChange` + `InsertAction` + `.eq` filter + `JSONObject.decode(as:)` inheriting `JSONDecoder.supabase()` fractional-second ISO8601 handling). Pattern becomes the reference for future Realtime surfaces (Notifications, Activity Feed, live approvals). Also establishes the client-side-access-gate pattern for every module where Web bypasses RLS via admin client — chat is the first of several.
 
 ## Active

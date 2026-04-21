@@ -318,6 +318,40 @@ Scope-creep reverse checks — should find nothing:
   **When to revisit**: dedicated Web security sprint, likely post-3.x
   feature parity.
 
+- **3.1-debt-06 Realtime connection failure visibility (partial)**. Fix
+  `06b7f99` swapped deprecated `subscribe()` for `subscribeWithError()` and
+  writes `errorMessage = "实时连接失败，新消息可能延迟送达"` on throw, but
+  `ChatRoomView` does not yet render `errorMessage`. User still gets no
+  visible signal that realtime is degraded; fetch-only history continues
+  to display.
+  **Why deferred**: shared remedy with 3.1-debt-07 (error-banner
+  component). Folding both into one UI pass is cheaper.
+  **When to revisit**: 3.2 sprint, paired with debt-07.
+
+- **3.1-debt-07 Chat error surfacing**. `ChatRoomViewModel.fetchMessages`
+  and `.sendMessage` both set `errorMessage` on failure, and
+  `ChatListViewModel.fetchChannels` does the same. No view currently
+  reads `errorMessage` — network failures manifest as empty states or
+  silent send no-ops. Needs a reusable error banner / toast component
+  threaded through both chat views.
+  **Why deferred**: debt-06 + debt-07 share the same banner; designing
+  that once is out of 3.1's minimal-surface scope.
+  **When to revisit**: 3.2 sprint.
+
+- **3.1-debt-08 Navigation-destination laziness for chat room**.
+  `ChatListView.swift:21` eagerly constructs
+  `ChatRoomViewModel(client:channel:)` for every row at list-render time;
+  only the actually-navigated row's VM survives (`@StateObject`
+  semantics). The init is cheap (two stored references, no IO) so
+  runtime cost is negligible, but it is still wasted allocation. Fix is
+  to migrate to iOS 16 value-based navigation
+  (`NavigationLink(value:)` + `.navigationDestination(for:)`) whose
+  destination closure is lazy.
+  **Why deferred**: correctness is untouched, and a nav refactor is
+  out of 3.1 minimal-surface scope.
+  **When to revisit**: opportunistically alongside a broader navigation
+  pass, or when the list grows large enough to measure.
+
 ## 7. Artifacts
 
 - Source (new): `Brainstorm+/Features/Chat/ChatRoomViewModel.swift`,
@@ -336,6 +370,13 @@ Scope-creep reverse checks — should find nothing:
     gate/fetch/send/realtime).
   - `7b0b135` — Task D + Task E view binding, `ChatDateFormatter`, list
     `NavigationLink` update.
+  - `a421140` — Task F ledger sync.
+  - `3f5679d` — Task G this file.
+  - `71e8957` — ledger correction (stale `53-` → `52-` ready-notes path).
+  - `06b7f99` — reviewer follow-up: `teardown()` uses
+    `client.removeChannel(ch)`; `subscribeWithError()` replaces
+    deprecated `subscribe()`; `ChatRoomView.sendTapped` clears input
+    optimistically before awaiting send.
 - Ledger sync: `findings.md`, `progress.md`, `task_plan.md`.
 - Web references cited: `BrainStorm+-Web/src/lib/actions/chat.ts`
   L252-282 / 284-305 / 539-576; `BrainStorm+-Web/src/hooks/use-realtime.ts`
