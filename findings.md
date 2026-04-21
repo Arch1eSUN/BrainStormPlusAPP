@@ -60,9 +60,21 @@ Five items carry forward into the next chat sprint. Full diagnosis lives in
   consumed at render. Web's `fetchMessages` does a reply-to second query (chat.ts:160
   `normalizeMessage`); iOS deliberately skips per devprompt §6 scope exclusion. 3.2+
   scope.
-- **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**: Web ships
-  `@mentions`, message search, conversation creation, DM find-or-create. iOS defers all
-  four; `ChatListView` shows only already-joined channels with no creation entry point.
+- **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**:
+  - **create-conversation + find-or-create-DM CLOSED (Sprint 3.2, 2026-04-21)**: two
+    SECURITY DEFINER RPCs landed on Web
+    (`20260421130000_chat_conversation_rpc.sql` — `chat_find_or_create_direct_channel`
+    + `chat_create_group_channel`, commit `08bce19`). iOS wires them through new
+    `ChatListViewModel.findOrCreateDirectChannel` / `createGroupChannel` plus new
+    `UserPickerView` + `NewConversationSheet` + `ChatListView` toolbar `+` entry
+    (commit `7143142`). Race-safety preserved via pre-existing partial unique index
+    on `chat_channels(participant_pair_key) WHERE type='direct'` — INSERT loser
+    catches `unique_violation` and re-SELECTs. Validation mirrors Web (auth required,
+    self-DM rejected, empty group name rejected, zero-member/self-only rejected,
+    dedup). Verified via 9-assertion native-PG harness (`/tmp/chat_rpc_test.sh`).
+  - **Remaining**: `@mentions` (Web parses `content.includes('@<name>')` naive regex
+    + writes to `chat_mentions`; iOS sends plain text only) and message search (Web
+    `ilike` on `content`) still deferred. Future sprint.
 - **3.1-debt-05 Web RLS tightening (system-level security debt)**:
   Sprint 3.2a IN PROGRESS under repeated "你自己决定" delegation. Context: Web
   `chat_channels` / `chat_messages` SELECT RLS was `USING (true)` because Web uses
