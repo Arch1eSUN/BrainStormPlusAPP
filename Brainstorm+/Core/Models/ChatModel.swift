@@ -28,6 +28,25 @@ public struct ChatChannel: Identifiable, Codable, Hashable {
     }
 }
 
+/// Web `ChatAttachment` 1:1 mirror (src/lib/actions/chat.ts:5-10).
+/// Stored as JSONB array in `chat_messages.attachments`. Empty array means
+/// text-only message. Reactions stay out of iOS scope for now.
+public struct ChatAttachment: Codable, Hashable {
+    public let name: String
+    public let url: String
+    public let type: String   // MIME, e.g. "image/png", "application/pdf"
+    public let size: Int?
+
+    public var isImage: Bool { type.hasPrefix("image/") }
+
+    public init(name: String, url: String, type: String, size: Int?) {
+        self.name = name
+        self.url = url
+        self.type = type
+        self.size = size
+    }
+}
+
 public struct ChatMessage: Identifiable, Codable, Hashable {
     public let id: UUID
     public let channelId: UUID
@@ -35,9 +54,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
     public let content: String
     public let type: MessageType
     public let replyTo: UUID?
-    // Simplified for MVP, JSONB maps to simple strings or basic Decodable types if needed
-    // public let attachments: String? 
-    // public let reactions: String?
+    public let attachments: [ChatAttachment]
     public let isWithdrawn: Bool
     public let withdrawnAt: Date?
     public let createdAt: Date?
@@ -56,9 +73,51 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         case content
         case type
         case replyTo = "reply_to"
+        case attachments
         case isWithdrawn = "is_withdrawn"
         case withdrawnAt = "withdrawn_at"
         case createdAt = "created_at"
+    }
+
+    // JSONB 默认值是 '[]' 但旧行 / 非 SELECT 实时事件里有可能字段缺席，
+    // 所以自定义 decoder 把缺席 / null 都归一成空数组 —— Web
+    // `normalizeAttachments` (chat.ts:169-185) 也是同样的容错姿势。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        channelId = try c.decode(UUID.self, forKey: .channelId)
+        senderId = try c.decode(UUID.self, forKey: .senderId)
+        content = try c.decode(String.self, forKey: .content)
+        type = try c.decode(MessageType.self, forKey: .type)
+        replyTo = try c.decodeIfPresent(UUID.self, forKey: .replyTo)
+        attachments = (try? c.decodeIfPresent([ChatAttachment].self, forKey: .attachments)) ?? []
+        isWithdrawn = try c.decode(Bool.self, forKey: .isWithdrawn)
+        withdrawnAt = try c.decodeIfPresent(Date.self, forKey: .withdrawnAt)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+    }
+
+    public init(
+        id: UUID,
+        channelId: UUID,
+        senderId: UUID,
+        content: String,
+        type: MessageType,
+        replyTo: UUID? = nil,
+        attachments: [ChatAttachment] = [],
+        isWithdrawn: Bool = false,
+        withdrawnAt: Date? = nil,
+        createdAt: Date? = nil
+    ) {
+        self.id = id
+        self.channelId = channelId
+        self.senderId = senderId
+        self.content = content
+        self.type = type
+        self.replyTo = replyTo
+        self.attachments = attachments
+        self.isWithdrawn = isWithdrawn
+        self.withdrawnAt = withdrawnAt
+        self.createdAt = createdAt
     }
 }
 

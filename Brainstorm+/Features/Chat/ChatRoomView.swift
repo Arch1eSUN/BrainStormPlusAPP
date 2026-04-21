@@ -1,9 +1,20 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import UniformTypeIdentifiers
 
 public struct ChatRoomView: View {
     @StateObject private var viewModel: ChatRoomViewModel
     @State private var messageText: String = ""
+
+    // MARK: - Sprint 3.3 附件选择状态
+    //
+    // `pendingUploads` 是"已选但未发送"的附件缓冲区——用户可以连续挑多张图 /
+    // 多个文件再一并发出。`photoItems` 是 PhotosPicker 的 selection 绑定；
+    // `onChange` 里把它转成 `PendingUpload` 再清掉，避免 picker 重复触发。
+    @State private var pendingUploads: [PendingUpload] = []
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var showFileImporter = false
 
     public init(viewModel: ChatRoomViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -18,6 +29,9 @@ public struct ChatRoomView: View {
                 content
 
                 if !viewModel.accessDenied {
+                    if !pendingUploads.isEmpty {
+                        pendingAttachmentsStrip
+                    }
                     inputBar
                 }
             }
@@ -27,6 +41,19 @@ public struct ChatRoomView: View {
         .zyErrorBanner($viewModel.errorMessage)
         .task { await viewModel.bootstrap() }
         .onDisappear { viewModel.teardown() }
+        // PhotosPicker 把选中的 PhotosPickerItem 塞进 $photoItems，
+        // 这里监听变化 → loadTransferable(Data) → 追加到 pendingUploads。
+        .onChange(of: photoItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            Task { await ingestPhotoItems(newItems) }
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            handleFileImport(result)
+        }
     }
 
     @ViewBuilder
@@ -67,9 +94,24 @@ public struct ChatRoomView: View {
         }
     }
 
+    // MARK: - Input bar
+
     private var inputBar: some View {
         HStack(spacing: 12) {
-            Button(action: {}) {
+            Menu {
+                PhotosPicker(
+                    selection: $photoItems,
+                    maxSelectionCount: 9,
+                    matching: .images
+                ) {
+                    Label("图片", systemImage: "photo")
+                }
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Label("文件", systemImage: "doc")
+                }
+            } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 20))
                     .foregroundColor(.gray)
@@ -105,17 +147,149 @@ public struct ChatRoomView: View {
         )
     }
 
+    // MARK: - Pending attachments 预览条
+
+    private var pendingAttachmentsStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(pendingUploads) { upload in
+                    ZStack(alignment: .topTrailing) {
+                        pendingThumbnail(for: upload)
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.gray.opacity(0.25), lineWidth: 0.5)
+                            )
+
+                        Button {
+                            pendingUploads.removeAll { $0.id == upload.id }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white, .black.opacity(0.6))
+                                .shadow(radius: 1)
+                        }
+                        .offset(x: 6, y: -6)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private func pendingThumbnail(for upload: PendingUpload) -> some View {
+        if let image = upload.previewImage {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                Color(UIColor.tertiarySystemBackground)
+                VStack(spacing: 2) {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.secondary)
+                    Text(upload.fileName)
+                        .font(.system(size: 9))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 4)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Send flow
+
     private var isSendDisabled: Bool {
-        viewModel.isSending
-            || messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if viewModel.isSending { return true }
+        let empty = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return empty && pendingUploads.isEmpty
     }
 
     private func sendTapped() {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        messageText = ""  // optimistic 清，用户立即可以打新消息
-        Task { await viewModel.sendMessage(text) }
+        let uploads = pendingUploads
+        guard !text.isEmpty || !uploads.isEmpty else { return }
+
+        // 乐观清 UI —— 如果上传/发送失败，errorMessage 会弹出 banner，
+        // 用户可以重新选文件再发。Web 行为一致（page.tsx:301-306）。
+        messageText = ""
+        pendingUploads = []
+
+        Task {
+            var attached: [ChatAttachment] = []
+            for upload in uploads {
+                do {
+                    let att = try await viewModel.uploadAttachment(
+                        data: upload.data,
+                        fileName: upload.fileName,
+                        mimeType: upload.mimeType
+                    )
+                    attached.append(att)
+                } catch {
+                    viewModel.errorMessage = "上传失败: \(error.localizedDescription)"
+                    return
+                }
+            }
+            await viewModel.sendMessage(text, attachments: attached)
+        }
     }
+
+    // MARK: - Attachment ingestion
+
+    @MainActor
+    private func ingestPhotoItems(_ items: [PhotosPickerItem]) async {
+        // PhotosPickerItem 没有直接暴露 fileName —— 用 UUID + jpg 作为展示名。
+        // `loadTransferable(type: Data.self)` 是 Apple 推荐姿势，会自动处理
+        // iCloud / HEIC 解码（HEIC 选择时系统会降级编码为 JPEG 返回）。
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let fileName = "IMG_\(UUID().uuidString.prefix(8)).jpg"
+            let preview = UIImage(data: data)
+            pendingUploads.append(PendingUpload(
+                data: data,
+                fileName: fileName,
+                mimeType: "image/jpeg",
+                previewImage: preview
+            ))
+        }
+        photoItems = []  // 清 selection，避免同一张图重复 ingest
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case let .success(urls) = result else {
+            if case let .failure(error) = result {
+                viewModel.errorMessage = "选择文件失败: \(error.localizedDescription)"
+            }
+            return
+        }
+        for url in urls {
+            // .fileImporter 返回的 URL 带 security scope —— 必须
+            // startAccessingSecurityScopedResource 才能 Data(contentsOf:)。
+            let didStart = url.startAccessingSecurityScopedResource()
+            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let fileName = url.lastPathComponent
+            let mime = UTType(filenameExtension: url.pathExtension)?
+                .preferredMIMEType ?? "application/octet-stream"
+            let preview = mime.hasPrefix("image/") ? UIImage(data: data) : nil
+            pendingUploads.append(PendingUpload(
+                data: data,
+                fileName: fileName,
+                mimeType: mime,
+                previewImage: preview
+            ))
+        }
+    }
+
+    // MARK: - Message bubble
 
     @ViewBuilder
     private func messageBubble(msg: ChatMessage, isCurrentUser: Bool) -> some View {
@@ -123,17 +297,35 @@ public struct ChatRoomView: View {
             if isCurrentUser { Spacer(minLength: 50) }
 
             VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
-                Text(msg.content)
-                    .font(.body)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        isCurrentUser
-                            ? Color.blue
-                            : Color(UIColor.secondarySystemBackground)
-                    )
-                    .foregroundColor(isCurrentUser ? .white : .primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if msg.isWithdrawn {
+                    // Web `MessageItem` (page.tsx 渲染逻辑) —— 撤回后只留占位。
+                    Text("此消息已撤回")
+                        .font(.body.italic())
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                } else {
+                    // 文本部分：空字符串 + 纯附件时跳过气泡，避免多一个空框。
+                    if !msg.content.isEmpty {
+                        Text(msg.content)
+                            .font(.body)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                isCurrentUser
+                                    ? Color.blue
+                                    : Color(UIColor.secondarySystemBackground)
+                            )
+                            .foregroundColor(isCurrentUser ? .white : .primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+
+                    ForEach(msg.attachments, id: \.url) { att in
+                        attachmentView(att)
+                    }
+                }
 
                 let timeText = ChatDateFormatter.format(msg.createdAt)
                 if !timeText.isEmpty {
@@ -146,4 +338,65 @@ public struct ChatRoomView: View {
             if !isCurrentUser { Spacer(minLength: 50) }
         }
     }
+
+    @ViewBuilder
+    private func attachmentView(_ att: ChatAttachment) -> some View {
+        // Web 渲染：image 用 <img> 200x200 cover + 点击新 tab；
+        // file 用 FileText 图标 + 文件名。iOS 对齐：AsyncImage / SF 图标，
+        // 点击用 Link 打开 URL（Safari 或系统文档预览）。
+        if let url = URL(string: att.url) {
+            Link(destination: url) {
+                if att.isImage {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ZStack {
+                                Color(UIColor.tertiarySystemBackground)
+                                ProgressView()
+                            }
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            ZStack {
+                                Color(UIColor.tertiarySystemBackground)
+                                Image(systemName: "photo")
+                                    .foregroundColor(.secondary)
+                            }
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: 200, height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.fill")
+                            .foregroundColor(.blue)
+                        Text(att.name)
+                            .font(.callout)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Supporting types
+
+/// 本地 pending 上传项——等用户点"发送"时才真正上传到 chat-files。
+/// 带 previewImage 是为了在预览条里即时显示缩略图而不用再解码一次。
+private struct PendingUpload: Identifiable {
+    let id = UUID()
+    let data: Data
+    let fileName: String
+    let mimeType: String
+    let previewImage: UIImage?
 }

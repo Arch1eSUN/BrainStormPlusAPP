@@ -91,9 +91,16 @@ public class ChatRoomViewModel: ObservableObject {
     /// optimistic-append the returned row, then best-effort update
     /// `chat_channels.last_message` / `last_message_at` (policy 026 widens
     /// UPDATE to any authenticated user for these columns).
-    public func sendMessage(_ text: String) async {
+    ///
+    /// When `attachments` is non-empty, `type` is derived per Web
+    /// `sendMessage` (src/lib/actions/chat.ts:595-597): all-images → `image`,
+    /// mixed / any non-image → `file`, empty → `text`. `content` mirrors Web
+    /// posture — trimmed free-text; empty string is allowed when attachments
+    /// are present (sending only images/files is OK).
+    public func sendMessage(_ text: String, attachments: [ChatAttachment] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        // empty text AND no attachments → nothing to send
+        guard !(trimmed.isEmpty && attachments.isEmpty) else { return }
 
         let userId: UUID
         do {
@@ -106,11 +113,21 @@ public class ChatRoomViewModel: ObservableObject {
         isSending = true
         defer { isSending = false }
 
+        let derivedType: String
+        if attachments.isEmpty {
+            derivedType = "text"
+        } else if attachments.allSatisfy({ $0.isImage }) {
+            derivedType = "image"
+        } else {
+            derivedType = "file"
+        }
+
         struct InsertPayload: Encodable {
             let channel_id: String
             let sender_id: String
             let content: String
             let type: String
+            let attachments: [ChatAttachment]
         }
 
         do {
@@ -120,7 +137,8 @@ public class ChatRoomViewModel: ObservableObject {
                     channel_id: channel.id.uuidString,
                     sender_id: userId.uuidString,
                     content: trimmed,
-                    type: "text"
+                    type: derivedType,
+                    attachments: attachments
                 ))
                 .select()
                 .single()
@@ -131,6 +149,17 @@ public class ChatRoomViewModel: ObservableObject {
                 messages.append(inserted)
             }
 
+            // `last_message` preview: Web 展示文本或"[图片]" / "[文件]"。这里
+            // 取同样语义 —— 如果有文本就用文本；纯附件则给出通用占位。
+            let preview: String
+            if !trimmed.isEmpty {
+                preview = trimmed
+            } else if derivedType == "image" {
+                preview = "[图片]"
+            } else {
+                preview = "[文件]"
+            }
+
             struct LastMsgPatch: Encodable {
                 let last_message: String
                 let last_message_at: String
@@ -138,12 +167,61 @@ public class ChatRoomViewModel: ObservableObject {
             let iso = ISO8601DateFormatter().string(from: Date())
             _ = try? await client
                 .from("chat_channels")
-                .update(LastMsgPatch(last_message: trimmed, last_message_at: iso))
+                .update(LastMsgPatch(last_message: preview, last_message_at: iso))
                 .eq("id", value: channel.id.uuidString)
                 .execute()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Sprint 3.3: Attachment upload
+    //
+    // Strategy: iOS uploads directly to the `chat-files` Supabase bucket with a
+    // user-JWT. Web uses `createAdminClient()` via `/api/chat/upload/route.ts`,
+    // which bypasses `storage.objects` RLS (migration 028:42-58 WITH CHECK
+    // `auth.uid()::text = (storage.foldername(name))[1]`). iOS can't bypass,
+    // so the path starts with `{user_id}/` to satisfy the policy, then nests
+    // `{channel_id}/{uuid}.{ext}` for archival readability. Bucket is public,
+    // so reads go through `getPublicURL()` — no signed-URL TTL to manage.
+    //
+    // Web's page.tsx:288 references a non-existent `chat_attachments` bucket;
+    // that client-direct-upload branch is dead Web code (production path is
+    // the `/api/chat/upload` route that uploads to `chat-files`). We align
+    // with the actual bucket `chat-files`.
+
+    /// Upload a single attachment to `chat-files`. Returns a `ChatAttachment`
+    /// ready to be attached to `sendMessage`. Caller chooses MIME (e.g. from
+    /// `PhotosPicker` → `image/jpeg`, from `.fileImporter` → `UTType` MIME).
+    public func uploadAttachment(
+        data: Data,
+        fileName: String,
+        mimeType: String
+    ) async throws -> ChatAttachment {
+        let userId = try await client.auth.session.user.id
+        let ext = (fileName as NSString).pathExtension
+        let uuid = UUID().uuidString
+        let fileComponent = ext.isEmpty ? uuid : "\(uuid).\(ext)"
+        let path = "\(userId.uuidString)/\(channel.id.uuidString)/\(fileComponent)"
+
+        _ = try await client.storage
+            .from("chat-files")
+            .upload(
+                path,
+                data: data,
+                options: FileOptions(contentType: mimeType, upsert: false)
+            )
+
+        let publicURL = try client.storage
+            .from("chat-files")
+            .getPublicURL(path: path)
+
+        return ChatAttachment(
+            name: fileName,
+            url: publicURL.absoluteString,
+            type: mimeType,
+            size: data.count
+        )
     }
 
     /// Supabase Realtime v2: filtered postgres_changes INSERT stream on
