@@ -24,6 +24,7 @@ public struct ChatRoomView: View {
         }
         .navigationTitle(viewModel.channel.name)
         .navigationBarTitleDisplayMode(.inline)
+        .zyErrorBanner($viewModel.errorMessage)
         .task { await viewModel.bootstrap() }
         .onDisappear { viewModel.teardown() }
     }

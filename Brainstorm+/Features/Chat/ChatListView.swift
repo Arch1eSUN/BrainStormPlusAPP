@@ -55,6 +55,7 @@ public struct ChatListView: View {
                 }
             }
             .navigationTitle("Team Chat")
+            .zyErrorBanner($viewModel.errorMessage)
             .refreshable {
                 await viewModel.fetchChannels()
             }
