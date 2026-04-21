@@ -1,3 +1,98 @@
+# Findings: Sprint 3.1 (Team Chat Foundation — Read + Send + Realtime)
+
+## 3.1 Scope
+
+3.1 stands up the first usable Team Chat surface on iOS: channel list (filtered by
+Web-parity access rules), message read (50-row ascending window), message send
+(optimistic append + best-effort `chat_channels` tail update), and Realtime v2
+`INSERT` subscription for live push. Web-only chat features — attachments / reactions
+/ withdraw / reply threading / mentions / search / create-conversation / DM
+find-or-create / AI Copilot — stay explicitly out of scope per devprompt §6 and carry
+forward as debt. Nothing about RBAC, Projects, or other modules moves; this round is
+localized to `Features/Chat/` + one `Core/Models/ChatModel.swift` extension.
+
+Ground-truth reference: `BrainStorm+-Web/src/lib/actions/chat.ts` — specifically
+`getAccessibleChannelMap` (lines 252-282, three-part union: announcement OR
+`created_by` OR `chat_channel_members` membership) and `ensureChannelAccess`
+(lines 284-305, same three-part gate per-channel). Web serves these through
+`createAdminClient()` (service role, RLS-bypass); iOS holds only a user JWT and
+therefore must replicate the access gate client-side because `chat_channels` /
+`chat_messages` SELECT RLS is `USING (true)`. This is the 3.1 round's central
+architectural decision.
+
+## 3.1 Deltas / What Landed
+
+| File | Change | Key behavior |
+|---|---|---|
+| `Brainstorm+/Core/Models/ChatModel.swift` | Added `ChatChannelMember` struct + nested `MemberRole` enum (`owner` / `admin` / `member`) | Decodes `chat_channel_members` rows with `channel_id` / `user_id` / `joined_at` snake-case mapping; used by both viewmodels for membership lookups. `ChatMessage` intentionally unchanged — `attachments` / `reactions` / `reply_to` still deferred per scope. |
+| `Brainstorm+/Features/Chat/ChatListViewModel.swift` | Rewritten: three-part client-side union mirroring `getAccessibleChannelMap` | Three parallel `async let` PostgREST reads (announcements by `type='announcement'`, owned by `created_by=userId`, memberships via `chat_channel_members` → channel-id resolve) → Set-based dedupe by id → sort `last_message_at DESC nulls last` with `created_at` tiebreaker. Matches Web page.tsx sort exactly. |
+| `Brainstorm+/Features/Chat/ChatRoomViewModel.swift` (new) | `@MainActor ObservableObject` with 5 methods: `bootstrap` / `fetchMessages` / `sendMessage` / `subscribeRealtime` / `teardown` | Access gate (announcement OR `createdBy == userId` OR membership row present, else `accessDenied = true`) runs before any fetch/subscribe. Messages fetched `created_at ASC limit 50`. Send flow: insert → optimistic append (dedup against Realtime echo by id) → best-effort `chat_channels.last_message` / `last_message_at` UPDATE via migration 026 policy. Realtime v2 uses `postgresChange(InsertAction.self, filter: .eq("channel_id", channel.id))` with `JSONObject.decode(as:)` inheriting `JSONDecoder.supabase()` fractional-second decoding. `deinit` only cancels the task (MainActor-isolated `teardown()` is not callable from deinit); View layer must call `teardown()` from `.onDisappear`. |
+| `Brainstorm+/Features/Chat/ChatRoomView.swift` | Rewritten: bound to `ChatRoomViewModel` via `@StateObject(wrappedValue:)` | `.task { await bootstrap() }` + `.onDisappear { teardown() }`; ScrollViewReader auto-scrolls on `messages.count` change; bubble `isCurrentUser` check keys off `msg.senderId == viewModel.currentUserId`; three-state UI (accessDenied / loading-empty / normal); send button disabled while `isSending || trimmed.isEmpty`; input cleared only after send returns (not optimistically). |
+| `Brainstorm+/Features/Chat/ChatDateFormatter.swift` (new) | `enum ChatDateFormatter` + `static func format(_ date: Date?) -> String` | Four branches: nil → `""`, today → `HH:mm`, yesterday → `昨天 HH:mm`, this-year-earlier → `M月d日 HH:mm`, older → `yyyy年M月d日`. `zh_CN` locale, static-cached `DateFormatter` instances. Mirrors Web page.tsx inline formatter with iOS-idiomatic 中文 month/day labels. |
+| `Brainstorm+/Features/Chat/ChatListView.swift` | Patched: NavigationLink destination + list-cell date | NavigationLink now constructs `ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))`; `Text(date, style: .time)` replaced with `Text(ChatDateFormatter.format(channel.lastMessageAt))`. No new FAB / search / unread-badge surfaces. |
+
+## 3.1 Web Parity Mapping
+
+| Behavior | Web source | iOS after 3.1 | Parity |
+|---|---|---|---|
+| Accessible channel set | `getAccessibleChannelMap` (chat.ts:252-282) — admin-client three-query union server-side | Three `async let` user-JWT queries unioned + dedup + sort client-side | Parity (equivalent set; different trust boundary) |
+| Per-channel access gate | `ensureChannelAccess` (chat.ts:284-305) — server-action gate before fetch | `ChatRoomViewModel.bootstrap` three-branch check before fetch/subscribe; `accessDenied` rail isolates UI | Parity |
+| Message read | `fetchMessages(channelId, limit=50)` (chat.ts:539-576) — `created_at ASC` | `eq("channel_id")` + `order("created_at", ascending: true)` + `limit(50)` | Parity |
+| Message send | `sendMessage` (chat.ts:592-660) — insert → UPDATE `chat_channels.last_message` / `last_message_at` | Identical — insert returns row, optimistic append, best-effort UPDATE swallowed on failure | Parity |
+| Realtime push | `use-realtime.ts` (79 lines) — `postgres_changes` + `channel_id=eq.${id}` filter | Supabase Swift SDK v2 `postgresChange(InsertAction.self, filter: .eq(...))` + dedup by id against optimistic append | Parity |
+| Sort | `last_message_at DESC nulls last`, `created_at` tiebreaker | Identical sort in `ChatListViewModel.fetchChannels` | Parity |
+| `last_message` tail update | UPDATE via migration 026 policy `auth.uid() IS NOT NULL` | Same — best-effort `.update(...)` post-insert | Parity |
+| Date formatting | Inline formatter (today / 昨天 / M/D HH:MM) | `ChatDateFormatter` (nil / today / 昨天 / 本年 / 跨年) | Parity-plus (nil + cross-year branches iOS-only) |
+| Announcement "admin-only send" | `page.tsx` input-bar `canCreate` gate | Not implemented — input always visible | Deferred (debt 3.1-debt-04 via devprompt §5.5) |
+
+## 3.1 Debt Carry-Forward (summary — details in Winston ready-notes)
+
+Five items carry forward into the next chat sprint. Full diagnosis lives in
+`docs/parity/53-winston-ready-3.1-notes.md` (authored under Task G); summary here:
+
+- **3.1-debt-01 Attachments / images / files**: `ChatMessage` intentionally ships as
+  text-only. Web has `chat-files` storage bucket policy + message-type `image` / `file`
+  enum support; iOS picks this up in the dedicated 3.2 Attachments sprint.
+- **3.1-debt-02 Message withdraw**: `is_withdrawn` / `withdrawn_at` fields exist on the
+  model but no UI trigger path and no server-side RLS UPDATE test. Web has the flow; iOS
+  lags.
+- **3.1-debt-03 Reply threading**: `reply_to: UUID?` present on the model but not
+  consumed at render. Web's `fetchMessages` does a reply-to second query (chat.ts:160
+  `normalizeMessage`); iOS deliberately skips per devprompt §6 scope exclusion. 3.2+
+  scope.
+- **3.1-debt-04 Mentions / search / create-conversation / find-or-create-DM**: Web ships
+  `@mentions`, message search, conversation creation, DM find-or-create. iOS defers all
+  four; `ChatListView` shows only already-joined channels with no creation entry point.
+- **3.1-debt-05 Web RLS tightening (architectural)**: Web `chat_channels` /
+  `chat_messages` SELECT RLS is `USING (true)` because Web uses `createAdminClient()`
+  server-side to bypass RLS and apply access control in server actions. iOS cannot
+  reuse that posture with a user JWT and therefore replicates access gating client-side
+  (`getAccessibleChannelMap` / `ensureChannelAccess`). This is **architectural debt**,
+  not a 3.1-scoped item: long-term SELECT RLS should tighten so iOS and Web share one
+  security model; otherwise every new chat feature re-does access control on iOS. Owned
+  by cross-end security alignment, not a single sprint.
+
+## 3.1 Verification
+
+- Build: `xcodebuild build` with Debug + iOS Simulator destination +
+  `CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO` → `** BUILD SUCCEEDED **`.
+- Commits on `main` (note: Task D subagent committed first; Task A/B/C were filled in
+  afterward by the controller — chronological landing order A → B/C → D as recorded
+  below):
+  - `fdaf782` docs(devprompt): add sprint 3.1 team chat foundation plan
+  - `0e6e456` feat(chat): add ChatChannelMember model for membership access checks
+    (Task A)
+  - `f591231` feat(chat): replicate web access gate and realtime stream in chat
+    viewmodels (Tasks B + C)
+  - `7b0b135` feat(chat): bind ChatRoomView to ChatRoomViewModel with realtime
+    teardown (Tasks D + E)
+- Module status: `Features/Chat/` promoted from "3 placeholder files with blind
+  SELECT / empty send / no VM" to "read + send + realtime-live foundation with
+  client-side access gate". Still `.partial` on `AppModule.chat` until the 5 debt
+  items land.
+
+---
+
 # Findings: Sprint 2.6 (Projects Risk Action Sync Write Path Foundation)
 
 ## 2.6 Scope
