@@ -4,7 +4,8 @@ import Supabase
 
 public struct ChatListView: View {
     @StateObject private var viewModel: ChatListViewModel
-    
+    @State private var showNewConversation: Bool = false
+
     public init(viewModel: ChatListViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
@@ -55,6 +56,22 @@ public struct ChatListView: View {
                 }
             }
             .navigationTitle("Team Chat")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showNewConversation = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("新建会话")
+                }
+            }
+            .sheet(isPresented: $showNewConversation) {
+                NewConversationSheet(viewModel: viewModel) { _ in
+                    // Channel already inserted at top by the sheet; no extra nav
+                    // needed — the user sees the new row and taps to enter.
+                }
+            }
             .zyErrorBanner($viewModel.errorMessage)
             .refreshable {
                 await viewModel.fetchChannels()
