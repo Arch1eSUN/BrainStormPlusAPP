@@ -61,3 +61,25 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         case createdAt = "created_at"
     }
 }
+
+public struct ChatChannelMember: Identifiable, Codable, Hashable {
+    public let id: UUID
+    public let channelId: UUID
+    public let userId: UUID
+    public let role: MemberRole
+    public let joinedAt: Date?
+
+    public enum MemberRole: String, Codable, Hashable {
+        case owner
+        case admin
+        case member
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case channelId = "channel_id"
+        case userId = "user_id"
+        case role
+        case joinedAt = "joined_at"
+    }
+}
