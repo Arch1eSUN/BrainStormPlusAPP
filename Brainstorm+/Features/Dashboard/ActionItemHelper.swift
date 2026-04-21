@@ -19,6 +19,8 @@ public struct ActionItemHelper {
             AttendanceView()
         case .chat:
             ChatListView(viewModel: ChatListViewModel(client: supabase))
+        case .approval:
+            ApprovalsListView(viewModel: MySubmissionsViewModel(client: supabase))
         case .knowledge:
             KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase))
         case .notifications:

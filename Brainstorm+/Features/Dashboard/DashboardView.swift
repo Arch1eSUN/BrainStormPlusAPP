@@ -266,6 +266,7 @@ struct DashboardView: View {
                 actionItem(module: .okr, color: .purple)
                 actionItem(module: .knowledge, titleOverride: "Docs", color: .teal)
                 actionItem(module: .leaves, color: Color.Brand.warning)
+                actionItem(module: .approval, color: .pink)
                 actionItem(module: .announcements, titleOverride: "News", color: .indigo)
 
             }
