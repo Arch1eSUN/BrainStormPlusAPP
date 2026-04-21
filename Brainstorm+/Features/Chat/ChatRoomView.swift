@@ -326,8 +326,15 @@ public struct ChatRoomView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 } else {
                     // 文本部分：空字符串 + 纯附件时跳过气泡，避免多一个空框。
+                    // Sprint 3.5: content 走 `ChatContentHighlighter` 给
+                    // `@mention` 套高亮样式。self-bubble 是蓝底白字，mention 用
+                    // 黄色；peer-bubble 是浅灰底，mention 用蓝色 —— 需要足够对比
+                    // 才能让 mention 可识别。
                     if !msg.content.isEmpty {
-                        Text(msg.content)
+                        Text(ChatContentHighlighter.attributed(
+                            msg.content,
+                            mentionColor: isCurrentUser ? .yellow : .blue
+                        ))
                             .font(.body)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)

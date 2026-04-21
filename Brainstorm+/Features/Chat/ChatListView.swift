@@ -157,10 +157,23 @@ public struct ChatListView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            Text(result.message.content.isEmpty ? "[附件]" : result.message.content)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
+            // Sprint 3.5: 把查询词在消息正文里高亮出来，用户一眼看到"为什么"
+            // 这条消息命中。同一个 highlighter 也顺便渲染 @mention，列表里看到
+            // 的语义跟打开会话看到的一致。
+            if result.message.content.isEmpty {
+                Text("[附件]")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            } else {
+                Text(ChatContentHighlighter.attributed(
+                    result.message.content,
+                    searchTerm: viewModel.searchQuery
+                ))
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
         }
         .padding(.vertical, 4)
     }
