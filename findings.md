@@ -50,9 +50,55 @@ architectural decision.
 Five items carry forward into the next chat sprint. Full diagnosis lives in
 `docs/parity/52-winston-ready-3.1-notes.md` (authored under Task G); summary here:
 
-- **3.1-debt-01 Attachments / images / files**: `ChatMessage` intentionally ships as
-  text-only. Web has `chat-files` storage bucket policy + message-type `image` / `file`
-  enum support; iOS picks this up in the dedicated 3.2 Attachments sprint.
+- **3.1-debt-01 Attachments / images / files — ✅ CLOSED (image + file subset)
+  2026-04-21** via Sprint 3.3 (App commit `93ad38f`):
+  - `ChatMessage` extended with `attachments: [ChatAttachment]` field +
+    null-tolerant custom decoder (missing / null → `[]`, matches Web's
+    `normalizeAttachments` fallback). New `ChatAttachment: Codable, Hashable
+    { name, url, type (MIME), size: Int? }` + `isImage` computed property.
+  - `ChatRoomViewModel.sendMessage` now accepts `attachments: [ChatAttachment]
+    = []`, drops the empty-text guard (attachments-only sends allowed like Web),
+    derives message `type` via `attachments.isEmpty ? "text" :
+    (allSatisfy({ $0.isImage }) ? "image" : "file")` — 1:1 with
+    `chat.ts:595-597`. `last_message` preview mirrors Web: text if present,
+    else `"[图片]"` / `"[文件]"`.
+  - New `ChatRoomViewModel.uploadAttachment(data:fileName:mimeType:)` writes
+    to bucket `chat-files` at path `{user_id}/{channel_id}/{uuid}.{ext}` via
+    user-JWT (first segment satisfies existing storage RLS policy from
+    migration 028 without needing admin client). Returns `ChatAttachment`
+    with `getPublicURL(path:).absoluteString` — public bucket so no
+    signed-URL TTL. Chose this over calling Web's `/api/chat/upload` route
+    (would add Web-uptime dependency) or SECURITY DEFINER RPC (unnecessary
+    for storage-level auth).
+  - `ChatRoomView` + button replaced with `Menu` wrapping `PhotosPicker`
+    (images, max 9) + `Button → .fileImporter(allowedContentTypes: [.item])`.
+    Photos handled via `PhotosPickerItem.loadTransferable(type: Data.self)`
+    → `"IMG_<uuid>.jpg"` + `"image/jpeg"` MIME. Files handled via
+    `startAccessingSecurityScopedResource()` + `Data(contentsOf:)` +
+    `UTType(filenameExtension:)?.preferredMIMEType`. Pending strip above
+    input bar shows 64×64 thumbnails (UIImage for images, `doc.fill` + name
+    for files) with remove chip. `sendTapped` awaits each upload
+    sequentially then calls `sendMessage(text, attachments:)`; upload
+    failure surfaces via `errorMessage` banner without consuming state.
+  - `messageBubble` grows: `msg.isWithdrawn` → italic gray "此消息已撤回"
+    bubble with no attachments rendered (Web parity); else text bubble
+    skipped when content empty (no empty bubble over attachments-only
+    messages) + `ForEach(attachments)` renders `AsyncImage` 200×200 rounded
+    for images or `doc.fill + filename` row for files, both wrapped in
+    `Link(destination: URL)` for tap-to-open (Safari / system quick-look).
+  - **Note — Web bucket truth**: `page.tsx:288` references bucket
+    `'chat_attachments'` but that bucket doesn't exist in any migration;
+    the production upload path is `/api/chat/upload` (route.ts:9) which
+    uses `'chat-files'`. The `page.tsx:288` client-direct-upload branch is
+    dead Web code. iOS aligns with the actual bucket `chat-files`.
+  - **Explicitly deferred (3.3-followup)**: (1) image compression before
+    upload (Web uploads raw too), (2) signed-URL reads (bucket is public),
+    (3) upload progress bar (Web has spinner only), (4) multi-image gallery
+    modal on tap (Web opens in new tab — parity), (5) file quick-look
+    preview inline (parity: browser / OS delegation), (6) attachment size
+    / extension enforcement (no server-side enforcement on Web either),
+    (7) Winston 3.3 audit + iOS staging smoke batched to unified testing
+    phase per standing directive.
 - **3.1-debt-02 Message withdraw**: `is_withdrawn` / `withdrawn_at` fields exist on the
   model but no UI trigger path and no server-side RLS UPDATE test. Web has the flow; iOS
   lags.
