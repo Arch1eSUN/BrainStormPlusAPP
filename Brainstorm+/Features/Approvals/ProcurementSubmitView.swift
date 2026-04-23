@@ -35,7 +35,9 @@ public struct ProcurementSubmitView: View {
 
     public var body: some View {
         NavigationStack {
-            Form {
+            ZStack {
+                BsAmbientBackground()
+                Form {
                 Section("采购项目") {
                     Picker("类型", selection: $viewModel.procurementType) {
                         ForEach(ProcurementType.allCases) { t in
@@ -131,17 +133,23 @@ public struct ProcurementSubmitView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                }
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("采购申请")
             .navigationBarTitleDisplayMode(.inline)
             .zyErrorBanner($viewModel.errorMessage)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                        .disabled(viewModel.isSubmitting)
+                    Button("取消") {
+                        Haptic.light()
+                        dismiss()
+                    }
+                    .disabled(viewModel.isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("提交") {
+                        Haptic.medium()
                         Task { await handleSubmit() }
                     }
                     .disabled(!viewModel.canSubmit)
@@ -152,6 +160,9 @@ public struct ProcurementSubmitView: View {
                     submittingOverlay
                 }
             }
+            .onChange(of: viewModel.procurementType) { _, _ in Haptic.selection() }
+            .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
+            .onChange(of: viewModel.budgetAvailable) { _, _ in Haptic.light() }
         }
     }
 
@@ -179,8 +190,11 @@ public struct ProcurementSubmitView: View {
     private func handleSubmit() async {
         let ok = await viewModel.submit()
         if ok, let id = viewModel.createdRequestId {
+            Haptic.success()
             onSubmitted(id)
             dismiss()
+        } else {
+            Haptic.error()
         }
     }
 

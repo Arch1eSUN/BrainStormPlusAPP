@@ -10,18 +10,24 @@ import Supabase
 //   - iOS ships as a pushed NavigationStack screen, not a centered
 //     modal dialog — navigation parity with other list → detail flows
 //     in the app (tasks, projects, knowledge).
-//   - `isSelf` badge is dropped: every row reachable from "我提交的"
-//     is already self-served. 4.3 will revisit when we land the
-//     approver queues.
 //   - AI assist audit list is omitted for 4.2 (Web shows a collapsed
 //     list of the last 5 — not user-facing value). Carry-forward.
 //   - Revoke flow renders as a sheet instead of a centered dialog;
 //     still calls the same SECURITY DEFINER RPC.
+//
+// Batch C.1 additions:
+//   - `isSelf` "本人提交" pill (Web parity: approval-detail-dialog.tsx:228).
+//   - Bottom action bar with approve/reject for pending rows when
+//     the viewer holds the matching capability. Routes through the
+//     existing `ApprovalCommentSheet` so comment rules (reject
+//     requires comment; approve optional) are enforced uniformly.
 // ══════════════════════════════════════════════════════════════════
 
 public struct ApprovalDetailView: View {
+    @Environment(SessionManager.self) private var sessionManager
     @StateObject private var viewModel: ApprovalDetailViewModel
     @State private var showRevokeSheet = false
+    @State private var pendingDecision: ApprovalActionDecision?
 
     public init(requestId: UUID, client: SupabaseClient) {
         _viewModel = StateObject(
@@ -29,28 +35,59 @@ public struct ApprovalDetailView: View {
         )
     }
 
+    private var effectiveCapabilities: [Capability] {
+        RBACManager.shared.getEffectiveCapabilities(for: sessionManager.currentProfile)
+    }
+
+    private var canShowActionBar: Bool {
+        viewModel.canApproveThisRequest(capabilities: effectiveCapabilities)
+            // Leave kind routes through the Next.js hook layer on Web
+            // for comp_time quota / DWS side-effects. Keep the same
+            // "Web-only" gate as the queue list (parity with
+            // `ApprovalQueueKind.supportsWriteOnIOS`).
+            && viewModel.request?.requestType != .leave
+    }
+
     public var body: some View {
-        Group {
-            if viewModel.isLoading && viewModel.request == nil {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let request = viewModel.request {
-                detailScroll(request)
-            } else if let message = viewModel.errorMessage {
-                ContentUnavailableView(
-                    "加载失败",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(message)
-                )
-            } else {
-                ContentUnavailableView(
-                    "审批请求不存在",
-                    systemImage: "tray"
-                )
+        ZStack {
+            // Ambient 弥散底层 —— Azure + Mint blobs 漂在暖米纸底上，
+            // 卡片玻璃透出一点氛围光。Fusion 词汇统一。
+            BsAmbientBackground()
+
+            Group {
+                if viewModel.isLoading && viewModel.request == nil {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let request = viewModel.request {
+                    detailScroll(request)
+                } else if let message = viewModel.errorMessage {
+                    ContentUnavailableView(
+                        "加载失败",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(message)
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "审批请求不存在",
+                        systemImage: "tray"
+                    )
+                }
             }
         }
         .navigationTitle("审批详情")
         .navigationBarTitleDisplayMode(.inline)
+        // 长按整页 → 复制编号（对齐 Fusion 交互词汇）
+        .bsContextMenu([
+            BsContextMenuItem(
+                label: "复制编号",
+                systemImage: "doc.on.doc"
+            ) {
+                if let id = viewModel.request?.id {
+                    UIPasteboard.general.string = id.uuidString
+                    Haptic.light()
+                }
+            }
+        ])
         .zyErrorBanner($viewModel.errorMessage)
         .refreshable {
             await viewModel.load()
@@ -61,6 +98,83 @@ public struct ApprovalDetailView: View {
         .sheet(isPresented: $showRevokeSheet) {
             revokeSheet
         }
+        .sheet(item: $pendingDecision) { decision in
+            ApprovalCommentSheet(
+                isPresented: Binding(
+                    get: { pendingDecision != nil },
+                    set: { if !$0 { pendingDecision = nil } }
+                ),
+                decision: decision,
+                requestLabel: actionSheetLabel
+            ) { comment in
+                await viewModel.applyAction(decision: decision, comment: comment)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if canShowActionBar {
+                actionBar
+            }
+        }
+    }
+
+    private var actionSheetLabel: String? {
+        guard let req = viewModel.request else { return nil }
+        let typeLabel = req.requestType.displayLabel
+        let name = req.requesterProfile?.fullName ?? "未知用户"
+        return "\(typeLabel) · \(name)"
+    }
+
+    @ViewBuilder
+    private var actionBar: some View {
+        let busy = viewModel.isApplyingAction
+        HStack(spacing: 12) {
+            // 拒绝 —— glass-tinted danger capsule + warning haptic
+            Button(role: .destructive) {
+                Haptic.warning()
+                pendingDecision = .reject
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark.circle")
+                    Text("拒绝").fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .glassEffect(
+                    .regular.tint(BsColor.danger.opacity(0.28)).interactive(),
+                    in: Capsule()
+                )
+                .foregroundStyle(BsColor.danger)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+
+            // 批准 —— glass-tinted success capsule + success haptic
+            Button {
+                Haptic.success()
+                pendingDecision = .approve
+            } label: {
+                HStack(spacing: 6) {
+                    if busy {
+                        ProgressView().controlSize(.small).tint(BsColor.success)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                    }
+                    Text("批准").fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .glassEffect(
+                    .regular.tint(BsColor.success.opacity(0.28)).interactive(),
+                    in: Capsule()
+                )
+                .foregroundStyle(BsColor.success)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 
     // MARK: - Detail body
@@ -69,7 +183,9 @@ public struct ApprovalDetailView: View {
     private func detailScroll(_ request: ApprovalRequestDetail) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // 入场 stagger —— 每张卡延迟 50ms 按序浮入
                 headerCard(request)
+                    .bsAppearStagger(index: 0)
 
                 if let reason = request.businessReason, !reason.isEmpty {
                     Section(title: "申请事由", systemImage: "bubble.left.and.text.bubble.right") {
@@ -78,14 +194,17 @@ public struct ApprovalDetailView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .bsAppearStagger(index: 1)
                 }
 
                 typedDetailSection(viewModel.typedDetail)
+                    .bsAppearStagger(index: 2)
 
                 if !request.attachments.isEmpty {
                     Section(title: "附件", systemImage: "paperclip") {
                         attachmentsList(request.attachments)
                     }
+                    .bsAppearStagger(index: 3)
                 }
 
                 if let summary = request.aiSummary, !summary.isEmpty {
@@ -95,26 +214,32 @@ public struct ApprovalDetailView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .bsAppearStagger(index: 4)
                 }
 
                 if let note = request.reviewerNote, !note.isEmpty {
                     Section(title: "审批意见", systemImage: "checkmark.seal") {
                         reviewerNoteBlock(note: note, at: request.reviewedAt)
                     }
+                    .bsAppearStagger(index: 5)
                 }
 
                 if !viewModel.actions.isEmpty {
                     Section(title: "审批记录", systemImage: "clock.badge.checkmark") {
                         auditTrail(viewModel.actions)
                     }
+                    .bsAppearStagger(index: 6)
                 }
 
                 if viewModel.canRevokeCompTime {
                     revokeAffordance
+                        .bsAppearStagger(index: 7)
                 }
             }
             .padding(16)
         }
+        // Ambient bg 直接透到 scroll 下层
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Header
@@ -133,6 +258,10 @@ public struct ApprovalDetailView: View {
                         typeChip(request.requestType)
 
                         statusChip(request.status)
+
+                        if viewModel.isSelf {
+                            selfPill
+                        }
                     }
                     Text(submittedAtText(request))
                         .font(.caption2)
@@ -143,10 +272,8 @@ public struct ApprovalDetailView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        // 招牌玻璃卡：Liquid Glass + inset 高光 + 软阴影
+        .bsGlassCard(cornerRadius: 14)
     }
 
     @ViewBuilder
@@ -167,10 +294,11 @@ public struct ApprovalDetailView: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(
-                Capsule().fill(Color.blue.opacity(0.15))
+            .glassEffect(
+                .regular.tint(BsColor.brandAzure.opacity(0.25)),
+                in: Capsule()
             )
-            .foregroundStyle(Color.blue)
+            .foregroundStyle(BsColor.brandAzure)
     }
 
     @ViewBuilder
@@ -179,10 +307,33 @@ public struct ApprovalDetailView: View {
             .font(.caption2.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(
-                Capsule().fill(toneBackground(status.tone))
+            .glassEffect(
+                .regular.tint(toneForeground(status.tone).opacity(0.25)),
+                in: Capsule()
             )
             .foregroundStyle(toneForeground(status.tone))
+    }
+
+    /// Emerald "我提交的" pill shown in the header when viewer == requester.
+    /// Mirrors Web `approval-detail-dialog.tsx:228-233` (emerald chip with
+    /// user icon). Rendered only after `load()` resolves `viewerUserId`
+    /// and the VM's `isSelf` derived property flips to true.
+    @ViewBuilder
+    private var selfPill: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "person.fill")
+                .font(.caption2)
+            Text("我提交的")
+                .font(.caption2.weight(.semibold))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .glassEffect(
+            .regular.tint(BsColor.success.opacity(0.25)),
+            in: Capsule()
+        )
+        .foregroundStyle(BsColor.success)
+        .accessibilityLabel("我提交的审批")
     }
 
     private func submittedAtText(_ request: ApprovalRequestDetail) -> String {
@@ -435,8 +586,9 @@ public struct ApprovalDetailView: View {
             .font(.caption2.weight(.medium))
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(
-                Capsule().fill(toneBackground(type.tone))
+            .glassEffect(
+                .regular.tint(toneForeground(type.tone).opacity(0.25)),
+                in: Capsule()
             )
             .foregroundStyle(toneForeground(type.tone))
     }
@@ -446,6 +598,7 @@ public struct ApprovalDetailView: View {
     @ViewBuilder
     private var revokeAffordance: some View {
         Button {
+            Haptic.rigid()
             showRevokeSheet = true
         } label: {
             HStack(spacing: 6) {
@@ -455,11 +608,11 @@ public struct ApprovalDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.orange.opacity(0.15))
+            .glassEffect(
+                .regular.tint(BsColor.warning.opacity(0.28)).interactive(),
+                in: Capsule()
             )
-            .foregroundStyle(Color.orange)
+            .foregroundStyle(BsColor.warning)
         }
         .buttonStyle(.plain)
         .padding(.top, 4)
@@ -549,10 +702,8 @@ private struct Section<Content: View>: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        // Glass envelope with brand bevel + soft shadow
+        .bsGlassCard(cornerRadius: 14)
     }
 }
 
@@ -673,9 +824,9 @@ private struct RevokeCompTimeSheet: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.yellow.opacity(0.08))
+        .glassEffect(
+            .regular.tint(BsColor.warning.opacity(0.15)),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
     }
 }
@@ -687,4 +838,5 @@ private struct RevokeCompTimeSheet: View {
             client: supabase
         )
     }
+    .environment(SessionManager())
 }

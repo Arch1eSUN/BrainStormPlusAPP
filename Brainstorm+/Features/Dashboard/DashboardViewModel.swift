@@ -12,28 +12,52 @@ public enum ViewState: Equatable {
 public final class DashboardViewModel {
     public var state: ViewState = .loading
     public var profile: Profile?
-    public var schedules: [Schedule] = []
-    
+    public var todayState: DailyWorkState?
+
     private let repository: DashboardRepository
-    
+
     public init(repository: DashboardRepository = DashboardRepository()) {
         self.repository = repository
     }
-    
+
+    /// Mirror of Web `getDashboardTemplate(primaryRole)` — 3 templates.
+    /// Falls back to `.employee` while profile is still loading (matches Web's
+    /// employee-default for any non-admin/non-superadmin primaryRole).
+    public var dashboardTemplate: PrimaryRole {
+        let role = RBACManager.shared.migrateLegacyRole(profile?.role).primaryRole
+        return role
+    }
+
+    public var dashboardTemplateLabel: String {
+        switch dashboardTemplate {
+        case .employee: return "个人工作台"
+        case .admin: return "管理工作台"
+        case .superadmin: return "治理工作台"
+        }
+    }
+
+    public var primaryRoleDisplayName: String {
+        switch dashboardTemplate {
+        case .employee: return "员工"
+        case .admin: return "管理员"
+        case .superadmin: return "超级管理员"
+        }
+    }
+
     public func loadData() async {
         state = .loading
-        
+
         do {
             // First we need the authenticated user
             let session = try await supabase.auth.session
             let userId = session.user.id
-            
+
             // Execute parallel fetch Using `async let` pattern
             async let fetchedProfile = repository.fetchCurrentProfile(userId: userId)
-            async let fetchedSchedules = repository.fetchTodaySchedules(userId: userId)
-            
+            async let fetchedTodayState = repository.fetchTodayWorkState(userId: userId)
+
             self.profile = try await fetchedProfile
-            self.schedules = try await fetchedSchedules
+            self.todayState = try await fetchedTodayState
             
             withAnimation {
                 self.state = .loaded

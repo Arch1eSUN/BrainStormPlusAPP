@@ -1,31 +1,51 @@
 import SwiftUI
+import UIKit
 import Supabase
 
 /// Sprint 4.1 — "我提交的" list screen (read-only foundation) +
 /// Sprint 4.2 — detail push + "申请撤回" self-service +
 /// Sprint 4.3 — embedded as the `mine` tab body inside
-/// `ApprovalCenterView`.
+/// `ApprovalCenterView` +
+/// Design-system adoption — iOS 26 native list idioms
+/// (swipeActions / contextMenu / design tokens / haptics).
 ///
 /// 1:1 port of Web `src/app/dashboard/approval/_tabs/my-submissions.tsx`
 /// with these intentional deltas:
 ///   - No tab switcher lives in *this* file; the 7-tab shell is
-///     `ApprovalCenterView` (4.3). This view is now a content body
+///     `ApprovalCenterView` (4.3). This view is a content body
 ///     that assumes it's embedded inside an outer NavigationStack
 ///     which also owns the `.navigationDestination(for: UUID.self)`
-///     registration. We do not declare the destination here anymore
-///     to avoid a duplicate-registration SwiftUI runtime warning;
+///     registration. We do not declare the destination here to
+///     avoid a duplicate-registration SwiftUI runtime warning;
 ///     the outer center view handles UUID deep links for both
 ///     `mine` and the 6 approver queues uniformly.
-///   - Similarly, the navigation title/chrome is set by the center
-///     view, not this body — the title there is "审批中心" with the
-///     pill bar identifying the current tab.
+///   - Navigation title/chrome is set by the center view, not this
+///     body — the title there is "审批中心" with the pill bar
+///     identifying the current tab.
+///   - `MySubmissionsViewModel` does not (yet) expose a withdraw
+///     action, so the swipeActions/contextMenu "撤回" item is
+///     intentionally *not* rendered here. Withdraw still lives in
+///     the detail screen (`ApprovalDetailView`) which owns the
+///     mutating VM. When `MySubmissionsViewModel.withdrawSubmission`
+///     lands, revive the commented hook in `rowContextMenu`.
 public struct ApprovalsListView: View {
     @StateObject private var viewModel: MySubmissionsViewModel
     private let client: SupabaseClient
+    /// Phase 24 — zoom transition source namespace. Owned by the
+    /// enclosing `ApprovalCenterView` so the row and the detail view
+    /// (whose `.navigationDestination` registration lives upstream)
+    /// share the same identity scope. Optional so previews / ad-hoc
+    /// embeddings without a namespace still compile.
+    private let zoomNamespace: Namespace.ID?
 
-    public init(viewModel: MySubmissionsViewModel, client: SupabaseClient) {
+    public init(
+        viewModel: MySubmissionsViewModel,
+        client: SupabaseClient,
+        zoomNamespace: Namespace.ID? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.client = client
+        self.zoomNamespace = zoomNamespace
     }
 
     public var body: some View {
@@ -59,69 +79,135 @@ public struct ApprovalsListView: View {
 
     @ViewBuilder
     private var submissionsList: some View {
-        List(viewModel.rows) { row in
+        List {
+            ForEach(Array(viewModel.rows.enumerated()), id: \.element.id) { index, row in
             NavigationLink(value: row.id) {
-                submissionRow(row)
+                Group {
+                    if let ns = zoomNamespace {
+                        submissionRow(row)
+                            .matchedTransitionSource(id: row.id, in: ns)
+                    } else {
+                        submissionRow(row)
+                    }
+                }
             }
+            .bsAppearStagger(index: index)
             .buttonStyle(.plain)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(
+                top: BsSpacing.xs,
+                leading: BsSpacing.lg,
+                bottom: BsSpacing.xs,
+                trailing: BsSpacing.lg
+            ))
+            // Light haptic on tap so the push into detail has the same
+            // feel as Dashboard cards (DashboardRoleSections.swift:217).
+            .simultaneousGesture(
+                TapGesture().onEnded { Haptic.light() }
+            )
+            // iOS 26 native swipe — destructive withdraw is the Web parity
+            // action here, but MySubmissionsViewModel doesn't own it yet
+            // (withdraw lives in ApprovalDetailViewModel). Leaving the
+            // trailing edge empty rather than inventing a VM method.
+            // When the VM gains `withdrawSubmission(rowId:)`, uncomment:
+            //
+            // .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            //     if row.status == .pending {
+            //         Button(role: .destructive) {
+            //             Haptic.rigid()
+            //             Task { await viewModel.withdrawSubmission(rowId: row.id) }
+            //         } label: {
+            //             Label("撤回", systemImage: "arrow.uturn.backward")
+            //         }
+            //     }
+            // }
+            .contextMenu { rowContextMenu(row) }
+            }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    // MARK: - Context menu
+
+    @ViewBuilder
+    private func rowContextMenu(_ row: ApprovalMySubmissionRow) -> some View {
+        // 查看详情 — always available. Tapping the row already pushes
+        // the detail; this entry is the explicit long-press affordance
+        // that matches iOS 26 Mail / Messages convention.
+        NavigationLink(value: row.id) {
+            Label("查看详情", systemImage: "arrow.up.forward.square")
+        }
+
+        // 复制编号 — copies the request UUID to UIPasteboard so users
+        // can paste it into a support ticket / chat. We copy the raw
+        // UUID string (no prefix) to match what the Web admin surface
+        // displays in `id` columns.
+        Button {
+            UIPasteboard.general.string = row.id.uuidString
+            Haptic.light()
+        } label: {
+            Label("复制编号", systemImage: "doc.on.doc")
+        }
+
+        // 撤回 — intentionally omitted: MySubmissionsViewModel does
+        // not own a withdraw mutation. Withdraw stays on
+        // ApprovalDetailView where the VM does own it. See file
+        // header for re-enablement note.
     }
 
     @ViewBuilder
     private func submissionRow(_ row: ApprovalMySubmissionRow) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             // Header: type label + status chip + created-at
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: BsSpacing.sm) {
                 Text(row.requestType.displayLabel)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(BsTypography.cardSubtitle)
+                    .foregroundStyle(BsColor.ink)
 
                 statusChip(row.status)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: BsSpacing.sm)
 
                 Text(Self.createdAtFormatter.string(from: row.createdAt))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkFaint)
             }
 
             // Leave-only preview line (Web my-submissions.tsx:145-151)
             if row.requestType == .leave, let leave = row.leave {
                 Text(leavePreviewText(leave))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(BsTypography.caption)
+                    .foregroundStyle(BsColor.inkMuted)
             }
 
             if let reason = row.businessReason, !reason.isEmpty {
                 Text(reason)
-                    .font(.caption)
-                    .foregroundStyle(Color.secondary)
+                    .font(BsTypography.caption)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(2)
             }
 
             if let note = row.reviewerNote, !note.isEmpty {
-                // Web: border-l-2 border-gray-200 pl-2 — we mirror with a
-                // Rectangle leading bar so the visual semantics carry across.
-                HStack(alignment: .top, spacing: 8) {
+                // Web: border-l-2 border-gray-200 pl-2 — mirror with a
+                // Rectangle leading bar so the visual semantics carry
+                // across.
+                HStack(alignment: .top, spacing: BsSpacing.sm) {
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.3))
+                        .fill(BsColor.borderSubtle)
                         .frame(width: 2)
                     Text("审批意见：\(note)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(BsTypography.caption)
+                        .foregroundStyle(BsColor.inkMuted)
                         .lineLimit(3)
                 }
             }
         }
-        .padding(12)
+        .padding(BsSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
 
     // MARK: - Status chip
@@ -129,32 +215,30 @@ public struct ApprovalsListView: View {
     @ViewBuilder
     private func statusChip(_ status: ApprovalStatus) -> some View {
         Text(status.displayLabel)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(
-                Capsule().fill(toneBackground(status.tone))
-            )
+            .font(BsTypography.captionSmall)
             .foregroundStyle(toneForeground(status.tone))
+            .padding(.horizontal, BsSpacing.sm)
+            .padding(.vertical, 3)
+            .glassEffect(.regular.tint(toneBackground(status.tone).opacity(1.5)), in: Capsule())
     }
 
     private func toneBackground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange.opacity(0.15)
-        case .success: return Color.green.opacity(0.15)
-        case .danger:  return Color.red.opacity(0.15)
-        case .info:    return Color.blue.opacity(0.15)
-        case .neutral: return Color.gray.opacity(0.18)
+        case .warning: return BsColor.warning.opacity(0.15)
+        case .success: return BsColor.success.opacity(0.15)
+        case .danger:  return BsColor.danger.opacity(0.15)
+        case .info:    return BsColor.brandAzure.opacity(0.15)
+        case .neutral: return BsColor.inkMuted.opacity(0.15)
         }
     }
 
     private func toneForeground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange
-        case .success: return Color.green
-        case .danger:  return Color.red
-        case .info:    return Color.blue
-        case .neutral: return Color.secondary
+        case .warning: return BsColor.warning
+        case .success: return BsColor.success
+        case .danger:  return BsColor.danger
+        case .info:    return BsColor.brandAzure
+        case .neutral: return BsColor.inkMuted
         }
     }
 

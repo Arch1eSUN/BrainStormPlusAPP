@@ -29,23 +29,30 @@ public struct NewConversationSheet: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if selectedUserIds.count >= 2 {
-                    groupDetailsSection
-                    Divider()
-                }
+            ZStack {
+                BsAmbientBackground()
+                VStack(spacing: 0) {
+                    if selectedUserIds.count >= 2 {
+                        groupDetailsSection
+                        Divider()
+                    }
 
-                UserPickerView(viewModel: viewModel, selectedUserIds: $selectedUserIds)
+                    UserPickerView(viewModel: viewModel, selectedUserIds: $selectedUserIds)
+                }
             }
             .navigationTitle("新建会话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("取消") { dismiss() }
-                        .disabled(isSubmitting)
+                    Button("取消") {
+                        Haptic.light()
+                        dismiss()
+                    }
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptic.medium()
                         Task { await submit() }
                     } label: {
                         if isSubmitting {
@@ -57,6 +64,7 @@ public struct NewConversationSheet: View {
                     .disabled(!canSubmit)
                 }
             }
+            .onChange(of: selectedUserIds) { _, _ in Haptic.light() }
             .alert("创建失败", isPresented: errorBinding, actions: {
                 Button("好", role: .cancel) { errorMessage = nil }
             }, message: {
@@ -67,14 +75,16 @@ public struct NewConversationSheet: View {
 
     @ViewBuilder
     private var groupDetailsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("群聊信息").font(.headline)
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
+            Text("群聊信息")
+                .font(BsTypography.cardTitle)
+                .foregroundStyle(BsColor.ink)
             TextField("群名称 (必填)", text: $groupName)
                 .textFieldStyle(.roundedBorder)
             TextField("群描述 (可选)", text: $groupDescription)
                 .textFieldStyle(.roundedBorder)
         }
-        .padding()
+        .padding(BsSpacing.lg)
     }
 
     private var submitLabel: String {
@@ -116,10 +126,12 @@ public struct NewConversationSheet: View {
 
             let channel = try await viewModel.fetchChannel(id: channelId)
             viewModel.appendChannelIfMissing(channel)
+            Haptic.success()
             onCreated(channel)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            Haptic.error()
+            errorMessage = ErrorLocalizer.localize(error)
         }
     }
 }

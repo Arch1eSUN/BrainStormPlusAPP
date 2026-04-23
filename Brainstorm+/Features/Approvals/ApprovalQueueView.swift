@@ -25,10 +25,31 @@ import Supabase
 public struct ApprovalQueueView: View {
     @StateObject private var viewModel: ApprovalQueueViewModel
     private let client: SupabaseClient
+    /// Phase 24 — zoom transition source namespace, shared with
+    /// `ApprovalCenterView` so row → detail push animates as a zoom.
+    /// Optional so previews / direct embeddings compile without one.
+    private let zoomNamespace: Namespace.ID?
 
-    public init(kind: ApprovalQueueKind, client: SupabaseClient) {
+    /// When non-nil, the comment sheet is presented for the carried
+    /// (row, decision) pair. Resetting to nil dismisses — we bind a
+    /// computed `Bool` to the sheet's `isPresented` so the sheet itself
+    /// can close by clearing this state.
+    @State private var pendingAction: PendingAction?
+
+    private struct PendingAction: Identifiable {
+        let id = UUID()
+        let row: ApprovalListRow
+        let decision: ApprovalActionDecision
+    }
+
+    public init(
+        kind: ApprovalQueueKind,
+        client: SupabaseClient,
+        zoomNamespace: Namespace.ID? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: ApprovalQueueViewModel(kind: kind, client: client))
         self.client = client
+        self.zoomNamespace = zoomNamespace
     }
 
     public var body: some View {
@@ -53,21 +74,56 @@ public struct ApprovalQueueView: View {
         .task {
             await viewModel.load()
         }
+        .sheet(item: $pendingAction) { action in
+            ApprovalCommentSheet(
+                isPresented: Binding(
+                    get: { pendingAction != nil },
+                    set: { if !$0 { pendingAction = nil } }
+                ),
+                decision: action.decision,
+                requestLabel: Self.sheetLabel(for: action.row)
+            ) { comment in
+                await viewModel.applyAction(
+                    to: action.row.id,
+                    decision: action.decision,
+                    comment: comment
+                )
+            }
+        }
+    }
+
+    private static func sheetLabel(for row: ApprovalListRow) -> String {
+        let typeLabel = row.requestType.displayLabel
+        let name = row.requesterProfile?.fullName ?? "未知用户"
+        return "\(typeLabel) · \(name)"
     }
 
     // MARK: - List
 
     @ViewBuilder
     private var queueList: some View {
-        List(viewModel.rows) { row in
-            NavigationLink(value: row.id) {
-                queueRow(row)
+        List {
+            ForEach(Array(viewModel.rows.enumerated()), id: \.element.id) { index, row in
+                NavigationLink(value: row.id) {
+                    Group {
+                        if let ns = zoomNamespace {
+                            queueRow(row)
+                                .matchedTransitionSource(id: row.id, in: ns)
+                        } else {
+                            queueRow(row)
+                        }
+                    }
+                }
+                .bsAppearStagger(index: index)
+                .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
-            .buttonStyle(.plain)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
     }
 
     @ViewBuilder
@@ -130,10 +186,7 @@ public struct ApprovalQueueView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
+        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
 
     // MARK: - Action buttons
@@ -145,7 +198,7 @@ public struct ApprovalQueueView: View {
             Spacer()
 
             Button {
-                Task { await viewModel.applyAction(to: row.id, decision: .approve, comment: nil) }
+                pendingAction = PendingAction(row: row, decision: .approve)
             } label: {
                 HStack(spacing: 4) {
                     if isBusy {
@@ -157,14 +210,14 @@ public struct ApprovalQueueView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(Color.green))
-                .foregroundStyle(.white)
+                .foregroundStyle(BsColor.success)
+                .glassEffect(.regular.tint(BsColor.success.opacity(0.28)).interactive(), in: Capsule())
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
 
             Button {
-                Task { await viewModel.applyAction(to: row.id, decision: .reject, comment: nil) }
+                pendingAction = PendingAction(row: row, decision: .reject)
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "xmark.circle")
@@ -172,12 +225,8 @@ public struct ApprovalQueueView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .strokeBorder(Color.red.opacity(0.5), lineWidth: 1)
-                        .background(Capsule().fill(Color.red.opacity(0.08)))
-                )
-                .foregroundStyle(Color.red)
+                .foregroundStyle(BsColor.danger)
+                .glassEffect(.regular.tint(BsColor.danger.opacity(0.28)).interactive(), in: Capsule())
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
@@ -202,10 +251,10 @@ public struct ApprovalQueueView: View {
     private func typeChip(_ type: ApprovalRequestType) -> some View {
         Text(type.displayLabel)
             .font(.caption2.weight(.semibold))
+            .foregroundStyle(BsColor.brandAzure)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.blue.opacity(0.15)))
-            .foregroundStyle(Color.blue)
+            .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.35)), in: Capsule())
     }
 
     @ViewBuilder
@@ -213,10 +262,10 @@ public struct ApprovalQueueView: View {
         if priority == .unknown { EmptyView() } else {
             Text(priorityLabel(priority))
                 .font(.caption2.weight(.semibold))
+                .foregroundStyle(priorityTint(priority))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Capsule().fill(priorityTint(priority).opacity(0.15)))
-                .foregroundStyle(priorityTint(priority))
+                .glassEffect(.regular.tint(priorityTint(priority).opacity(0.35)), in: Capsule())
         }
     }
 
@@ -244,10 +293,10 @@ public struct ApprovalQueueView: View {
     private func statusChip(_ status: ApprovalStatus) -> some View {
         Text(status.displayLabel)
             .font(.caption2.weight(.medium))
+            .foregroundStyle(toneForeground(status.tone))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(Capsule().fill(toneBackground(status.tone)))
-            .foregroundStyle(toneForeground(status.tone))
+            .glassEffect(.regular.tint(toneBackground(status.tone).opacity(1.5)), in: Capsule())
     }
 
     private func toneBackground(_ tone: ApprovalStatus.Tone) -> Color {
@@ -276,7 +325,6 @@ public struct ApprovalQueueView: View {
         case .fieldWork:    return "暂无外勤审批。"
         case .businessTrip: return "暂无出差审批。"
         case .expense:      return "暂无报销/采购审批。"
-        case .report:       return "暂无日报/周报审批。"
         case .generic:      return "暂无通用审批。"
         }
     }

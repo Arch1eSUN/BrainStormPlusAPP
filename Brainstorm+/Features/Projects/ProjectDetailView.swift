@@ -56,7 +56,7 @@ public struct ProjectDetailView: View {
 
     public var body: some View {
         ZStack {
-            Color.Brand.background
+            BsColor.surfaceSecondary
                 .ignoresSafeArea()
 
             Group {
@@ -66,12 +66,12 @@ public struct ProjectDetailView: View {
                     detailScroll(project: project)
                 } else if viewModel.isLoading {
                     ProgressView()
-                        .tint(Color.Brand.primary)
+                        .tint(BsColor.brandAzure)
                 } else if let error = viewModel.errorMessage {
                     errorStateView(message: error)
                 } else {
                     ProgressView()
-                        .tint(Color.Brand.primary)
+                        .tint(BsColor.brandAzure)
                 }
             }
         }
@@ -87,9 +87,9 @@ public struct ProjectDetailView: View {
                         isShowingEditSheet = true
                     } label: {
                         Image(systemName: "pencil")
-                            .foregroundColor(Color.Brand.primary)
+                            .foregroundColor(BsColor.brandAzure)
                     }
-                    .accessibilityLabel("Edit project")
+                    .accessibilityLabel("编辑项目")
                     .disabled(viewModel.isDeleting)
                 }
                 // 2.0: delete entry. Same access gate as the edit button — a denied caller
@@ -99,9 +99,9 @@ public struct ProjectDetailView: View {
                         isShowingDeleteConfirm = true
                     } label: {
                         Image(systemName: "trash")
-                            .foregroundColor(Color.Brand.warning)
+                            .foregroundColor(BsColor.warning)
                     }
-                    .accessibilityLabel("Delete project")
+                    .accessibilityLabel("删除项目")
                     .disabled(viewModel.isDeleting)
                 }
             }
@@ -109,7 +109,7 @@ public struct ProjectDetailView: View {
         .overlay(alignment: .top) {
             if viewModel.isLoading && viewModel.project != nil {
                 ProgressView()
-                    .tint(Color.Brand.primary)
+                    .tint(BsColor.brandAzure)
                     .padding(.top, 8)
             }
         }
@@ -118,10 +118,10 @@ public struct ProjectDetailView: View {
         .overlay {
             if viewModel.isDeleting {
                 Color.black.opacity(0.15).ignoresSafeArea()
-                ProgressView("Deleting…")
-                    .tint(Color.Brand.primary)
+                ProgressView("正在删除…")
+                    .tint(BsColor.brandAzure)
                     .padding()
-                    .background(Color.Brand.paper)
+                    .background(BsColor.surfacePrimary)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
@@ -143,31 +143,31 @@ public struct ProjectDetailView: View {
         // 2.0: destructive confirmation. Mirrors Web `confirm('确定删除这个项目吗？')` intent
         // gate with an iOS-native `.confirmationDialog` + `Button(role: .destructive)`.
         .confirmationDialog(
-            "Delete project?",
+            "确定删除这个项目吗？",
             isPresented: $isShowingDeleteConfirm,
             titleVisibility: .visible
         ) {
             if let project = viewModel.project {
-                Button("Delete \"\(project.name)\"", role: .destructive) {
+                Button("删除 “\(project.name)”", role: .destructive) {
                     Task { await confirmDelete() }
                 }
             }
-            Button("Cancel", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
             if let project = viewModel.project {
-                Text("This permanently deletes “\(project.name)” and all of its members. This cannot be undone.")
+                Text("将永久删除 “\(project.name)” 及其全部成员，此操作不可撤销。")
             } else {
-                Text("This permanently deletes this project. This cannot be undone.")
+                Text("将永久删除该项目，此操作不可撤销。")
             }
         }
         .alert(
-            "Delete failed",
+            "删除失败",
             isPresented: Binding(
                 get: { viewModel.deleteErrorMessage != nil },
                 set: { newValue in if !newValue { viewModel.deleteErrorMessage = nil } }
             ),
             actions: {
-                Button("OK", role: .cancel) { viewModel.deleteErrorMessage = nil }
+                Button("好的", role: .cancel) { viewModel.deleteErrorMessage = nil }
             },
             message: {
                 Text(viewModel.deleteErrorMessage ?? "")
@@ -224,8 +224,8 @@ public struct ProjectDetailView: View {
     }
 
     private var navigationTitle: String {
-        if viewModel.accessOutcome == .denied { return "Project" }
-        return viewModel.project?.name ?? "Project"
+        if viewModel.accessOutcome == .denied { return "项目" }
+        return viewModel.project?.name ?? "项目"
     }
 
     // MARK: - Detail layout
@@ -289,8 +289,8 @@ public struct ProjectDetailView: View {
     private func headerSection(project: Project) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(project.name)
-                .font(.custom("Outfit-Bold", size: 26))
-                .foregroundColor(Color.Brand.text)
+                .font(BsTypography.brandTitle)
+                .foregroundColor(BsColor.ink)
 
             statusBadge(status: project.status)
         }
@@ -299,7 +299,7 @@ public struct ProjectDetailView: View {
     private func statusBadge(status: Project.ProjectStatus) -> some View {
         let (label, fg, bg) = Self.statusStyle(for: status)
         return Text(label)
-            .font(.custom("Inter-SemiBold", size: 12))
+            .font(BsTypography.inter(12, weight: "SemiBold"))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(bg)
@@ -310,21 +310,21 @@ public struct ProjectDetailView: View {
     private func metadataSection(project: Project) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if let start = project.startDate {
-                metaRow(icon: "calendar", label: "Start", value: Self.dateFormatter.string(from: start))
+                metaRow(icon: "calendar", label: "开始", value: Self.dateFormatter.string(from: start))
             }
             if let end = project.endDate {
-                metaRow(icon: "calendar.badge.clock", label: "End", value: Self.dateFormatter.string(from: end))
+                metaRow(icon: "calendar.badge.clock", label: "截止", value: Self.dateFormatter.string(from: end))
             }
             // 1.7: owner row now prefers the joined profile's full_name. If owner fetch failed
             // (recorded in `enrichmentErrors[.owner]`) we fall back to the raw UUID rather than
             // hiding the row, so the detail still shows *something* for the owner field.
             ownerMetaRow(project: project)
             if let createdAt = project.createdAt {
-                metaRow(icon: "clock", label: "Created", value: Self.dateFormatter.string(from: createdAt))
+                metaRow(icon: "clock", label: "创建", value: Self.dateFormatter.string(from: createdAt))
             }
         }
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
@@ -337,11 +337,11 @@ public struct ProjectDetailView: View {
         let ownerFullName = viewModel.owner?.fullName
 
         if let ownerFullName, !ownerFullName.isEmpty {
-            ownerMetaRowLayout(label: "Owner", value: ownerFullName, avatarUrl: avatarUrl)
+            ownerMetaRowLayout(label: "所有者", value: ownerFullName, avatarUrl: avatarUrl)
         } else if let ownerId = project.ownerId {
             // Either owner hasn't loaded yet, profile has no full_name, or the owner fetch
             // recorded an error. Keep the UUID visible so the field isn't silently empty.
-            ownerMetaRowLayout(label: "Owner", value: ownerId.uuidString, avatarUrl: avatarUrl)
+            ownerMetaRowLayout(label: "所有者", value: ownerId.uuidString, avatarUrl: avatarUrl)
         }
     }
 
@@ -351,12 +351,12 @@ public struct ProjectDetailView: View {
         HStack(spacing: 12) {
             ownerAvatarView(urlString: avatarUrl, diameter: 22)
             Text(label)
-                .font(.custom("Inter-Medium", size: 13))
-                .foregroundColor(Color.Brand.textSecondary)
+                .font(BsTypography.caption)
+                .foregroundColor(BsColor.inkMuted)
             Spacer()
             Text(value)
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(Color.Brand.text)
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -381,7 +381,7 @@ public struct ProjectDetailView: View {
             }
             .frame(width: diameter, height: diameter)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.Brand.primaryLight.opacity(0.4), lineWidth: 0.5))
+            .overlay(Circle().stroke(BsColor.brandAzureLight.opacity(0.4), lineWidth: 0.5))
         } else {
             ownerAvatarPlaceholder
                 .frame(width: diameter, height: diameter)
@@ -392,21 +392,21 @@ public struct ProjectDetailView: View {
         Image(systemName: "person.crop.circle.fill")
             .resizable()
             .scaledToFit()
-            .foregroundColor(Color.Brand.primary.opacity(0.75))
+            .foregroundColor(BsColor.brandAzure.opacity(0.75))
     }
 
     private func metaRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(Color.Brand.primary)
+                .foregroundColor(BsColor.brandAzure)
                 .frame(width: 20)
             Text(label)
-                .font(.custom("Inter-Medium", size: 13))
-                .foregroundColor(Color.Brand.textSecondary)
+                .font(BsTypography.caption)
+                .foregroundColor(BsColor.inkMuted)
             Spacer()
             Text(value)
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(Color.Brand.text)
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -415,37 +415,37 @@ public struct ProjectDetailView: View {
     private func progressSection(project: Project) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Progress")
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                Text("进度")
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
                 Text("\(project.progress)%")
-                    .font(.custom("Inter-SemiBold", size: 14))
-                    .foregroundColor(Color.Brand.primary)
+                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .foregroundColor(BsColor.brandAzure)
             }
             ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
                 .progressViewStyle(.linear)
-                .tint(Color.Brand.primary)
+                .tint(BsColor.brandAzure)
         }
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     private func descriptionSection(description: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Description")
-                .font(.custom("Outfit-SemiBold", size: 16))
-                .foregroundColor(Color.Brand.text)
+            Text("项目描述")
+                .font(BsTypography.outfit(16, weight: "SemiBold"))
+                .foregroundColor(BsColor.ink)
             Text(description)
-                .font(.custom("Inter-Regular", size: 14))
-                .foregroundColor(Color.Brand.textSecondary)
+                .font(BsTypography.bodySmall)
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
@@ -456,12 +456,12 @@ public struct ProjectDetailView: View {
     /// `tasks` sub-select). Read-only; no navigation, no edit — that belongs to the Tasks module.
     private var tasksSection: some View {
         enrichmentCard(
-            title: "Tasks",
+            title: "任务",
             subtitle: tasksSubtitle,
             errorMessage: viewModel.enrichmentErrors[.tasks]
         ) {
             if viewModel.tasks.isEmpty && viewModel.enrichmentErrors[.tasks] == nil {
-                emptyLine("No tasks for this project yet.")
+                emptyLine("暂无任务。")
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(viewModel.tasks.prefix(8)) { task in
@@ -472,12 +472,12 @@ public struct ProjectDetailView: View {
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(task.title)
-                                    .font(.custom("Inter-Medium", size: 13))
-                                    .foregroundColor(Color.Brand.text)
+                                    .font(BsTypography.caption)
+                                    .foregroundColor(BsColor.ink)
                                     .lineLimit(2)
                                 Text(taskMetaLine(for: task))
-                                    .font(.custom("Inter-Regular", size: 11))
-                                    .foregroundColor(Color.Brand.textSecondary)
+                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .foregroundColor(BsColor.inkMuted)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
@@ -485,9 +485,9 @@ public struct ProjectDetailView: View {
                         }
                     }
                     if viewModel.tasks.count > 8 {
-                        Text("+ \(viewModel.tasks.count - 8) more")
-                            .font(.custom("Inter-Medium", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
+                        Text("还有 \(viewModel.tasks.count - 8) 条")
+                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .foregroundColor(BsColor.inkMuted)
                             .padding(.top, 2)
                     }
                 }
@@ -497,54 +497,54 @@ public struct ProjectDetailView: View {
 
     private var tasksSubtitle: String? {
         guard viewModel.enrichmentErrors[.tasks] == nil else { return nil }
-        return viewModel.tasks.isEmpty ? nil : "\(viewModel.tasks.count) shown"
+        return viewModel.tasks.isEmpty ? nil : "共 \(viewModel.tasks.count) 条"
     }
 
     /// Compact list of up to 10 recent daily logs (Web parity: `fetchProjectDetail()`
     /// `recent_daily_logs` sub-select).
     private var dailyLogsSection: some View {
         enrichmentCard(
-            title: "Recent Daily Logs",
+            title: "近期日报",
             subtitle: dailyLogsSubtitle,
             errorMessage: viewModel.enrichmentErrors[.dailyLogs]
         ) {
             if viewModel.dailyLogs.isEmpty && viewModel.enrichmentErrors[.dailyLogs] == nil {
-                emptyLine("No daily logs yet for this project.")
+                emptyLine("暂无日报。")
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(viewModel.dailyLogs.prefix(5)) { log in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
                                 Text(log.date)
-                                    .font(.custom("Inter-SemiBold", size: 12))
-                                    .foregroundColor(Color.Brand.primary)
+                                    .font(BsTypography.inter(12, weight: "SemiBold"))
+                                    .foregroundColor(BsColor.brandAzure)
                                 if let authorLine = authorLine(forUserId: log.userId) {
                                     Text("·")
-                                        .font(.custom("Inter-Regular", size: 11))
-                                        .foregroundColor(Color.Brand.textSecondary)
+                                        .font(BsTypography.inter(11, weight: "Regular"))
+                                        .foregroundColor(BsColor.inkMuted)
                                     Text(authorLine)
-                                        .font(.custom("Inter-Medium", size: 11))
-                                        .foregroundColor(Color.Brand.textSecondary)
+                                        .font(BsTypography.inter(11, weight: "Medium"))
+                                        .foregroundColor(BsColor.inkMuted)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                             }
                             Text(log.content)
-                                .font(.custom("Inter-Regular", size: 13))
-                                .foregroundColor(Color.Brand.text)
+                                .font(BsTypography.inter(13, weight: "Regular"))
+                                .foregroundColor(BsColor.ink)
                                 .lineLimit(3)
                             if let blockers = log.blockers, !blockers.isEmpty {
-                                Text("Blockers: \(blockers)")
-                                    .font(.custom("Inter-Regular", size: 11))
-                                    .foregroundColor(Color.Brand.warning)
+                                Text("阻塞：\(blockers)")
+                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .foregroundColor(BsColor.warning)
                                     .lineLimit(2)
                             }
                         }
                     }
                     if viewModel.dailyLogs.count > 5 {
-                        Text("+ \(viewModel.dailyLogs.count - 5) more")
-                            .font(.custom("Inter-Medium", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
+                        Text("还有 \(viewModel.dailyLogs.count - 5) 条")
+                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .foregroundColor(BsColor.inkMuted)
                     }
                 }
             }
@@ -553,54 +553,54 @@ public struct ProjectDetailView: View {
 
     private var dailyLogsSubtitle: String? {
         guard viewModel.enrichmentErrors[.dailyLogs] == nil else { return nil }
-        return viewModel.dailyLogs.isEmpty ? nil : "\(viewModel.dailyLogs.count) recent"
+        return viewModel.dailyLogs.isEmpty ? nil : "最近 \(viewModel.dailyLogs.count) 条"
     }
 
     /// Compact list of up to 5 recent weekly summaries (Web parity: `fetchProjectDetail()`
     /// `weekly_summaries` sub-select where `project_ids @> [projectId]`).
     private var weeklySummariesSection: some View {
         enrichmentCard(
-            title: "Weekly Summaries",
+            title: "近期周报",
             subtitle: weeklySubtitle,
             errorMessage: viewModel.enrichmentErrors[.weeklySummaries]
         ) {
             if viewModel.weeklySummaries.isEmpty && viewModel.enrichmentErrors[.weeklySummaries] == nil {
-                emptyLine("No weekly summaries yet for this project.")
+                emptyLine("暂无周报。")
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(viewModel.weeklySummaries.prefix(3)) { week in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 6) {
-                                Text("Week of \(week.weekStart)")
-                                    .font(.custom("Inter-SemiBold", size: 12))
-                                    .foregroundColor(Color.Brand.primary)
+                                Text("\(week.weekStart) 当周")
+                                    .font(BsTypography.inter(12, weight: "SemiBold"))
+                                    .foregroundColor(BsColor.brandAzure)
                                 if let authorLine = authorLine(forUserId: week.userId) {
                                     Text("·")
-                                        .font(.custom("Inter-Regular", size: 11))
-                                        .foregroundColor(Color.Brand.textSecondary)
+                                        .font(BsTypography.inter(11, weight: "Regular"))
+                                        .foregroundColor(BsColor.inkMuted)
                                     Text(authorLine)
-                                        .font(.custom("Inter-Medium", size: 11))
-                                        .foregroundColor(Color.Brand.textSecondary)
+                                        .font(BsTypography.inter(11, weight: "Medium"))
+                                        .foregroundColor(BsColor.inkMuted)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                             }
                             Text(week.summary)
-                                .font(.custom("Inter-Regular", size: 13))
-                                .foregroundColor(Color.Brand.text)
+                                .font(BsTypography.inter(13, weight: "Regular"))
+                                .foregroundColor(BsColor.ink)
                                 .lineLimit(3)
                             if let highlights = week.highlights, !highlights.isEmpty {
-                                Text("Highlights: \(highlights)")
-                                    .font(.custom("Inter-Regular", size: 11))
-                                    .foregroundColor(Color.Brand.textSecondary)
+                                Text("亮点：\(highlights)")
+                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .foregroundColor(BsColor.inkMuted)
                                     .lineLimit(2)
                             }
                         }
                     }
                     if viewModel.weeklySummaries.count > 3 {
-                        Text("+ \(viewModel.weeklySummaries.count - 3) more")
-                            .font(.custom("Inter-Medium", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
+                        Text("还有 \(viewModel.weeklySummaries.count - 3) 条")
+                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .foregroundColor(BsColor.inkMuted)
                     }
                 }
             }
@@ -609,7 +609,7 @@ public struct ProjectDetailView: View {
 
     private var weeklySubtitle: String? {
         guard viewModel.enrichmentErrors[.weeklySummaries] == nil else { return nil }
-        return viewModel.weeklySummaries.isEmpty ? nil : "\(viewModel.weeklySummaries.count) shown"
+        return viewModel.weeklySummaries.isEmpty ? nil : "共 \(viewModel.weeklySummaries.count) 条"
     }
 
     @ViewBuilder
@@ -622,22 +622,22 @@ public struct ProjectDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
                 if let subtitle {
                     Text(subtitle)
-                        .font(.custom("Inter-Medium", size: 11))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .foregroundColor(BsColor.inkMuted)
                 }
             }
             if let errorMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(Color.Brand.warning)
-                    Text("Couldn't load: \(errorMessage)")
-                        .font(.custom("Inter-Regular", size: 12))
-                        .foregroundColor(Color.Brand.warning)
+                        .foregroundColor(BsColor.warning)
+                    Text("加载失败：\(errorMessage)")
+                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .foregroundColor(BsColor.warning)
                         .lineLimit(3)
                 }
             } else {
@@ -646,29 +646,29 @@ public struct ProjectDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     private func emptyLine(_ text: String) -> some View {
         Text(text)
-            .font(.custom("Inter-Regular", size: 12))
-            .foregroundColor(Color.Brand.textSecondary)
+            .font(BsTypography.inter(12, weight: "Regular"))
+            .foregroundColor(BsColor.inkMuted)
     }
 
     private func errorBanner(message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundColor(Color.Brand.warning)
+                .foregroundColor(BsColor.warning)
             Text(message)
-                .font(.custom("Inter-Medium", size: 13))
-                .foregroundColor(Color.Brand.warning)
+                .font(BsTypography.caption)
+                .foregroundColor(BsColor.warning)
                 .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.Brand.warning.opacity(0.10))
+        .background(BsColor.warning.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -700,76 +700,145 @@ public struct ProjectDetailView: View {
         // admin / manager roles. Still deferred on iOS: resolution write-backs (close /
         // reopen / effectiveness / governance note), generating fresh risk analyses from
         // iOS, and the full risk action management surface.
-        Text("Generating fresh risk analyses and writing resolution outcomes (close / reopen / effectiveness) remain on the web and will arrive in later iOS rounds.")
-            .font(.custom("Inter-Regular", size: 12))
-            .foregroundColor(Color.Brand.textSecondary)
+        Text("生成新的风险分析以及处理结果写回（关闭 / 重开 / 有效性）暂仅支持 Web 端，iOS 后续版本补齐。")
+            .font(BsTypography.inter(12, weight: "Regular"))
+            .foregroundColor(BsColor.inkMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .background(Color.Brand.primaryLight.opacity(0.35))
+            .background(BsColor.brandAzureLight.opacity(0.35))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - 2.2 AI summary foundation section
 
-    /// Detail-page entry for the 2.2 AI summary foundation. State machine:
-    /// - idle (no `summary`, no `summaryErrorMessage`, not `isGeneratingSummary`):
-    ///     shows a single "Generate summary" button.
-    /// - generating: shows an in-place `ProgressView` + disabled button.
-    /// - success: shows the synthesized summary text + a "Regenerate" button.
-    /// - error: shows an isolated warning row + "Try again" button (plus any previously
-    ///     synthesized summary, if one was kept — foundation keeps it conservative: we clear
-    ///     `summary` on the failure path, so only the warning renders).
+    /// Detail-page entry for the AI summary section. Phase 6.1 replaced the local 2.2
+    /// facts-synthesis foundation with a direct HTTP call to the Web bridge at
+    /// `POST /api/ai/project-summary`, so the rendered content is now a server-generated
+    /// structured snapshot with five sections: 简述 / 已完成亮点 / 进行中 / 下一步 / 风险提示.
     ///
-    /// Web parity note: Web's `generateProjectSummary(projectId)` is a server action, not an
-    /// HTTP endpoint; iOS therefore synthesizes a deterministic facts summary from the same
-    /// parallel Supabase fetch Web uses (30 tasks / 10 daily logs / 3 weekly reports). The
-    /// foundation label makes this honest; an LLM-backed realignment is a later round.
+    /// State machine:
+    /// - idle: single "生成摘要" button.
+    /// - generating: inline `ProgressView` + "生成中…" label, button disabled.
+    /// - success: structured sections rendered below + "重新生成" button.
+    /// - error: isolated warning row + "重试" button.
     private var aiSummarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Project Summary")
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                Text("AI 项目摘要")
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
-                if let generatedAt = viewModel.summary?.generatedAt {
-                    Text("Generated \(Self.generatedAtFormatter.string(from: generatedAt))")
-                        .font(.custom("Inter-Medium", size: 11))
-                        .foregroundColor(Color.Brand.textSecondary)
+                if let caption = summaryProvenanceCaption(for: viewModel.projectSummary) {
+                    Text(caption)
+                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .foregroundColor(BsColor.inkMuted)
                 }
             }
 
-            Text("Foundation snapshot · synthesized locally from tasks, daily logs, and weekly reports. AI-generated narrative arrives in a later iOS round.")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("由 Web 端 AI 服务生成 · 涵盖进度简述、已完成亮点、进行中事项、下一步与风险提示。")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let errorMessage = viewModel.summaryErrorMessage {
                 summaryErrorRow(message: errorMessage)
-            } else if let summary = viewModel.summary {
-                Text(summary.summary)
-                    .font(.custom("Inter-Regular", size: 13))
-                    .foregroundColor(Color.Brand.text)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else if let summary = viewModel.projectSummary {
+                projectSummaryContent(summary: summary)
             }
 
             summaryActionButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     @ViewBuilder
+    private func projectSummaryContent(summary: ProjectSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !summary.snapshotSummary.isEmpty {
+                summarySection(title: "简述", body: summary.snapshotSummary)
+            }
+            if !summary.completedHighlights.isEmpty {
+                summaryBulletSection(title: "已完成亮点", items: summary.completedHighlights)
+            }
+            if !summary.inProgress.isEmpty {
+                summaryBulletSection(title: "进行中", items: summary.inProgress)
+            }
+            if !summary.nextSteps.isEmpty {
+                summaryBulletSection(title: "下一步", items: summary.nextSteps)
+            }
+            if !summary.riskNotes.isEmpty {
+                summaryBulletSection(title: "风险提示", items: summary.riskNotes)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func summarySection(title: String, body: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .foregroundColor(BsColor.inkMuted)
+            Text(body)
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func summaryBulletSection(title: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .foregroundColor(BsColor.inkMuted)
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("•")
+                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .foregroundColor(BsColor.inkMuted)
+                    Text(item)
+                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .foregroundColor(BsColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func summaryProvenanceCaption(for summary: ProjectSummary?) -> String? {
+        guard let summary else { return nil }
+        var parts: [String] = []
+        if let raw = summary.generatedAt, let date = Self.parseISOTimestamp(raw) {
+            parts.append("生成于 " + Self.generatedAtFormatter.string(from: date))
+        }
+        if let model = summary.modelUsed, !model.isEmpty {
+            parts.append("模型：\(model)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static func parseISOTimestamp(_ raw: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: raw) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: raw)
+    }
+
+    @ViewBuilder
     private var summaryActionButton: some View {
-        let hasResult = viewModel.summary != nil
+        let hasResult = viewModel.projectSummary != nil
         let hasError = viewModel.summaryErrorMessage != nil
         let label: String = {
-            if viewModel.isGeneratingSummary { return "Generating…" }
-            if hasError { return "Try again" }
-            if hasResult { return "Regenerate summary" }
-            return "Generate summary"
+            if viewModel.isGeneratingSummary { return "生成中…" }
+            if hasError { return "重试" }
+            if hasResult { return "重新生成" }
+            return "生成摘要"
         }()
 
         HStack {
@@ -787,11 +856,11 @@ public struct ProjectDetailView: View {
                         Image(systemName: "sparkles")
                     }
                     Text(label)
-                        .font(.custom("Inter-SemiBold", size: 13))
+                        .font(BsTypography.inter(13, weight: "SemiBold"))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.Brand.primary)
+                .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
             }
@@ -807,15 +876,15 @@ public struct ProjectDetailView: View {
     private func summaryErrorRow(message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundColor(Color.Brand.warning)
+                .foregroundColor(BsColor.warning)
             Text(message)
-                .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(Color.Brand.warning)
+                .font(BsTypography.inter(12, weight: "Regular"))
+                .foregroundColor(BsColor.warning)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(Color.Brand.warning.opacity(0.10))
+        .background(BsColor.warning.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -848,38 +917,28 @@ public struct ProjectDetailView: View {
     private var riskAnalysisSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Risk Analysis")
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                Text("AI 风险分析")
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
                 if let analysis = viewModel.riskAnalysis {
                     riskLevelBadge(level: analysis.riskLevel)
                 }
             }
 
-            Text("Read-only snapshot · loaded from the web dashboard's most recent analysis. New analyses must be generated on the web.")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("由 Web 端 AI 服务生成 · 包含整体风险等级、摘要说明、逐条风险项与处置建议。")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let errorMessage = viewModel.riskAnalysisErrorMessage {
                 summaryErrorRow(message: errorMessage)
             } else if let analysis = viewModel.riskAnalysis {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(analysis.summary)
-                        .font(.custom("Inter-Regular", size: 13))
-                        .foregroundColor(Color.Brand.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let caption = riskAnalysisProvenanceCaption(for: analysis) {
-                        Text(caption)
-                            .font(.custom("Inter-Medium", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
-                    }
-                }
+                riskAnalysisContent(analysis: analysis)
             } else if viewModel.riskAnalysisNotYetGenerated {
-                Text("No risk analysis has been generated on the web yet for this project.")
-                    .font(.custom("Inter-Regular", size: 12))
-                    .foregroundColor(Color.Brand.textSecondary)
+                Text("Web 端尚未为该项目生成风险分析。")
+                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .foregroundColor(BsColor.inkMuted)
             }
 
             riskAnalysisActionButton
@@ -894,16 +953,16 @@ public struct ProjectDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
         .confirmationDialog(
-            "Convert risk analysis to risk action?",
+            "将当前风险分析转为风险动作？",
             isPresented: $isShowingRiskActionSyncConfirm,
             titleVisibility: .visible,
             presenting: pendingRiskActionDraft
         ) { draft in
-            Button("Create risk action") {
+            Button("创建风险动作") {
                 Task {
                     // VM owns the authoritative draft rebuild + insert. On success the
                     // view schedules the 3s auto-clear; on failure the scoped error
@@ -915,7 +974,7 @@ public struct ProjectDetailView: View {
                     }
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button("取消", role: .cancel) {
                 pendingRiskActionDraft = nil
             }
         } message: { draft in
@@ -923,11 +982,11 @@ public struct ProjectDetailView: View {
             // syncRiskFromDetection: title, trimmed detail, severity. A new risk_actions
             // row will be created with status 'open' and linked to the current analysis.
             Text("""
-            A new risk action will be created and linked to this project's risk analysis.
+            将创建一条新的风险动作，并关联到该项目的风险分析。
 
-            • Title: \(draft.title)
-            • Severity: \(Self.riskActionSeverityLabel(draft.severity))
-            • Detail: \(draft.detail.isEmpty ? "—" : draft.detail)
+            • 标题：\(draft.title)
+            • 严重度：\(Self.riskActionSeverityLabel(draft.severity))
+            • 详情：\(draft.detail.isEmpty ? "—" : draft.detail)
             """)
         }
     }
@@ -962,12 +1021,12 @@ public struct ProjectDetailView: View {
                         } else {
                             Image(systemName: "arrow.triangle.branch")
                         }
-                        Text(isSyncing ? "Converting…" : "Convert to risk action")
-                            .font(.custom("Inter-SemiBold", size: 13))
+                        Text(isSyncing ? "转换中…" : "转为风险动作")
+                            .font(BsTypography.inter(13, weight: "SemiBold"))
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(canSyncRiskAction ? Color.Brand.warning : Color.Brand.textSecondary.opacity(0.4))
+                    .background(canSyncRiskAction ? BsColor.warning : BsColor.inkMuted.opacity(0.4))
                     .foregroundColor(.white)
                     .clipShape(Capsule())
                 }
@@ -984,9 +1043,9 @@ public struct ProjectDetailView: View {
                 // control and only surfaces the gate on the server side — but unlike Web,
                 // iOS pre-gates so the user isn't surprised by an RLS error. The hint
                 // keeps that predictability explicit.
-                Text("Converting a risk into a risk action requires admin or manager privileges.")
-                    .font(.custom("Inter-Regular", size: 11))
-                    .foregroundColor(Color.Brand.textSecondary)
+                Text("转为风险动作需要管理员或经理权限。")
+                    .font(BsTypography.inter(11, weight: "Regular"))
+                    .foregroundColor(BsColor.inkMuted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
@@ -1000,14 +1059,14 @@ public struct ProjectDetailView: View {
                 // `projects/page.tsx:216` in spirit — iOS ships English-only copy this round.
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color.Brand.primary)
-                    Text("Risk action created and linked to this analysis.")
-                        .font(.custom("Inter-Regular", size: 12))
-                        .foregroundColor(Color.Brand.primary)
+                        .foregroundColor(BsColor.brandAzure)
+                    Text("已转为风险动作，并关联到本次分析。")
+                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .foregroundColor(BsColor.brandAzure)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .background(Color.Brand.primaryLight.opacity(0.55))
+                .background(BsColor.brandAzureLight.opacity(0.55))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
@@ -1027,13 +1086,120 @@ public struct ProjectDetailView: View {
     /// Maps the three-value `severity` vocabulary into a user-facing label for the
     /// confirmation dialog. The VM stores severity as a raw string to match the Web insert
     /// payload verbatim; rendering happens here.
+    // D.2a: Chinese severity labels for the confirmation dialog.
     private static func riskActionSeverityLabel(_ severity: String) -> String {
         switch severity {
-        case "high": return "High"
-        case "medium": return "Medium"
-        case "low": return "Low"
+        case "high": return "高"
+        case "medium": return "中"
+        case "low": return "低"
         default: return severity.capitalized
         }
+    }
+
+    @ViewBuilder
+    private func riskAnalysisContent(analysis: ProjectRiskAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !analysis.summary.isEmpty {
+                Text(analysis.summary)
+                    .font(BsTypography.inter(13, weight: "Regular"))
+                    .foregroundColor(BsColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !analysis.risks.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("风险项")
+                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .foregroundColor(BsColor.inkMuted)
+                    ForEach(Array(analysis.risks.enumerated()), id: \.offset) { _, item in
+                        riskItemRow(item: item)
+                    }
+                }
+            }
+
+            if let caption = riskAnalysisProvenanceCaption(for: analysis) {
+                Text(caption)
+                    .font(BsTypography.inter(11, weight: "Medium"))
+                    .foregroundColor(BsColor.inkMuted)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func riskItemRow(item: ProjectRiskAnalysis.RiskItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                riskCategoryChip(category: item.category)
+                riskSeverityChip(severity: item.severity)
+                Spacer()
+            }
+            if !item.title.isEmpty {
+                Text(item.title)
+                    .font(BsTypography.inter(13, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !item.description.isEmpty {
+                Text(item.description)
+                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .foregroundColor(BsColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !item.suggestedAction.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Text("建议：")
+                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .foregroundColor(BsColor.brandAzure)
+                    Text(item.suggestedAction)
+                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .foregroundColor(BsColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(BsColor.brandAzureLight.opacity(0.20))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func riskCategoryChip(category: String) -> some View {
+        let label: String = {
+            switch category.lowercased() {
+            case "schedule": return "进度"
+            case "progress": return "进展"
+            case "resource": return "资源"
+            case "blocker": return "阻塞"
+            default: return "其他"
+            }
+        }()
+        return Text(label)
+            .font(BsTypography.inter(10, weight: "Medium"))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(BsColor.brandAzure.opacity(0.15))
+            .foregroundColor(BsColor.brandAzure)
+            .clipShape(Capsule())
+    }
+
+    private func riskSeverityChip(severity: String) -> some View {
+        let lower = severity.lowercased()
+        let (label, fg, bg): (String, Color, Color) = {
+            switch lower {
+            case "critical": return ("严重", .white, Color.red)
+            case "high":     return ("高", .white, BsColor.warning)
+            case "medium":   return ("中", BsColor.warning, BsColor.warning.opacity(0.18))
+            case "low":      return ("低", BsColor.brandAzure, BsColor.brandAzureLight)
+            default:         return (severity.capitalized, BsColor.inkMuted, Color.gray.opacity(0.15))
+            }
+        }()
+        return Text(label)
+            .font(BsTypography.inter(10, weight: "SemiBold"))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(bg)
+            .foregroundColor(fg)
+            .clipShape(Capsule())
     }
 
     @ViewBuilder
@@ -1041,10 +1207,10 @@ public struct ProjectDetailView: View {
         let hasResult = viewModel.riskAnalysis != nil
         let hasError = viewModel.riskAnalysisErrorMessage != nil
         let label: String = {
-            if viewModel.isLoadingRiskAnalysis { return "Checking…" }
-            if hasError { return "Try again" }
-            if hasResult { return "Refresh" }
-            return "Check for risk analysis"
+            if viewModel.isLoadingRiskAnalysis { return "生成中…" }
+            if hasError { return "重试" }
+            if hasResult { return "重新生成" }
+            return "生成风险分析"
         }()
 
         HStack {
@@ -1062,11 +1228,11 @@ public struct ProjectDetailView: View {
                         Image(systemName: "shield.checkered")
                     }
                     Text(label)
-                        .font(.custom("Inter-SemiBold", size: 13))
+                        .font(BsTypography.inter(13, weight: "SemiBold"))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.Brand.primary)
+                .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
             }
@@ -1080,7 +1246,7 @@ public struct ProjectDetailView: View {
     private func riskLevelBadge(level: ProjectRiskAnalysis.RiskLevel) -> some View {
         let (label, fg, bg) = Self.riskLevelStyle(for: level)
         return Text(label)
-            .font(.custom("Inter-SemiBold", size: 11))
+            .font(BsTypography.inter(11, weight: "SemiBold"))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(bg)
@@ -1091,10 +1257,10 @@ public struct ProjectDetailView: View {
     private func riskAnalysisProvenanceCaption(for analysis: ProjectRiskAnalysis) -> String? {
         var parts: [String] = []
         if let generatedAt = analysis.generatedAt {
-            parts.append("Generated " + Self.generatedAtFormatter.string(from: generatedAt))
+            parts.append("生成于 " + Self.generatedAtFormatter.string(from: generatedAt))
         }
         if let model = analysis.model, !model.isEmpty {
-            parts.append(model)
+            parts.append("模型：\(model)")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -1103,18 +1269,19 @@ public struct ProjectDetailView: View {
     /// SwiftUI's built-in `.red` for critical because there's no dedicated danger token in
     /// `Color.Brand`. Unknown values (e.g. Web wrote an unrecognized level) render neutrally
     /// rather than pretending to be "low".
+    // D.2a: Chinese labels for risk-level badges (mirrors Web `🟢 低 / 🟡 中 / 🟠 高 / 🔴 严重`).
     private static func riskLevelStyle(for level: ProjectRiskAnalysis.RiskLevel) -> (String, Color, Color) {
         switch level {
         case .low:
-            return ("Low risk", Color.Brand.primary, Color.Brand.primaryLight)
+            return ("低风险", BsColor.brandAzure, BsColor.brandAzureLight)
         case .medium:
-            return ("Medium risk", Color.Brand.warning, Color.Brand.warning.opacity(0.18))
+            return ("中风险", BsColor.warning, BsColor.warning.opacity(0.18))
         case .high:
-            return ("High risk", .white, Color.Brand.warning)
+            return ("高风险", .white, BsColor.warning)
         case .critical:
-            return ("Critical risk", .white, Color.red)
+            return ("严重风险", .white, Color.red)
         case .unknown:
-            return ("Unknown", Color.Brand.textSecondary, Color.gray.opacity(0.15))
+            return ("未知", BsColor.inkMuted, Color.gray.opacity(0.15))
         }
     }
 
@@ -1129,24 +1296,24 @@ public struct ProjectDetailView: View {
         VStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(Color.Brand.warning.opacity(0.12))
+                    .fill(BsColor.warning.opacity(0.12))
                     .frame(width: 96, height: 96)
                 Image(systemName: "lock.shield")
                     .font(.system(size: 36))
-                    .foregroundColor(Color.Brand.warning)
+                    .foregroundColor(BsColor.warning)
             }
-            Text("Access restricted")
-                .font(.custom("Outfit-SemiBold", size: 20))
-                .foregroundColor(Color.Brand.text)
-            Text("You don't have permission to view this project. A workspace admin can add you as a member from the web dashboard.")
-                .font(.custom("Inter-Regular", size: 14))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("无权访问此项目")
+                .font(BsTypography.sectionTitle)
+                .foregroundColor(BsColor.ink)
+            Text("你没有查看此项目的权限。可请管理员在 Web 端将你添加为项目成员。")
+                .font(BsTypography.bodySmall)
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
         .padding(.vertical, 40)
         .padding(.horizontal, 24)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
         .padding(.horizontal, 24)
@@ -1156,48 +1323,49 @@ public struct ProjectDetailView: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 36))
-                .foregroundColor(Color.Brand.warning)
-            Text("Couldn't load project")
-                .font(.custom("Outfit-SemiBold", size: 18))
-                .foregroundColor(Color.Brand.text)
+                .foregroundColor(BsColor.warning)
+            Text("项目加载失败")
+                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .foregroundColor(BsColor.ink)
             Text(message)
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(Color.Brand.textSecondary)
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Button {
                 Task { await reload() }
             } label: {
-                Text("Retry")
-                    .font(.custom("Inter-SemiBold", size: 14))
+                Text("重试")
+                    .font(BsTypography.inter(14, weight: "SemiBold"))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
-                    .background(Color.Brand.primary)
+                    .background(BsColor.brandAzure)
                     .foregroundColor(.white)
                     .clipShape(Capsule())
             }
         }
         .padding(.vertical, 32)
         .padding(.horizontal, 24)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, 24)
     }
 
     // MARK: - Styling helpers
 
+    // D.2a: Chinese labels matching Web STATUS_CFG.
     private static func statusStyle(for status: Project.ProjectStatus) -> (String, Color, Color) {
         switch status {
         case .planning:
-            return ("Planning", Color.Brand.primary, Color.Brand.primaryLight)
+            return ("规划中", BsColor.brandAzure, BsColor.brandAzureLight)
         case .active:
-            return ("Active", .white, Color.Brand.primary)
+            return ("进行中", .white, BsColor.brandAzure)
         case .onHold:
-            return ("On Hold", Color.Brand.warning, Color.Brand.warning.opacity(0.15))
+            return ("暂停", BsColor.warning, BsColor.warning.opacity(0.15))
         case .completed:
-            return ("Completed", Color.Brand.textSecondary, Color.gray.opacity(0.15))
+            return ("已完成", BsColor.inkMuted, Color.gray.opacity(0.15))
         case .archived:
-            return ("Archived", Color.Brand.textSecondary, Color.gray.opacity(0.10))
+            return ("归档", BsColor.inkMuted, Color.gray.opacity(0.10))
         }
     }
 
@@ -1205,9 +1373,9 @@ public struct ProjectDetailView: View {
     /// of unknown status values (the DTO decodes `status` as a raw `String`).
     private static func taskStatusColor(_ status: String) -> Color {
         switch status {
-        case "done": return Color.Brand.primary
-        case "in_progress", "review": return Color.Brand.warning
-        default: return Color.Brand.textSecondary
+        case "done": return BsColor.brandAzure
+        case "in_progress", "review": return BsColor.warning
+        default: return BsColor.inkMuted
         }
     }
 
@@ -1215,10 +1383,11 @@ public struct ProjectDetailView: View {
         raw.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
+    // D.2a: zh_CN locale for date labels in detail view.
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM d, yyyy"
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy年M月d日"
+        f.locale = Locale(identifier: "zh_CN")
         return f
     }()
 
@@ -1250,21 +1419,21 @@ public struct ProjectDetailView: View {
     private var linkedRiskActionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Linked Risk Actions")
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                Text("已关联风险动作")
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
                 if viewModel.linkedRiskActionsPhase == .loaded,
                    !viewModel.linkedRiskActions.isEmpty {
                     Text("\(viewModel.linkedRiskActions.count) linked")
-                        .font(.custom("Inter-Medium", size: 11))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .foregroundColor(BsColor.inkMuted)
                 }
             }
 
-            Text("Linked to the current risk analysis. Convert a new risk action above; resolution write-backs (close / reopen / effectiveness) remain on the web for now.")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("与当前风险分析关联的动作列表。关闭 / 重开 / 有效性等处理结果写回暂仅支持 Web 端。")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let errorMessage = viewModel.linkedRiskActionsErrorMessage {
@@ -1277,7 +1446,7 @@ public struct ProjectDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
@@ -1292,15 +1461,15 @@ public struct ProjectDetailView: View {
             EmptyView()
 
         case .noRiskAnalysisSource:
-            Text("No risk analysis exists for this project yet. Run one from the web dashboard first, then come back to view its linked actions here.")
-                .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("该项目暂无风险分析。请先在 Web 端生成分析，再返回这里查看已关联动作。")
+                .font(BsTypography.inter(12, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .empty:
-            Text("No risk actions have been linked to this analysis yet.")
-                .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("当前分析尚无关联的风险动作。")
+                .font(BsTypography.inter(12, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
 
         case .loaded:
             VStack(alignment: .leading, spacing: 8) {
@@ -1309,8 +1478,8 @@ public struct ProjectDetailView: View {
                 }
                 if viewModel.linkedRiskActions.count > 3 {
                     Text("+ \(viewModel.linkedRiskActions.count - 3) more on the web dashboard")
-                        .font(.custom("Inter-Medium", size: 11))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .foregroundColor(BsColor.inkMuted)
                         .padding(.top, 2)
                 }
             }
@@ -1323,8 +1492,8 @@ public struct ProjectDetailView: View {
                 .fill(Self.linkedActionStatusColor(action.status))
                 .frame(width: 8, height: 8)
             Text(action.title)
-                .font(.custom("Inter-Medium", size: 13))
-                .foregroundColor(Color.Brand.text)
+                .font(BsTypography.caption)
+                .foregroundColor(BsColor.ink)
                 .lineLimit(2)
             Spacer(minLength: 8)
             linkedActionSeverityBadge(severity: action.severity)
@@ -1334,7 +1503,7 @@ public struct ProjectDetailView: View {
     private func linkedActionSeverityBadge(severity: String) -> some View {
         let (label, fg, bg) = Self.linkedActionSeverityStyle(for: severity)
         return Text(label)
-            .font(.custom("Inter-SemiBold", size: 10))
+            .font(BsTypography.inter(10, weight: "SemiBold"))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(bg)
@@ -1350,10 +1519,10 @@ public struct ProjectDetailView: View {
             || viewModel.linkedRiskActionsPhase == .noRiskAnalysisSource
         let hasError = viewModel.linkedRiskActionsErrorMessage != nil
         let label: String = {
-            if isLoading { return "Checking…" }
-            if hasError { return "Try again" }
-            if hasResult || hasEmptyOrNoSource { return "Refresh" }
-            return "Check for linked actions"
+            if isLoading { return "加载中…" }
+            if hasError { return "重试" }
+            if hasResult || hasEmptyOrNoSource { return "刷新" }
+            return "查看关联动作"
         }()
 
         HStack {
@@ -1371,11 +1540,11 @@ public struct ProjectDetailView: View {
                         Image(systemName: "link")
                     }
                     Text(label)
-                        .font(.custom("Inter-SemiBold", size: 13))
+                        .font(BsTypography.inter(13, weight: "SemiBold"))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.Brand.primary)
+                .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
             }
@@ -1395,27 +1564,28 @@ public struct ProjectDetailView: View {
         switch status {
         case "resolved": return Color.green
         case "in_progress": return Color.blue
-        case "open": return Color.Brand.warning
-        case "acknowledged": return Color.Brand.primary
-        case "dismissed": return Color.Brand.textSecondary
-        default: return Color.Brand.textSecondary
+        case "open": return BsColor.warning
+        case "acknowledged": return BsColor.brandAzure
+        case "dismissed": return BsColor.inkMuted
+        default: return BsColor.inkMuted
         }
     }
 
     /// Severity capsule palette. Web uses red for high, amber for medium, green for low
     /// (see `page.tsx` lines 715-720). `unknown` / unrecognized values render neutrally
     /// rather than being treated as "low" (same posture as 2.3 risk-level `.unknown`).
+    // D.2a: Chinese severity labels for linked action capsules.
     private static func linkedActionSeverityStyle(for severity: String) -> (String, Color, Color) {
         switch severity {
         case "high":
-            return ("High", .white, Color.red)
+            return ("高", .white, Color.red)
         case "medium":
-            return ("Med", Color.Brand.warning, Color.Brand.warning.opacity(0.18))
+            return ("中", BsColor.warning, BsColor.warning.opacity(0.18))
         case "low":
-            return ("Low", Color.Brand.primary, Color.Brand.primaryLight)
+            return ("低", BsColor.brandAzure, BsColor.brandAzureLight)
         default:
-            return (severity.capitalized.isEmpty ? "Unknown" : severity.capitalized,
-                    Color.Brand.textSecondary,
+            return (severity.capitalized.isEmpty ? "未知" : severity.capitalized,
+                    BsColor.inkMuted,
                     Color.gray.opacity(0.15))
         }
     }
@@ -1449,21 +1619,21 @@ public struct ProjectDetailView: View {
     private var resolutionFeedbackSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Resolution Feedback")
-                    .font(.custom("Outfit-SemiBold", size: 16))
-                    .foregroundColor(Color.Brand.text)
+                Text("处理结果回流")
+                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .foregroundColor(BsColor.ink)
                 Spacer()
                 if viewModel.resolutionFeedbackPhase == .loaded,
                    let feedback = viewModel.resolutionFeedback {
                     Text("\(feedback.total) tracked")
-                        .font(.custom("Inter-Medium", size: 11))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .foregroundColor(BsColor.inkMuted)
                 }
             }
 
-            Text("Read-only · resolution write-back and governance interventions are only available on the web.")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("只读 · 处理结果写回与治理干预暂仅支持 Web 端。")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let errorMessage = viewModel.resolutionFeedbackErrorMessage {
@@ -1476,7 +1646,7 @@ public struct ProjectDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.Brand.paper)
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
@@ -1488,15 +1658,15 @@ public struct ProjectDetailView: View {
             EmptyView()
 
         case .noRiskAnalysisSource:
-            Text("No risk analysis exists for this project yet. Run one from the web dashboard first, then come back to view its resolution feedback here.")
-                .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("该项目暂无风险分析。请先在 Web 端生成分析，再返回这里查看处理结果回流。")
+                .font(BsTypography.inter(12, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .empty:
-            Text("No risk actions tracked yet for this analysis, so there's no resolution feedback to aggregate.")
-                .font(.custom("Inter-Regular", size: 12))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("当前分析还没有跟踪中的风险动作，暂无处理结果可聚合。")
+                .font(BsTypography.inter(12, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .loaded:
@@ -1523,15 +1693,15 @@ public struct ProjectDetailView: View {
         // widths when all five badges are populated.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                resolutionStatBadge(label: "Resolved", count: feedback.resolved,
-                                    fg: Color.Brand.primary, bg: Color.Brand.primaryLight)
-                resolutionStatBadge(label: "Dismissed", count: feedback.dismissed,
-                                    fg: Color.Brand.textSecondary, bg: Color.gray.opacity(0.15))
-                resolutionStatBadge(label: "Active", count: feedback.active,
-                                    fg: Color.Brand.warning, bg: Color.Brand.warning.opacity(0.18))
-                resolutionStatBadge(label: "Follow-up", count: feedback.followUpRequired,
-                                    fg: Color.Brand.warning, bg: Color.Brand.warning.opacity(0.18))
-                resolutionStatBadge(label: "Reopened", count: feedback.reopenedCount,
+                resolutionStatBadge(label: "已解决", count: feedback.resolved,
+                                    fg: BsColor.brandAzure, bg: BsColor.brandAzureLight)
+                resolutionStatBadge(label: "已忽略", count: feedback.dismissed,
+                                    fg: BsColor.inkMuted, bg: Color.gray.opacity(0.15))
+                resolutionStatBadge(label: "进行中", count: feedback.active,
+                                    fg: BsColor.warning, bg: BsColor.warning.opacity(0.18))
+                resolutionStatBadge(label: "待跟进", count: feedback.followUpRequired,
+                                    fg: BsColor.warning, bg: BsColor.warning.opacity(0.18))
+                resolutionStatBadge(label: "曾重开", count: feedback.reopenedCount,
                                     fg: .white, bg: Color.red.opacity(0.85))
             }
         }
@@ -1540,9 +1710,9 @@ public struct ProjectDetailView: View {
     private func resolutionStatBadge(label: String, count: Int, fg: Color, bg: Color) -> some View {
         HStack(spacing: 6) {
             Text("\(count)")
-                .font(.custom("Inter-SemiBold", size: 13))
+                .font(BsTypography.inter(13, weight: "SemiBold"))
             Text(label)
-                .font(.custom("Inter-Medium", size: 11))
+                .font(BsTypography.inter(11, weight: "Medium"))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -1568,13 +1738,13 @@ public struct ProjectDetailView: View {
                       : "exclamationmark.shield.fill")
                     .foregroundColor(tint)
                 Text(title)
-                    .font(.custom("Inter-SemiBold", size: 12))
+                    .font(BsTypography.inter(12, weight: "SemiBold"))
                     .foregroundColor(tint)
             }
             if feedback.isProneToReopen {
-                Text("Prone to reopen · \(feedback.reopenedCount) reopened action(s) still have unresolved work.")
-                    .font(.custom("Inter-Regular", size: 11))
-                    .foregroundColor(Color.Brand.warning)
+                Text("易重开 · \(feedback.reopenedCount) 个曾重开的动作仍未完全解决。")
+                    .font(BsTypography.inter(11, weight: "Regular"))
+                    .foregroundColor(BsColor.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -1588,21 +1758,21 @@ public struct ProjectDetailView: View {
         HStack(spacing: 6) {
             Image(systemName: "tag")
                 .font(.system(size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
-            Text("Dominant category")
-                .font(.custom("Inter-Medium", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+                .foregroundColor(BsColor.inkMuted)
+            Text("主要处理方式")
+                .font(BsTypography.inter(11, weight: "Medium"))
+                .foregroundColor(BsColor.inkMuted)
             Text(Self.humanize(category))
-                .font(.custom("Inter-SemiBold", size: 12))
-                .foregroundColor(Color.Brand.text)
+                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .foregroundColor(BsColor.ink)
         }
     }
 
     private func recentResolutionsList(resolutions: [ProjectResolutionFeedback.RecentResolution]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Recent resolutions")
-                .font(.custom("Inter-SemiBold", size: 12))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("最近治理动作")
+                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .foregroundColor(BsColor.inkMuted)
                 .padding(.top, 2)
             ForEach(Array(resolutions.prefix(3).enumerated()), id: \.offset) { _, resolution in
                 recentResolutionRow(resolution: resolution)
@@ -1618,8 +1788,8 @@ public struct ProjectDetailView: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 4) {
                 Text(resolution.title)
-                    .font(.custom("Inter-Medium", size: 13))
-                    .foregroundColor(Color.Brand.text)
+                    .font(BsTypography.caption)
+                    .foregroundColor(BsColor.ink)
                     .lineLimit(2)
                 HStack(spacing: 6) {
                     if let effectiveness = resolution.effectiveness, !effectiveness.isEmpty {
@@ -1627,8 +1797,8 @@ public struct ProjectDetailView: View {
                     }
                     if let dateText = resolvedAtDisplayDate(resolution.resolvedAtRaw) {
                         Text(dateText)
-                            .font(.custom("Inter-Regular", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
+                            .font(BsTypography.inter(11, weight: "Regular"))
+                            .foregroundColor(BsColor.inkMuted)
                             .lineLimit(1)
                     }
                 }
@@ -1640,7 +1810,7 @@ public struct ProjectDetailView: View {
     private func effectivenessCapsule(effectiveness: String) -> some View {
         let (label, fg, bg) = Self.effectivenessStyle(for: effectiveness)
         return Text(label)
-            .font(.custom("Inter-SemiBold", size: 10))
+            .font(BsTypography.inter(10, weight: "SemiBold"))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(bg)
@@ -1682,10 +1852,10 @@ public struct ProjectDetailView: View {
             || viewModel.resolutionFeedbackPhase == .noRiskAnalysisSource
         let hasError = viewModel.resolutionFeedbackErrorMessage != nil
         let label: String = {
-            if isLoading { return "Checking…" }
-            if hasError { return "Try again" }
-            if hasResult || hasEmptyOrNoSource { return "Refresh" }
-            return "Check for resolution feedback"
+            if isLoading { return "加载中…" }
+            if hasError { return "重试" }
+            if hasResult || hasEmptyOrNoSource { return "刷新" }
+            return "查看处理结果"
         }()
 
         HStack {
@@ -1703,11 +1873,11 @@ public struct ProjectDetailView: View {
                         Image(systemName: "checkmark.seal")
                     }
                     Text(label)
-                        .font(.custom("Inter-SemiBold", size: 13))
+                        .font(BsTypography.inter(13, weight: "SemiBold"))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.Brand.primary)
+                .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
             }
@@ -1724,8 +1894,8 @@ public struct ProjectDetailView: View {
     private static func resolutionStatusColor(_ status: String) -> Color {
         switch status {
         case "resolved": return Color.green
-        case "dismissed": return Color.Brand.textSecondary
-        default: return Color.Brand.textSecondary
+        case "dismissed": return BsColor.inkMuted
+        default: return BsColor.inkMuted
         }
     }
 
@@ -1733,18 +1903,19 @@ public struct ProjectDetailView: View {
     /// {effective, partial, ineffective, pending}. Unknown values render with a neutral
     /// tone so unexpected server expansion degrades gracefully (same posture as the rest
     /// of the 2.x defensive styling).
+    // D.2a: Chinese labels matching Web's effectiveness palette.
     private static func effectivenessStyle(for raw: String) -> (String, Color, Color) {
         switch raw {
         case "effective":
-            return ("Effective", Color.Brand.primary, Color.Brand.primaryLight)
+            return ("有效", BsColor.brandAzure, BsColor.brandAzureLight)
         case "partial":
-            return ("Partial", Color.Brand.warning, Color.Brand.warning.opacity(0.18))
+            return ("部分", BsColor.warning, BsColor.warning.opacity(0.18))
         case "ineffective":
-            return ("Ineffective", .white, Color.red.opacity(0.85))
+            return ("无效", .white, Color.red.opacity(0.85))
         case "pending":
-            return ("Pending", Color.Brand.textSecondary, Color.gray.opacity(0.15))
+            return ("待验证", BsColor.inkMuted, Color.gray.opacity(0.15))
         default:
-            return (humanize(raw), Color.Brand.textSecondary, Color.gray.opacity(0.15))
+            return (humanize(raw), BsColor.inkMuted, Color.gray.opacity(0.15))
         }
     }
 
@@ -1757,16 +1928,16 @@ public struct ProjectDetailView: View {
     {
         switch signal {
         case .interventionEffective:
-            return ("Intervention effective",
-                    Color.Brand.primary,
-                    Color.Brand.primaryLight.opacity(0.55))
+            return ("干预已生效",
+                    BsColor.brandAzure,
+                    BsColor.brandAzureLight.opacity(0.55))
         case .needsIntervention:
-            return ("Needs governance intervention",
-                    Color.Brand.warning,
-                    Color.Brand.warning.opacity(0.18))
+            return ("待治理干预",
+                    BsColor.warning,
+                    BsColor.warning.opacity(0.18))
         case .none:
-            return ("Neutral",
-                    Color.Brand.textSecondary,
+            return ("—",
+                    BsColor.inkMuted,
                     Color.gray.opacity(0.10))
         }
     }

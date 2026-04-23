@@ -7,6 +7,22 @@
         <string>remote-notification</string>
     </array>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Your location is used to verify attendance clock-in against the company geofence.</string>
+    <string>BrainStorm+ 使用您的位置信息来判断是否处于公司打卡范围内，以及记录外勤、出差、地理围栏等考勤相关操作。仅在您主动执行打卡或管理考勤规则时获取位置。</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>BrainStorm+ 需要访问您的相册，用于上传报销票据、请假医疗证明、知识库附件、聊天图片等内容。只有您主动选择图片时才会读取。</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>UIAppFonts</key>
+    <array>
+        <string>Inter-Regular.ttf</string>
+        <string>Inter-Medium.ttf</string>
+        <string>Inter-SemiBold.ttf</string>
+        <string>Inter-Bold.ttf</string>
+        <string>Outfit-Regular.ttf</string>
+        <string>Outfit-Medium.ttf</string>
+        <string>Outfit-SemiBold.ttf</string>
+        <string>Outfit-Bold.ttf</string>
+        <string>Outfit-ExtraBold.ttf</string>
+    </array>
 </dict>
 </plist>

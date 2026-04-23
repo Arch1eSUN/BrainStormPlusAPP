@@ -122,7 +122,7 @@ public class ProjectEditViewModel: ObservableObject {
             self.candidates = rows
         case .failure(let error):
             self.candidates = []
-            self.candidatesErrorMessage = error.localizedDescription
+            self.candidatesErrorMessage = ErrorLocalizer.localize(error)
         }
 
         switch mResult {
@@ -141,7 +141,7 @@ public class ProjectEditViewModel: ObservableObject {
             // Piggyback onto `candidatesErrorMessage` so the picker row can surface a single
             // soft banner. A separate key would add UI without adding information.
             if self.candidatesErrorMessage == nil {
-                self.candidatesErrorMessage = error.localizedDescription
+                self.candidatesErrorMessage = ErrorLocalizer.localize(error)
             }
         }
 
@@ -239,7 +239,7 @@ public class ProjectEditViewModel: ObservableObject {
     /// project row was updated and the user sees a clear follow-up message.
     public func save() async -> Project? {
         guard isSaveEnabled else {
-            errorMessage = "Project name is required."
+            errorMessage = "请填写项目名称。"
             return nil
         }
 
@@ -280,14 +280,14 @@ public class ProjectEditViewModel: ObservableObject {
                 } catch {
                     // Project row already saved — surface the member sync failure separately
                     // so the user knows the row updated but membership didn't.
-                    errorMessage = "Project saved, but member update failed: \(error.localizedDescription)"
+                    errorMessage = "项目已保存，但成员更新失败：\(ErrorLocalizer.localize(error))"
                 }
             }
 
             isSaving = false
             return refreshed
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
             isSaving = false
             return nil
         }

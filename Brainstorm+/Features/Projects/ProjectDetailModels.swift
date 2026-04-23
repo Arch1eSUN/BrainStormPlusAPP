@@ -107,42 +107,82 @@ public struct ProjectWeeklySummary: Identifiable, Codable, Hashable {
     }
 }
 
-// MARK: - 2.2 Project AI Summary Foundation
+// MARK: - 2.2 Project AI Summary (Web bridge)
 
 /// Structured result of `ProjectDetailViewModel.generateSummary()`.
 ///
-/// **Web source-of-truth discrepancy (2.2)**: Web's `generateProjectSummary(projectId)` lives in
-/// `BrainStorm+-Web/src/lib/actions/summary-actions.ts` as a **server action**, not an HTTP API
-/// route. It fans out parallel Supabase reads (project + tasks(30) + daily_logs(10) +
-/// weekly_reports(3)) then calls `askAI(...)` with org-resolved provider credentials decrypted
-/// server-side from the `api_keys` table. iOS cannot reach that server action directly and must
-/// not embed decrypted provider keys on-device.
+/// Phase 6.1: the 2.2 local-synthesis foundation has been replaced with a direct HTTP call
+/// to the Web bridge at `POST /api/ai/project-summary`. The Web route fans out the same
+/// parallel Supabase reads (tasks(30) + daily_logs(10) + weekly_reports(3)), calls
+/// `askAI({ scenario: 'project_summary' })` server-side with org-resolved provider
+/// credentials, and persists the result in `project_summaries`. iOS now consumes the
+/// LLM-generated structured JSON directly.
 ///
-/// 2.2 ships the iOS-side **foundation snapshot**: iOS replicates Web's input-gathering step
-/// (same parallel Supabase queries, same row limits) and synthesizes a deterministic
-/// facts-only summary from the gathered context. The LLM-generated narrative is explicitly
-/// deferred until a server-side `/api/ai/project-summary` endpoint (or Supabase Edge Function)
-/// exposes the `generateProjectSummary` flow to native callers.
-///
-/// Shape choices:
-/// - `summary` is the rendered multi-line text (bullets + headers in plain text form). UI
-///   shows it verbatim — no Markdown parsing in foundation scope.
-/// - `facts` captures the raw counts so a future LLM-backed round can replace the synthesis
-///   step without changing the UI binding.
-/// - `generatedAt` is the local timestamp of the synthesis (mirrors Web's lack of persistence
-///   — every regenerate is fresh; no caching).
-public struct ProjectSummaryFoundation: Equatable {
-    public let summary: String
-    public let generatedAt: Date
-    public let facts: Facts
+/// Wire shape (snake_case — mirrored exactly via `CodingKeys` so the iOS model keeps the
+/// conventional Swift camelCase while decoding the Web response 1:1):
+/// ```json
+/// {
+///   "snapshot_summary":      "<multi-paragraph narrative>",
+///   "completed_highlights":  ["...", "..."],
+///   "in_progress":           ["...", "..."],
+///   "next_steps":            ["...", "..."],
+///   "risk_notes":            ["...", "..."],
+///   "generated_at":          "<ISO-8601>",
+///   "model_used":            "<primary or fallback model name>",
+///   "scenario":              "project_summary"
+/// }
+/// ```
+public struct ProjectSummary: Equatable, Decodable {
+    public let snapshotSummary: String
+    public let completedHighlights: [String]
+    public let inProgress: [String]
+    public let nextSteps: [String]
+    public let riskNotes: [String]
+    public let generatedAt: String?
+    public let modelUsed: String?
+    public let scenario: String?
 
-    public struct Facts: Equatable {
-        public let taskTotal: Int
-        public let taskDone: Int
-        public let taskInProgress: Int
-        public let taskOverdue: Int
-        public let dailyLogCount: Int
-        public let weeklyReportCount: Int
+    enum CodingKeys: String, CodingKey {
+        case snapshotSummary = "snapshot_summary"
+        case completedHighlights = "completed_highlights"
+        case inProgress = "in_progress"
+        case nextSteps = "next_steps"
+        case riskNotes = "risk_notes"
+        case generatedAt = "generated_at"
+        case modelUsed = "model_used"
+        case scenario
+    }
+
+    public init(
+        snapshotSummary: String,
+        completedHighlights: [String] = [],
+        inProgress: [String] = [],
+        nextSteps: [String] = [],
+        riskNotes: [String] = [],
+        generatedAt: String? = nil,
+        modelUsed: String? = nil,
+        scenario: String? = nil
+    ) {
+        self.snapshotSummary = snapshotSummary
+        self.completedHighlights = completedHighlights
+        self.inProgress = inProgress
+        self.nextSteps = nextSteps
+        self.riskNotes = riskNotes
+        self.generatedAt = generatedAt
+        self.modelUsed = modelUsed
+        self.scenario = scenario
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.snapshotSummary = (try? c.decode(String.self, forKey: .snapshotSummary)) ?? ""
+        self.completedHighlights = (try? c.decode([String].self, forKey: .completedHighlights)) ?? []
+        self.inProgress = (try? c.decode([String].self, forKey: .inProgress)) ?? []
+        self.nextSteps = (try? c.decode([String].self, forKey: .nextSteps)) ?? []
+        self.riskNotes = (try? c.decode([String].self, forKey: .riskNotes)) ?? []
+        self.generatedAt = try? c.decode(String.self, forKey: .generatedAt)
+        self.modelUsed = try? c.decode(String.self, forKey: .modelUsed)
+        self.scenario = try? c.decode(String.self, forKey: .scenario)
     }
 }
 
@@ -173,6 +213,7 @@ public struct ProjectSummaryFoundation: Equatable {
 public struct ProjectRiskAnalysis: Equatable {
     public let summary: String
     public let riskLevel: RiskLevel
+    public let risks: [RiskItem]
     public let generatedAt: Date?
     public let model: String?
     public let scenario: String?
@@ -183,6 +224,107 @@ public struct ProjectRiskAnalysis: Equatable {
         case high
         case critical
         case unknown
+    }
+
+    public init(
+        summary: String,
+        riskLevel: RiskLevel,
+        risks: [RiskItem] = [],
+        generatedAt: Date? = nil,
+        model: String? = nil,
+        scenario: String? = nil
+    ) {
+        self.summary = summary
+        self.riskLevel = riskLevel
+        self.risks = risks
+        self.generatedAt = generatedAt
+        self.model = model
+        self.scenario = scenario
+    }
+
+    /// One structured risk row from the Web `/api/ai/project-risk` response.
+    ///
+    /// Wire shape (snake_case → camelCase via `CodingKeys`):
+    /// ```json
+    /// { "category": "schedule|progress|resource|blocker|other",
+    ///   "severity": "low|medium|high|critical",
+    ///   "title": "...",
+    ///   "description": "...",
+    ///   "suggested_action": "..." }
+    /// ```
+    public struct RiskItem: Equatable, Hashable, Decodable, Identifiable {
+        public var id: String { "\(category)-\(severity)-\(title)" }
+        public let category: String
+        public let severity: String
+        public let title: String
+        public let description: String
+        public let suggestedAction: String
+
+        enum CodingKeys: String, CodingKey {
+            case category
+            case severity
+            case title
+            case description
+            case suggestedAction = "suggested_action"
+        }
+
+        public init(
+            category: String,
+            severity: String,
+            title: String,
+            description: String,
+            suggestedAction: String
+        ) {
+            self.category = category
+            self.severity = severity
+            self.title = title
+            self.description = description
+            self.suggestedAction = suggestedAction
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.category = (try? c.decode(String.self, forKey: .category)) ?? "other"
+            self.severity = (try? c.decode(String.self, forKey: .severity)) ?? "low"
+            self.title = (try? c.decode(String.self, forKey: .title)) ?? ""
+            self.description = (try? c.decode(String.self, forKey: .description)) ?? ""
+            self.suggestedAction = (try? c.decode(String.self, forKey: .suggestedAction)) ?? ""
+        }
+    }
+}
+
+/// Raw decode shape for `POST /api/ai/project-risk` response. Kept separate from
+/// `ProjectRiskAnalysis` because the Web response uses string risk levels + ISO 8601
+/// timestamps, whereas the public model exposes a normalized `RiskLevel` enum + `Date?`.
+/// The VM converts `ProjectRiskAnalysisResponse → ProjectRiskAnalysis` before publishing.
+public struct ProjectRiskAnalysisResponse: Decodable {
+    public let summary: String
+    public let riskLevel: String?
+    public let overallRiskLevel: String?
+    public let risks: [ProjectRiskAnalysis.RiskItem]
+    public let generatedAt: String?
+    public let modelUsed: String?
+    public let scenario: String?
+
+    enum CodingKeys: String, CodingKey {
+        case summary
+        case riskLevel = "risk_level"
+        case overallRiskLevel = "overall_risk_level"
+        case risks
+        case generatedAt = "generated_at"
+        case modelUsed = "model_used"
+        case scenario
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.summary = (try? c.decode(String.self, forKey: .summary)) ?? ""
+        self.riskLevel = try? c.decode(String.self, forKey: .riskLevel)
+        self.overallRiskLevel = try? c.decode(String.self, forKey: .overallRiskLevel)
+        self.risks = (try? c.decode([ProjectRiskAnalysis.RiskItem].self, forKey: .risks)) ?? []
+        self.generatedAt = try? c.decode(String.self, forKey: .generatedAt)
+        self.modelUsed = try? c.decode(String.self, forKey: .modelUsed)
+        self.scenario = try? c.decode(String.self, forKey: .scenario)
     }
 }
 

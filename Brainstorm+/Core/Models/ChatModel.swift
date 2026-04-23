@@ -55,6 +55,10 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
     public let type: MessageType
     public let replyTo: UUID?
     public let attachments: [ChatAttachment]
+    /// Phase 4.5: `reactions` JSONB map `{ "👍": ["uuid1", "uuid2"], … }` 对齐
+    /// Web `chat_messages.reactions` (migration 028:8). 空 map 用 `{}`；
+    /// 撤回消息 Web 故意保留 reactions（chat.ts 注释），iOS 同步策略。
+    public let reactions: [String: [UUID]]
     public let isWithdrawn: Bool
     public let withdrawnAt: Date?
     public let createdAt: Date?
@@ -74,6 +78,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         case type
         case replyTo = "reply_to"
         case attachments
+        case reactions
         case isWithdrawn = "is_withdrawn"
         case withdrawnAt = "withdrawn_at"
         case createdAt = "created_at"
@@ -91,6 +96,13 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         type = try c.decode(MessageType.self, forKey: .type)
         replyTo = try c.decodeIfPresent(UUID.self, forKey: .replyTo)
         attachments = (try? c.decodeIfPresent([ChatAttachment].self, forKey: .attachments)) ?? []
+        // reactions 字段可能缺席 (旧行 / realtime minimal payload) → 降级为空
+        if let raw = try? c.decodeIfPresent([String: [UUID]].self, forKey: .reactions) {
+            reactions = raw
+        } else {
+            // 兜底：旧行 reactions 可能是 String 数组形式的 ID，或其他结构；失败就清零。
+            reactions = [:]
+        }
         isWithdrawn = try c.decode(Bool.self, forKey: .isWithdrawn)
         withdrawnAt = try c.decodeIfPresent(Date.self, forKey: .withdrawnAt)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
@@ -104,6 +116,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         type: MessageType,
         replyTo: UUID? = nil,
         attachments: [ChatAttachment] = [],
+        reactions: [String: [UUID]] = [:],
         isWithdrawn: Bool = false,
         withdrawnAt: Date? = nil,
         createdAt: Date? = nil
@@ -115,6 +128,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         self.type = type
         self.replyTo = replyTo
         self.attachments = attachments
+        self.reactions = reactions
         self.isWithdrawn = isWithdrawn
         self.withdrawnAt = withdrawnAt
         self.createdAt = createdAt

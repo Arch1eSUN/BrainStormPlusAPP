@@ -14,18 +14,10 @@ struct ContentView: View {
     var body: some View {
         Group {
             if sessionManager.isLoadingSession {
-                // Splash/Loading skeleton
-                ZStack {
-                    Color.Brand.background.ignoresSafeArea()
-                    VStack(spacing: 20) {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 64))
-                            .foregroundStyle(Color.Brand.primary)
-                        ProgressView()
-                            .tint(Color.Brand.primary)
-                    }
-                }
-                .transition(.opacity)
+                // 跟 @main 入口 BrainStormApp 用同一个 SplashView,
+                // 保证启动态的视觉一致性(真 BrandLogo + 呼吸动画 + 3 dots)
+                SplashView()
+                    .transition(.opacity)
             } else if sessionManager.isAuthenticated {
                 MainTabView()
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))

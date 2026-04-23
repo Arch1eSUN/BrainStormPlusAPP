@@ -25,7 +25,7 @@ public class PayrollListViewModel: ObservableObject {
                 .execute()
                 .value
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
         isLoading = false
     }

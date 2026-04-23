@@ -12,19 +12,29 @@ public struct ChatListView: View {
 
     public var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.channels.isEmpty {
-                    ProgressView()
-                } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                    searchResultsList
-                } else if viewModel.channels.isEmpty {
-                    ContentUnavailableView(
-                        "No Messages",
-                        systemImage: "message",
-                        description: Text("You have no active chats yet.")
-                    )
-                } else {
-                    channelList
+            ZStack {
+                // Fusion ambient backdrop — soft diffused glow beneath the list
+                // so the channel rows float above an editorial gradient rather
+                // than a flat system background.
+                BsAmbientBackground()
+
+                VStack(spacing: 0) {
+                    Group {
+                        if viewModel.isLoading && viewModel.channels.isEmpty {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                            searchResultsList
+                        } else if viewModel.channels.isEmpty {
+                            BsEmptyState(
+                                title: "暂无消息",
+                                systemImage: "message",
+                                description: "你还没有进行中的会话。"
+                            )
+                        } else {
+                            channelList
+                        }
+                    }
                 }
             }
             // Sprint 3.4: value-based navigation. `ChatRoomViewModel` is only
@@ -35,13 +45,21 @@ public struct ChatListView: View {
             .navigationDestination(for: ChatChannel.self) { channel in
                 ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
             }
-            .navigationTitle("Team Chat")
+            .navigationTitle("消息")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showNewConversation = true
                     } label: {
                         Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(BsColor.brandAzure)
+                            .frame(width: 32, height: 32)
+                            .glassEffect(
+                                .regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(),
+                                in: Circle()
+                            )
                     }
                     .accessibilityLabel("新建会话")
                 }
@@ -84,45 +102,57 @@ public struct ChatListView: View {
 
     @ViewBuilder
     private var channelList: some View {
-        List(viewModel.channels) { channel in
-            NavigationLink(value: channel) {
-                channelRow(channel)
+        List {
+            ForEach(Array(viewModel.channels.enumerated()), id: \.element.id) { index, channel in
+                NavigationLink(value: channel) {
+                    channelRow(channel)
+                }
+                .bsAppearStagger(index: index)
             }
         }
         .listStyle(.plain)
+        // Fusion: kill the list's opaque backdrop so BsAmbientBackground shows
+        // through behind each row.
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
     private func channelRow(_ channel: ChatChannel) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: BsSpacing.lg) {
             ZStack {
                 Circle()
                     .fill(channelColor(channel.type).opacity(0.15))
                     .frame(width: 50, height: 50)
+                    .overlay(
+                        // Hairline ring for a subtle glass/linear treatment —
+                        // matches the Dashboard attendance ring aesthetic.
+                        Circle()
+                            .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
+                    )
                 Image(systemName: channelIcon(channel.type))
                     .font(.system(size: 20))
-                    .foregroundColor(channelColor(channel.type))
+                    .foregroundStyle(channelColor(channel.type))
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: BsSpacing.xs) {
                 HStack {
                     Text(channel.name)
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(BsColor.ink)
                     Spacer()
                     Text(ChatDateFormatter.format(channel.lastMessageAt))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
 
-                Text(channel.lastMessage ?? "No messages yet")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                Text(channel.lastMessage ?? "暂无消息")
+                    .font(BsTypography.bodySmall)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, BsSpacing.xs)
     }
 
     // MARK: - Search results
@@ -140,49 +170,50 @@ public struct ChatListView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 
     @ViewBuilder
     private func searchResultRow(_ result: ChatSearchResult) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             HStack {
                 Image(systemName: channelIcon(result.channel.type))
-                    .foregroundColor(channelColor(result.channel.type))
+                    .foregroundStyle(channelColor(result.channel.type))
                 Text(result.channel.name)
-                    .font(.subheadline.bold())
-                    .foregroundColor(.primary)
+                    .font(BsTypography.cardSubtitle)
+                    .foregroundStyle(BsColor.ink)
                 Spacer()
                 Text(ChatDateFormatter.format(result.message.createdAt))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             // Sprint 3.5: 把查询词在消息正文里高亮出来，用户一眼看到"为什么"
             // 这条消息命中。同一个 highlighter 也顺便渲染 @mention，列表里看到
             // 的语义跟打开会话看到的一致。
             if result.message.content.isEmpty {
                 Text("[附件]")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(BsTypography.body)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(2)
             } else {
                 Text(ChatContentHighlighter.attributed(
                     result.message.content,
                     searchTerm: viewModel.searchQuery
                 ))
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(BsTypography.body)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, BsSpacing.xs)
     }
 
     private func channelColor(_ type: ChatChannel.ChannelType) -> Color {
         switch type {
-        case .direct: return .blue
-        case .group: return .green
-        case .announcement: return .orange
+        case .direct:       return BsColor.brandAzure
+        case .group:        return BsColor.success
+        case .announcement: return BsColor.brandCoral
         }
     }
 

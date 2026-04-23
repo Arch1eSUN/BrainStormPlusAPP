@@ -35,6 +35,17 @@ public final class ApprovalDetailViewModel: ObservableObject {
     /// independently of the detail spinner.
     @Published public private(set) var isSubmittingRevoke: Bool = false
 
+    /// Viewer's own auth.uid(), resolved lazily during `load()`. Used
+    /// to power the `isSelf` pill + "don't show approve/reject bar if
+    /// viewing my own request" gate. Matches Web's `user?.id ===
+    /// req.requester_id` check (approval-detail-dialog.tsx:182).
+    @Published public private(set) var viewerUserId: UUID?
+
+    /// Per-row busy flag — matches the queue VM's `busyIds` shape but
+    /// scalar here since the detail view only ever approves/rejects
+    /// one request.
+    @Published public private(set) var isApplyingAction: Bool = false
+
     private let client: SupabaseClient
     private let requestId: UUID
 
@@ -54,6 +65,13 @@ public final class ApprovalDetailViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+
+        // Best-effort viewer-id capture. A failure here shouldn't
+        // block the detail fetch — RLS would surface an auth error
+        // on the request fetch itself in that case.
+        if viewerUserId == nil {
+            viewerUserId = try? await client.auth.session.user.id
+        }
 
         do {
             // Step 1 — parent row. Must be serialized before per-type
@@ -98,7 +116,7 @@ public final class ApprovalDetailViewModel: ObservableObject {
             self.typedDetail = fetchedTypedDetail
             self.actions = rawActions
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -144,6 +162,62 @@ public final class ApprovalDetailViewModel: ObservableObject {
             // `actions` in case the RPC writes an `approval_actions`
             // entry in future iterations. Cheap and matches Web's
             // `onSuccess` which closes + refetches.
+            await load()
+            return true
+        } catch {
+            self.errorMessage = prettyRPCError(error)
+            return false
+        }
+    }
+
+    // MARK: - Apply action (approve / reject) — Batch C.1
+
+    /// Calls the same `approvals_apply_action` SECURITY DEFINER RPC
+    /// the queue VM uses (approval-requests RPC migration
+    /// 20260421170000). On success reloads the detail so the audit
+    /// trail, reviewer note, and status chip reflect the new state.
+    ///
+    /// Returns `true` on success so the caller's `ApprovalCommentSheet`
+    /// can dismiss itself. Failures surface their Chinese message
+    /// through `errorMessage`.
+    @discardableResult
+    public func applyAction(
+        decision: ApprovalActionDecision,
+        comment: String?
+    ) async -> Bool {
+        let normalized = comment?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        if decision == .reject && normalized == nil {
+            errorMessage = "拒绝需填写原因"
+            return false
+        }
+
+        isApplyingAction = true
+        errorMessage = nil
+        defer { isApplyingAction = false }
+
+        struct Params: Encodable {
+            let p_request_id: String
+            let p_decision: String
+            let p_comment: String?
+        }
+
+        do {
+            let _: UUID = try await client
+                .rpc(
+                    "approvals_apply_action",
+                    params: Params(
+                        p_request_id: requestId.uuidString,
+                        p_decision: decision.rawValue,
+                        p_comment: normalized
+                    )
+                )
+                .execute()
+                .value
+
+            // Re-fetch so the detail mirrors server state. Matches the
+            // queue VM's post-action `load()` pattern; we're keeping
+            // the re-fetch approach per the Batch C.1 brief (optimistic
+            // update is scheduled for a later batch).
             await load()
             return true
         } catch {
@@ -403,9 +477,65 @@ public final class ApprovalDetailViewModel: ObservableObject {
     }
 }
 
+private extension String {
+    /// Mirrors the file-private helper in `ApprovalQueueViewModel` so
+    /// `applyAction`'s empty-comment normalization matches what the
+    /// RPC treats as "no comment" (NULL after btrim).
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 // MARK: - Revoke affordance gating
 
 public extension ApprovalDetailViewModel {
+    /// "本人提交" badge gate. Mirrors Web
+    /// `approval-detail-dialog.tsx:182` — true when the viewer's
+    /// `auth.uid()` matches the request's `requester_id`.
+    var isSelf: Bool {
+        guard let me = viewerUserId, let req = request else { return false }
+        return me == req.requesterId
+    }
+
+    /// Whether the view should render the approve/reject bottom bar.
+    /// Gated on (a) status is pending, (b) viewer is NOT the
+    /// requester (matches Web's queue-level self-exclusion and
+    /// avoids a user approving their own request), and (c) viewer
+    /// holds AT LEAST ONE capability for this request type —
+    /// mirrors `canAccessApprovalType(capabilities, request_type)`
+    /// in Web capabilities.ts:238-240.
+    ///
+    /// Capability mapping follows the same
+    /// `APPROVAL_TYPE_CAPABILITY_MAP` as Web, plus `approval_access`
+    /// as a catch-all for admin-as-fallback approvers.
+    func canApproveThisRequest(capabilities: [Capability]) -> Bool {
+        guard let req = request else { return false }
+        guard req.status == .pending else { return false }
+        guard !isSelf else { return false }
+
+        let required: [Capability]
+        switch req.requestType {
+        case .leave:
+            required = [.leave_approval, .approval_access]
+        case .fieldWork:
+            required = [.field_work_approval, .approval_access]
+        case .businessTrip:
+            required = [.approval_access]
+        case .reimbursement:
+            required = [.reimbursement_approval, .expense_approval, .approval_access]
+        case .procurement:
+            required = [.purchase_approval, .approval_access]
+        case .attendanceException:
+            required = [.attendance_exception_approval, .approval_access]
+        case .dailyLog:
+            required = [.daily_log_approval, .approval_access]
+        case .weeklyReport:
+            required = [.weekly_report_approval, .approval_access]
+        case .generic, .revokeCompTime, .unknown:
+            required = [.approval_access]
+        }
+
+        return hasAnyCapability(capabilities, required: required)
+    }
+
     /// Matches the Web revoke-button gate
     /// (`approval-item-card.tsx` / `approval-detail-dialog.tsx` surface
     /// the affordance only for the user's own approved comp-time leave

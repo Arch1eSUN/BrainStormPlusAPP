@@ -21,6 +21,11 @@ public enum ApprovalSubmitKind: String, CaseIterable, Identifiable {
     case reimbursement
     case procurement
     case fieldWork = "field_work"
+    // Batch B.3 — business trip submission. Writes directly to
+    // `business_trip_requests` (migration 045); no RPC on the server
+    // because Web never shipped this form. See BusinessTripSubmitView
+    // header for the trust-boundary rationale.
+    case businessTrip = "business_trip"
 
     public var id: String { rawValue }
 
@@ -30,18 +35,20 @@ public enum ApprovalSubmitKind: String, CaseIterable, Identifiable {
         case .reimbursement: return "报销"
         case .procurement:   return "采购"
         case .fieldWork:     return "外勤"
+        case .businessTrip:  return "出差"
         }
     }
 
     /// SF Symbol for the row icon. Chosen to match the Web iconography
     /// (calendar for leave, receipt for reimbursement, bag for
-    /// procurement, map-pin for field-work).
+    /// procurement, map-pin for field-work, airplane for business trip).
     public var systemImage: String {
         switch self {
         case .leave:         return "calendar"
         case .reimbursement: return "doc.text.magnifyingglass"
         case .procurement:   return "bag"
         case .fieldWork:     return "mappin.and.ellipse"
+        case .businessTrip:  return "airplane"
         }
     }
 
@@ -51,6 +58,7 @@ public enum ApprovalSubmitKind: String, CaseIterable, Identifiable {
         case .reimbursement: return "差旅 · 餐饮 · 设备等报销"
         case .procurement:   return "设备 · 软件 · SaaS 采购"
         case .fieldWork:     return "外勤记录，至少提前一天"
+        case .businessTrip:  return "跨城市出差行程登记"
         }
     }
 }

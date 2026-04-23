@@ -116,7 +116,40 @@ public final class ApprovalQueueViewModel: ObservableObject {
             self.rows = merged
             self.pendingCount = merged.filter { $0.status == .pending }.count
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    // MARK: - Pending count (head-only)
+
+    /// Lightweight HEAD count for tab-badge display without fetching
+    /// rows. Matches the iOS count convention:
+    ///   `.select("*", head: true, count: .exact).execute().count`.
+    ///
+    /// Mirrors Web's per-tab `result.pendingCount` plumbed through the
+    /// `onPendingChange` callback (approval-requests.ts:528). Filter
+    /// shape parity: same `request_type IN (...)`, same self-exclusion
+    /// via `.neq(requester_id)`, plus `status = 'pending'`.
+    ///
+    /// Returns 0 on any failure (silent) — a failed count isn't worth
+    /// surfacing a banner for, and the main `load()` path carries the
+    /// actual error when the tab gets opened.
+    public static func fetchPendingCount(
+        kind: ApprovalQueueKind,
+        client: SupabaseClient
+    ) async -> Int {
+        do {
+            let currentUserId = try await client.auth.session.user.id
+            let response = try await client
+                .from("approval_requests")
+                .select("*", head: true, count: .exact)
+                .in("request_type", values: kind.requestTypes)
+                .eq("status", value: "pending")
+                .neq("requester_id", value: currentUserId.uuidString)
+                .execute()
+            return response.count ?? 0
+        } catch {
+            return 0
         }
     }
 
@@ -135,6 +168,15 @@ public final class ApprovalQueueViewModel: ObservableObject {
         decision: ApprovalActionDecision,
         comment: String?
     ) async -> Bool {
+        // Defense-in-depth: the RPC already RAISEs on this condition, but
+        // we short-circuit to avoid a round-trip + give a cleaner banner
+        // if a future caller forgets the comment sheet.
+        let normalizedComment = comment?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        if decision == .reject && normalizedComment == nil {
+            errorMessage = "拒绝需填写原因"
+            return false
+        }
+
         busyIds.insert(requestId)
         errorMessage = nil
         defer { busyIds.remove(requestId) }
@@ -152,7 +194,7 @@ public final class ApprovalQueueViewModel: ObservableObject {
                     params: Params(
                         p_request_id: requestId.uuidString,
                         p_decision: decision.rawValue,
-                        p_comment: comment?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                        p_comment: normalizedComment
                     )
                 )
                 .execute()

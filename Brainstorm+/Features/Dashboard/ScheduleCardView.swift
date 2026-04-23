@@ -1,115 +1,112 @@
 import SwiftUI
 
-public struct ScheduleCardView: View {
-    public let schedule: Schedule
-    
-    // Quick time formatter for the top
-    private let timeFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.timeStyle = .short
-        return df
-    }()
-    
-    public init(schedule: Schedule) {
-        self.schedule = schedule
+/// Single-day status card driven by `daily_work_state` — replaces the legacy
+/// `Schedule` event card. Shows the Chinese state label (with leave_type
+/// override for `personal_leave`), the expected shift window, paid/unpaid
+/// pill, and the source origin (system / manager / approved request).
+public struct DayStateCardView: View {
+    public let dws: DailyWorkState?
+    public let date: Date
+
+    public init(dws: DailyWorkState?, date: Date) {
+        self.dws = dws
+        self.date = date
     }
-    
-    // Return a theme color based on schedule type
-    private var typeColor: Color {
-        let typeStr = schedule.type?.lowercased() ?? "work"
-        switch typeStr {
-        case "meeting":
-            return Color.Brand.primary // Azure Blue
-        case "training":
-            return Color.purple
-        case "work":
-            return Color.Brand.accent // Mint Cyan
-        default:
-            return Color.gray
-        }
-    }
-    
+
     public var body: some View {
+        let stateStr = dws?.state
+        let label = WorkStateLabels.label(state: stateStr, leaveType: dws?.leaveType)
+        let stateColor = WorkStateColors.color(state: stateStr, expectedStart: dws?.expectedStart)
+
         HStack(alignment: .top, spacing: 16) {
-            // Left timeline indicator
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(timeFormatter.string(from: schedule.startTime))
-                    .font(.custom("Outfit-Bold", size: 14))
-                    .foregroundColor(Color.Brand.text)
-                
-                Text(timeFormatter.string(from: schedule.endTime))
-                    .font(.custom("Inter-Medium", size: 12))
-                    .foregroundColor(Color.Brand.textSecondary)
-                
-                Spacer()
-            }
-            .frame(width: 70, alignment: .trailing)
-            .padding(.top, 4)
-            
-            // The Card
+            // Left color chip
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(stateColor)
+                .frame(width: 4)
+
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    Text(schedule.title)
-                        .font(.custom("Outfit-SemiBold", size: 16))
-                        .foregroundColor(Color.Brand.text)
-                        .lineLimit(2)
-                    
+                // Title row
+                HStack(alignment: .firstTextBaseline) {
+                    Text(label)
+                        .font(BsTypography.sectionTitle)
+                        .foregroundStyle(BsColor.ink)
+
                     Spacer()
-                    
-                    // Status Badge
-                    if let status = schedule.status, status == "completed" {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color.green)
-                            .font(.system(size: 16))
-                    } else if let status = schedule.status, status == "cancelled" {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color.Brand.warning)
-                            .font(.system(size: 16))
-                    } else {
-                        // scheduled
-                        Circle()
-                            .fill(Color.Brand.primary)
-                            .frame(width: 8, height: 8)
+
+                    paidPill
+                }
+
+                // Shift window
+                if let window = shiftWindow {
+                    HStack(spacing: BsSpacing.xs + 2) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(BsColor.inkMuted)
+                        Text(window)
+                            .font(BsTypography.caption)
+                            .foregroundStyle(BsColor.inkMuted)
+
+                        if dws?.flexibleHours == true {
+                            Text("弹性")
+                                .font(BsTypography.captionSmall)
+                                .foregroundStyle(BsColor.brandAzure)
+                                .padding(.horizontal, BsSpacing.xs + 2)
+                                .padding(.vertical, 2)
+                                .background(BsColor.brandAzure.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
                     }
                 }
-                
-                if let desc = schedule.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.custom("Inter-Regular", size: 14))
-                        .foregroundColor(Color.gray)
-                        .lineLimit(2)
-                }
-                
-                HStack(spacing: 12) {
-                    if let location = schedule.location, !location.isEmpty {
-                        Label(location, systemImage: "mappin.and.ellipse")
-                            .font(.custom("Inter-Medium", size: 12))
-                            .foregroundColor(Color.Brand.textSecondary)
+
+                // Source / concrete leave-type footer
+                HStack(spacing: BsSpacing.sm) {
+                    if let src = WorkStateSource.label(dws?.source) {
+                        Label(src, systemImage: "tray.fill")
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
-                    
-                    if let type = schedule.type {
-                        Label(type.capitalized, systemImage: "briefcase.fill")
-                            .font(.custom("Inter-Medium", size: 12))
-                            .foregroundColor(typeColor)
+
+                    if stateStr == "personal_leave",
+                       let lt = dws?.leaveType,
+                       let mapped = WorkStateLabels.leaveType[lt],
+                       mapped != "事假" {
+                        Label(mapped, systemImage: "doc.text.fill")
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(stateColor)
                     }
                 }
-                .padding(.top, 2)
             }
-            .padding(16)
+            .padding(BsSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Card Material & Shadow
-            .background(Color.Brand.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.black.opacity(0.03), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Interactive map for future navigation
-            HapticManager.shared.trigger(.soft)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+    }
+
+    // MARK: - Computed
+
+    private var shiftWindow: String? {
+        guard let start = dws?.expectedStart?.prefix(5),
+              let end = dws?.expectedEnd?.prefix(5) else { return nil }
+        return "\(start) – \(end)"
+    }
+
+    @ViewBuilder
+    private var paidPill: some View {
+        if let isPaid = dws?.isPaid {
+            let text = isPaid ? "计薪" : "不计薪"
+            let tone: Color = isPaid ? BsColor.success : BsColor.warning
+            Text(text)
+                .font(BsTypography.label)
+                .foregroundStyle(tone)
+                .padding(.horizontal, BsSpacing.sm)
+                .padding(.vertical, BsSpacing.xs)
+                .background(tone.opacity(0.1))
+                .clipShape(Capsule())
         }
     }
 }

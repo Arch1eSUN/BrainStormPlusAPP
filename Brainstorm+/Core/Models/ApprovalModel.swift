@@ -858,8 +858,13 @@ public enum ApprovalQueueKind: String, CaseIterable, Identifiable, Hashable {
     case fieldWork = "field_work"
     case businessTrip = "business_trip"
     case expense
-    case report
     case generic
+
+    // NOTE: `.report` was removed per migration 20260421190000 — daily_log
+    // and weekly_report no longer create approval_requests rows. Legacy
+    // rows can still exist in the DB and are decoded via
+    // `ApprovalRequestType.dailyLog` / `.weeklyReport` (kept intact so
+    // historical detail rendering still works).
 
     public var id: String { rawValue }
 
@@ -870,7 +875,6 @@ public enum ApprovalQueueKind: String, CaseIterable, Identifiable, Hashable {
         case .fieldWork:    return "外勤"
         case .businessTrip: return "出差"
         case .expense:      return "报销/采购"
-        case .report:       return "日报/周报"
         case .generic:      return "通用"
         }
     }
@@ -883,7 +887,6 @@ public enum ApprovalQueueKind: String, CaseIterable, Identifiable, Hashable {
         case .fieldWork:    return ["field_work"]
         case .businessTrip: return ["business_trip"]
         case .expense:      return ["reimbursement", "procurement"]
-        case .report:       return ["daily_log", "weekly_report"]
         case .generic:      return ["generic"]
         }
     }
@@ -895,13 +898,80 @@ public enum ApprovalQueueKind: String, CaseIterable, Identifiable, Hashable {
     public var supportsWriteOnIOS: Bool {
         self != .leave
     }
+
+    /// Capabilities that let the viewer render (and act on) this queue.
+    /// Mirrors Web's `APPROVAL_TYPE_CAPABILITY_MAP` in
+    /// `src/lib/capabilities.ts:223-232`. ANY match is sufficient —
+    /// treated as an OR via `hasAnyCapability`.
+    ///
+    /// `approval_access` is NOT included per tab: Web treats it as a
+    /// gate for "can open the approval page at all" rather than
+    /// per-queue write access, matching the Web page.tsx logic that
+    /// renders approver tabs only when ANY of the 11 approval caps is
+    /// present.
+    public var requiredCapabilities: [Capability] {
+        switch self {
+        case .leave:
+            return [.leave_approval]
+        case .fieldWork:
+            return [.field_work_approval]
+        case .businessTrip:
+            // No dedicated BusinessTrip capability on Web. Admin+ users
+            // who carry `approval_access` see the queue; legacy behavior
+            // from Web page.tsx where business_trip is always rendered
+            // when the user `canApprove`. Map to approval_access so the
+            // tab only surfaces to users who hold at least one approver
+            // cap.
+            return [.approval_access]
+        case .expense:
+            return [.expense_approval, .reimbursement_approval, .purchase_approval]
+        case .generic:
+            return [.approval_access]
+        }
+    }
+}
+
+// ─── Approval capability helpers ────────────────────────────────
+
+/// Union of all approval-side capabilities. Mirrors Web
+/// `ALL_APPROVAL_CAPABILITIES` in `src/lib/capabilities.ts:209-221`.
+/// Used to gate the approver-tab rendering on `ApprovalCenterView` —
+/// a user with none of these only sees `mine`.
+public let ALL_APPROVAL_CAPABILITIES: [Capability] = [
+    .approval_access,
+    .leave_approval,
+    .attendance_exception_approval,
+    .purchase_approval,
+    .expense_approval,
+    .reimbursement_approval,
+    .recruitment_approval,
+    .document_publish_approval,
+    .field_work_approval,
+    .daily_log_approval,
+    .weekly_report_approval,
+]
+
+public func hasAnyApprovalCapability(_ caps: [Capability]) -> Bool {
+    for required in ALL_APPROVAL_CAPABILITIES where caps.contains(required) {
+        return true
+    }
+    return false
+}
+
+public func hasAnyCapability(_ caps: [Capability], required: [Capability]) -> Bool {
+    for c in required where caps.contains(c) {
+        return true
+    }
+    return false
 }
 
 /// The two decisions the approve/reject buttons can post. Serialized
 /// as the `p_decision` TEXT arg of the `approvals_apply_action` RPC.
-public enum ApprovalActionDecision: String, Codable, Hashable {
+public enum ApprovalActionDecision: String, Codable, Hashable, Identifiable {
     case approve
     case reject
+
+    public var id: String { rawValue }
 
     public var displayLabel: String {
         switch self {
@@ -1294,5 +1364,118 @@ public struct FieldWorkSubmitInput: Encodable, Hashable {
         case location       = "p_location"
         case reason         = "p_reason"
         case expectedReturn = "p_expected_return"
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Batch B.3 — Business trip submission input
+//
+// Unlike leave / reimbursement / procurement / field_work, there is
+// no `approvals_submit_business_trip` RPC on the server — Web's
+// `/dashboard/approval/request` page never exposed a business-trip
+// submission form, even though `business_trip_requests` (migration
+// 045) has existed since Phase 2. The iOS submit path therefore
+// writes directly through PostgREST to `business_trip_requests`,
+// relying on the RLS INSERT policy `auth.uid() = user_id` (045:74).
+//
+// Column parity (migration 045):
+//   user_id           — caller's auth.uid() (written by VM)
+//   start_date        — DATE, required
+//   end_date          — DATE, required, CHECK end_date >= start_date
+//   destination       — TEXT, required
+//   purpose           — TEXT, required
+//   transportation    — TEXT IN (flight|train|car|other), optional
+//   estimated_cost    — NUMERIC(10,2), yuan (not cents — the
+//                       reimbursement/procurement cents convention
+//                       does NOT apply here, matching 045:20)
+//   status            — defaults to 'pending' server-side
+//   approval_request_id — nullable; Web's approval queue resolves
+//                       via this FK when present. Left NULL here
+//                       because no `approval_requests` companion row
+//                       is created (Web path that wired the FK lives
+//                       server-side and is not portable from an iOS
+//                       user JWT).
+//
+// If Web later introduces a submit RPC we should switch iOS over
+// to it for parity with the trust-boundary rationale in
+// 20260421180000_approvals_submit_rpcs.sql's header comment.
+// ══════════════════════════════════════════════════════════════════
+
+/// Transportation method — mirrors the CHECK constraint on
+/// `business_trip_requests.transportation` (migration 045:16-19).
+/// Stored as a nullable TEXT on the DB; `.unknown` is the decoder
+/// escape hatch and should never be picked by the form.
+public enum BusinessTripTransportation: String, CaseIterable, Codable, Hashable, Identifiable {
+    case flight
+    case train
+    case car
+    case other
+
+    public var id: String { rawValue }
+
+    public var displayLabel: String {
+        switch self {
+        case .flight: return "飞机"
+        case .train:  return "火车"
+        case .car:    return "汽车"
+        case .other:  return "其他"
+        }
+    }
+}
+
+/// Direct-insert payload for `business_trip_requests`. Encoded with
+/// snake_case keys (not `p_*`) because this is a REST write, not an
+/// RPC call — the Supabase Swift SDK serializes this struct as the
+/// row body for `.from("business_trip_requests").insert(payload)`.
+///
+/// `userId` is filled in by the ViewModel at submit time from the
+/// active session — we don't hard-code it because the form struct
+/// is constructed before the session is read.
+public struct BusinessTripSubmitInput: Encodable, Hashable {
+    public let userId: UUID
+    public let startDate: String   // "YYYY-MM-DD"
+    public let endDate: String     // "YYYY-MM-DD"
+    public let destination: String
+    public let purpose: String
+    public let transportation: BusinessTripTransportation?
+    public let estimatedCost: Double?   // In yuan (NUMERIC(10,2))
+
+    public init(
+        userId: UUID,
+        startDate: String,
+        endDate: String,
+        destination: String,
+        purpose: String,
+        transportation: BusinessTripTransportation? = nil,
+        estimatedCost: Double? = nil
+    ) {
+        self.userId = userId
+        self.startDate = startDate
+        self.endDate = endDate
+        self.destination = destination
+        self.purpose = purpose
+        self.transportation = transportation
+        self.estimatedCost = estimatedCost
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case userId         = "user_id"
+        case startDate      = "start_date"
+        case endDate        = "end_date"
+        case destination
+        case purpose
+        case transportation
+        case estimatedCost  = "estimated_cost"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(userId, forKey: .userId)
+        try c.encode(startDate, forKey: .startDate)
+        try c.encode(endDate, forKey: .endDate)
+        try c.encode(destination, forKey: .destination)
+        try c.encode(purpose, forKey: .purpose)
+        try c.encodeIfPresent(transportation?.rawValue, forKey: .transportation)
+        try c.encodeIfPresent(estimatedCost, forKey: .estimatedCost)
     }
 }

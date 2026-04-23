@@ -1,0 +1,80 @@
+import SwiftUI
+
+// Phase 4.4 — iOS port of BrainStorm+-Web/src/app/dashboard/hiring.
+// Web splits the page into four tabs (positions / candidates / contracts /
+// seniority). iOS keeps the first two as full tabs and folds contracts +
+// seniority into a combined "数据" tab since both are thin tables driven by
+// the same backing pickers. Capability gate mirrors Web's `hr_ops` check;
+// admin+ roles pick up `hr_ops` via the default capability map in
+// `RBACManager.defaultCapabilities`.
+
+public struct HiringCenterView: View {
+    @Environment(SessionManager.self) private var sessionManager
+
+    public init() {}
+
+    public enum Tab: String, CaseIterable, Identifiable {
+        case candidates
+        case jobs
+        case data
+
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .candidates: return "候选人"
+            case .jobs:       return "岗位"
+            case .data:       return "数据"
+            }
+        }
+    }
+
+    @State private var selectedTab: Tab = .candidates
+
+    public var body: some View {
+        Group {
+            if hasAccess {
+                gateContent
+            } else {
+                ContentUnavailableView(
+                    "无权访问",
+                    systemImage: "lock",
+                    description: Text("招聘管理需要「hr_ops」能力或 admin+ 角色。请联系管理员开通权限。")
+                )
+            }
+        }
+        .navigationTitle("招聘管理")
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    private var hasAccess: Bool {
+        guard let profile = sessionManager.currentProfile else { return false }
+        let caps = RBACManager.shared.getEffectiveCapabilities(for: profile)
+        if RBACManager.shared.hasCapability(.hr_ops, in: caps) { return true }
+        let role = RBACManager.shared.migrateLegacyRole(profile.role).primaryRole
+        return role == .admin || role == .superadmin
+    }
+
+    @ViewBuilder
+    private var gateContent: some View {
+        VStack(spacing: 0) {
+            Picker("视图", selection: $selectedTab) {
+                ForEach(Tab.allCases) { t in
+                    Text(t.title).tag(t)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            switch selectedTab {
+            case .candidates:
+                HiringCandidatesView()
+            case .jobs:
+                HiringJobsView()
+            case .data:
+                HiringDataView()
+            }
+        }
+    }
+}

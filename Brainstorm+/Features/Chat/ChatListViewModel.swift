@@ -96,7 +96,7 @@ public class ChatListViewModel: ObservableObject {
 
             self.channels = merged
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -223,7 +223,7 @@ public class ChatListViewModel: ObservableObject {
                 return ChatSearchResult(message: msg, channel: ch)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
             searchResults = []
         }
     }

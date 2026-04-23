@@ -1,0 +1,160 @@
+import Foundation
+import Combine
+import Supabase
+
+// 1:1 port of BrainStorm+-Web/src/lib/actions/announcements.ts:
+// fetchAnnouncements / createAnnouncement / togglePin / deleteAnnouncement.
+// Web sort: `.order('pinned', asc:false).order('created_at', asc:false)`.
+// Write-path authorization is DB-enforced (migration 004:87-91 —
+// `Authors can manage announcements` FOR ALL USING role IN
+// (super_admin, admin, hr)). iOS hides the controls but the RLS row
+// is the actual guard.
+
+@MainActor
+public final class AnnouncementsListViewModel: ObservableObject {
+    @Published public private(set) var items: [Announcement] = []
+    @Published public private(set) var isLoading: Bool = false
+    @Published public private(set) var isSaving: Bool = false
+    @Published public var errorMessage: String?
+
+    private let client: SupabaseClient
+
+    public init(client: SupabaseClient) {
+        self.client = client
+    }
+
+    public func load() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let rows: [Announcement] = try await client
+                .from("announcements")
+                .select("*, profiles:author_id(id, full_name, avatar_url)")
+                .order("pinned", ascending: false)
+                .order("created_at", ascending: false)
+                .limit(20)
+                .execute()
+                .value
+            self.items = rows
+        } catch {
+            self.errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    private struct CreatePayload: Encodable {
+        let title: String
+        let content: String
+        let priority: String
+        let pinned: Bool
+        let authorId: String
+
+        enum CodingKeys: String, CodingKey {
+            case title, content, priority, pinned
+            case authorId = "author_id"
+        }
+    }
+
+    @discardableResult
+    public func create(
+        title: String,
+        content: String,
+        priority: Announcement.Priority
+    ) async -> Bool {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else {
+            errorMessage = "请填写公告标题"
+            return false
+        }
+        guard !body.isEmpty else {
+            errorMessage = "请填写公告内容"
+            return false
+        }
+
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            let session = try await client.auth.session
+            let payload = CreatePayload(
+                title: t,
+                content: body,
+                priority: priority.rawValue,
+                pinned: false,
+                authorId: session.user.id.uuidString
+            )
+            let saved: Announcement = try await client
+                .from("announcements")
+                .insert(payload)
+                .select("*, profiles:author_id(id, full_name, avatar_url)")
+                .single()
+                .execute()
+                .value
+            items.insert(saved, at: 0)
+            // Keep local order consistent with the server sort.
+            items.sort { lhs, rhs in
+                if lhs.pinned != rhs.pinned { return lhs.pinned && !rhs.pinned }
+                return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
+            }
+            return true
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+
+    @discardableResult
+    public func togglePin(_ announcement: Announcement) async -> Bool {
+        let next = !announcement.pinned
+        errorMessage = nil
+        do {
+            _ = try await client
+                .from("announcements")
+                .update(["pinned": next])
+                .eq("id", value: announcement.id.uuidString)
+                .execute()
+            if let idx = items.firstIndex(where: { $0.id == announcement.id }) {
+                let existing = items[idx]
+                items[idx] = Announcement(
+                    id: existing.id,
+                    title: existing.title,
+                    content: existing.content,
+                    priority: existing.priority,
+                    pinned: next,
+                    authorId: existing.authorId,
+                    orgId: existing.orgId,
+                    createdAt: existing.createdAt,
+                    profiles: existing.profiles
+                )
+                items.sort { lhs, rhs in
+                    if lhs.pinned != rhs.pinned { return lhs.pinned && !rhs.pinned }
+                    return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
+                }
+            }
+            return true
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+
+    @discardableResult
+    public func delete(_ announcement: Announcement) async -> Bool {
+        errorMessage = nil
+        do {
+            _ = try await client
+                .from("announcements")
+                .delete()
+                .eq("id", value: announcement.id.uuidString)
+                .execute()
+            items.removeAll { $0.id == announcement.id }
+            return true
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+}

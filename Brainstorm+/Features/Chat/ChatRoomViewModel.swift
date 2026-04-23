@@ -64,7 +64,7 @@ public class ChatRoomViewModel: ObservableObject {
                 return
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
             accessDenied = true
             return
         }
@@ -91,7 +91,7 @@ public class ChatRoomViewModel: ObservableObject {
             self.messages = rows
             await hydrateReplyLookup(for: rows)
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -221,7 +221,7 @@ public class ChatRoomViewModel: ObservableObject {
                 .eq("id", value: channel.id.uuidString)
                 .execute()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -390,7 +390,90 @@ public class ChatRoomViewModel: ObservableObject {
             //   P0002 → '消息不存在'
             // PostgREST surfaces these in `error.localizedDescription`; UI
             // shows it verbatim so iOS/Web parity holds.
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    // MARK: - Phase 4.5: Reactions (emoji toggle)
+    //
+    // Web `toggleMessageReaction` (chat.ts:656-700) uses service_role to
+    // mutate `reactions` JSONB column. iOS routes through
+    // `chat_toggle_message_reaction` RPC (parked migration
+    // 20260423000000_chat_toggle_reaction_rpc.sql) for the same reason as
+    // withdraw: chat_messages has no UPDATE RLS policy. Optimistic UI:
+    // we locally flip the caller's id in/out of `reactions[emoji]`, then
+    // rely on the realtime UPDATE (handleRealtimeUpdate) to reconcile with
+    // server truth. If the RPC fails the banner surfaces and the next
+    // realtime UPDATE / fetch will snap state back.
+
+    public func toggleReaction(messageId: UUID, emoji: String) async {
+        guard let me = currentUserId else {
+            errorMessage = "未登录"
+            return
+        }
+
+        // Optimistic toggle in local messages array.
+        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            var reactions = messages[idx].reactions
+            var users = reactions[emoji] ?? []
+            if let existing = users.firstIndex(of: me) {
+                users.remove(at: existing)
+            } else {
+                users.append(me)
+            }
+            if users.isEmpty {
+                reactions.removeValue(forKey: emoji)
+            } else {
+                reactions[emoji] = users
+            }
+            messages[idx] = ChatMessage(
+                id: messages[idx].id,
+                channelId: messages[idx].channelId,
+                senderId: messages[idx].senderId,
+                content: messages[idx].content,
+                type: messages[idx].type,
+                replyTo: messages[idx].replyTo,
+                attachments: messages[idx].attachments,
+                reactions: reactions,
+                isWithdrawn: messages[idx].isWithdrawn,
+                withdrawnAt: messages[idx].withdrawnAt,
+                createdAt: messages[idx].createdAt
+            )
+        }
+
+        struct Params: Encodable {
+            let p_message_id: String
+            let p_emoji: String
+        }
+        do {
+            try await client
+                .rpc("chat_toggle_message_reaction",
+                     params: Params(p_message_id: messageId.uuidString, p_emoji: emoji))
+                .execute()
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+            // Best-effort rollback: re-fetch the row; realtime UPDATE may
+            // already have reconciled but this belts the suspenders.
+            await refetchMessage(id: messageId)
+        }
+    }
+
+    /// Re-fetches a single message and patches it into `messages` in place.
+    /// Used as a rollback after a failed optimistic mutation (reactions).
+    private func refetchMessage(id: UUID) async {
+        do {
+            let rows: [ChatMessage] = try await client
+                .from("chat_messages")
+                .select()
+                .eq("id", value: id.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            if let fresh = rows.first, let idx = messages.firstIndex(where: { $0.id == id }) {
+                messages[idx] = fresh
+            }
+        } catch {
+            // Non-fatal: next fetch / realtime will reconcile.
         }
     }
 

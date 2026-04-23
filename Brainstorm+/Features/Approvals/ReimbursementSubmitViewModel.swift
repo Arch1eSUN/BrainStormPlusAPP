@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 import Supabase
 
 // ══════════════════════════════════════════════════════════════════
@@ -16,10 +19,12 @@ import Supabase
 // values like 19.99 that would otherwise produce 1998 cents instead
 // of 1999.
 //
-// Attachments / receipt URLs: this sprint ships with empty arrays —
-// the iOS file-upload surface is deferred (tracked as 4.x polish).
-// The RPC accepts `COALESCE(p_receipt_urls, '[]'::jsonb)` so empty is
-// fine; `receipt_uploaded` just computes `false`.
+// Attachments / receipt URLs (Batch C.1): iOS now uploads to the
+// `approval_attachments` bucket via `ApprovalStorageClient`, matching
+// Web's `ReceiptUploader` (src/components/approval/forms/receipt-uploader.tsx).
+// URLs are accumulated into `receiptUrls` and sent through the RPC's
+// `p_receipt_urls` JSONB param on submit. The RPC stores them on
+// `approval_request_reimbursement.receipt_urls`.
 // ══════════════════════════════════════════════════════════════════
 
 @MainActor
@@ -37,13 +42,18 @@ public final class ReimbursementSubmitViewModel: ObservableObject {
     @Published public var priority: RequestPriority = .medium
     @Published public var businessReason: String = ""
     @Published public var relatedProject: String = ""
-    // Left empty until iOS upload surface is built (4.x polish).
+    // Top-level `attachments` stays empty — Web's reimbursement form
+    // routes everything through `receipt_urls` and leaves the parent
+    // `approval_requests.attachments` untouched. Keeping this
+    // published in case a future polish pass reintroduces the
+    // distinction.
     @Published public var attachments: [ApprovalAttachment] = []
     @Published public var receiptUrls: [String] = []
 
     // MARK: - Submit state
 
     @Published public private(set) var isSubmitting: Bool = false
+    @Published public private(set) var isUploading: Bool = false
     @Published public var errorMessage: String?
     @Published public private(set) var createdRequestId: UUID?
 
@@ -69,7 +79,77 @@ public final class ReimbursementSubmitViewModel: ObservableObject {
             return false
         }
         guard amountYuan > 0 else { return false }
-        return !isSubmitting
+        return !isSubmitting && !isUploading
+    }
+
+    // MARK: - Receipt upload ingestion
+
+    /// PhotosPicker ingestion. Each selected item is streamed into the
+    /// `approval_attachments` bucket via `ApprovalStorageClient` and
+    /// the returned public URL is appended to `receiptUrls`. Errors
+    /// are accumulated on `errorMessage` but don't short-circuit the
+    /// remaining items — matches Web's `receipt-uploader.tsx:42-47`
+    /// "continue on failure" behavior.
+    public func ingestPhotoItems(_ items: [PhotosPickerItem]) async {
+        guard !items.isEmpty else { return }
+        isUploading = true
+        defer { isUploading = false }
+
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                continue
+            }
+            // PhotosPicker hands back HEIC-decoded JPEG by default.
+            let fileName = "IMG_\(UUID().uuidString.prefix(8)).jpg"
+            await uploadOne(data: data, fileName: fileName, mimeType: "image/jpeg")
+        }
+    }
+
+    /// `.fileImporter` result ingestion. Walks security-scoped URLs,
+    /// decodes MIME type from the extension, uploads sequentially.
+    public func ingestPickedFiles(_ result: Result<[URL], Error>) async {
+        let urls: [URL]
+        switch result {
+        case .success(let picked):
+            urls = picked
+        case .failure(let error):
+            errorMessage = "选择文件失败: \(ErrorLocalizer.localize(error))"
+            return
+        }
+        guard !urls.isEmpty else { return }
+
+        isUploading = true
+        defer { isUploading = false }
+
+        for url in urls {
+            let didStart = url.startAccessingSecurityScopedResource()
+            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let fileName = url.lastPathComponent
+            let mime = UTType(filenameExtension: url.pathExtension)?
+                .preferredMIMEType ?? "application/octet-stream"
+            await uploadOne(data: data, fileName: fileName, mimeType: mime)
+        }
+    }
+
+    public func removeReceipt(at index: Int) {
+        guard receiptUrls.indices.contains(index) else { return }
+        receiptUrls.remove(at: index)
+    }
+
+    private func uploadOne(data: Data, fileName: String, mimeType: String) async {
+        do {
+            let publicUrl = try await ApprovalStorageClient.uploadReceipt(
+                data: data,
+                fileName: fileName,
+                mimeType: mimeType,
+                client: client
+            )
+            receiptUrls.append(publicUrl)
+        } catch {
+            errorMessage = "上传失败: \(ErrorLocalizer.localize(error))"
+        }
     }
 
     // MARK: - Submit

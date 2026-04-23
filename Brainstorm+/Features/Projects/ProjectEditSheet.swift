@@ -37,28 +37,28 @@ public struct ProjectEditSheet: View {
                 if let error = viewModel.errorMessage {
                     Section {
                         Text(error)
-                            .font(.custom("Inter-Medium", size: 13))
-                            .foregroundColor(Color.Brand.warning)
+                            .font(BsTypography.caption)
+                            .foregroundColor(BsColor.danger)
                     }
                 }
             }
-            .navigationTitle("Edit Project")
+            .navigationTitle("编辑项目")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("取消") {
                         dismiss()
                     }
-                    .font(.custom("Inter-Medium", size: 16))
-                    .foregroundColor(.gray)
+                    .font(BsTypography.inter(16, weight: "Medium"))
+                    .foregroundColor(BsColor.inkMuted)
                     .disabled(viewModel.isSaving)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button("保存") {
                         Task { await submit() }
                     }
-                    .font(.custom("Inter-SemiBold", size: 16))
-                    .foregroundColor(viewModel.isSaveEnabled ? Color.Brand.primary : .gray)
+                    .font(BsTypography.inter(16, weight: "SemiBold"))
+                    .foregroundColor(viewModel.isSaveEnabled ? BsColor.brandAzure : BsColor.inkMuted)
                     .disabled(!viewModel.isSaveEnabled)
                 }
             }
@@ -68,8 +68,8 @@ public struct ProjectEditSheet: View {
                         Color.black.opacity(0.35).ignoresSafeArea()
                         ProgressView()
                             .padding()
-                            .background(Color.Brand.paper)
-                            .cornerRadius(12)
+                            .background(BsColor.surfacePrimary)
+                            .cornerRadius(BsRadius.md)
                             .shadow(radius: 8)
                     }
                 }
@@ -83,71 +83,71 @@ public struct ProjectEditSheet: View {
     // MARK: - Sections
 
     private var detailsSection: some View {
-        Section(header: sectionHeader("Project Details")) {
-            TextField("Project name", text: $viewModel.name)
-                .font(.custom("Inter-Regular", size: 16))
+        Section(header: sectionHeader("项目信息")) {
+            TextField("项目名称", text: $viewModel.name)
+                .font(BsTypography.inter(16, weight: "Regular"))
                 .disabled(viewModel.isSaving)
 
             TextField(
-                "Description (optional)",
+                "简要描述项目目标（可选）",
                 text: $viewModel.descriptionText,
                 axis: .vertical
             )
-            .font(.custom("Inter-Regular", size: 16))
+            .font(BsTypography.inter(16, weight: "Regular"))
             .lineLimit(3...6)
             .disabled(viewModel.isSaving)
         }
     }
 
     private var scheduleSection: some View {
-        Section(header: sectionHeader("Schedule")) {
-            Toggle("Include start date", isOn: $viewModel.includeStartDate)
-                .font(.custom("Inter-Regular", size: 15))
+        Section(header: sectionHeader("日期")) {
+            Toggle("设置开始日期", isOn: $viewModel.includeStartDate)
+                .font(BsTypography.body)
                 .disabled(viewModel.isSaving)
             if viewModel.includeStartDate {
-                DatePicker("Start date", selection: $viewModel.startDate, displayedComponents: .date)
-                    .font(.custom("Inter-Regular", size: 15))
+                DatePicker("开始日期", selection: $viewModel.startDate, displayedComponents: .date)
+                    .font(BsTypography.body)
                     .disabled(viewModel.isSaving)
             }
 
-            Toggle("Include end date", isOn: $viewModel.includeEndDate)
-                .font(.custom("Inter-Regular", size: 15))
+            Toggle("设置结束日期", isOn: $viewModel.includeEndDate)
+                .font(BsTypography.body)
                 .disabled(viewModel.isSaving)
             if viewModel.includeEndDate {
-                DatePicker("End date", selection: $viewModel.endDate, displayedComponents: .date)
-                    .font(.custom("Inter-Regular", size: 15))
+                DatePicker("结束日期", selection: $viewModel.endDate, displayedComponents: .date)
+                    .font(BsTypography.body)
                     .disabled(viewModel.isSaving)
             }
 
             // Parity note — Web only SENDS a date field when it's filled, so an untoggled date
             // here leaves the column untouched on the server (rather than clearing it). This
             // is intentional Round 1.9 parity with Web, not a bug.
-            Text("Untoggling a date leaves the saved value unchanged (matches web behavior).")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("关闭日期开关仅从本次保存中省略该字段，服务器上的已有值不会被清除。")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
         }
     }
 
     private var statusProgressSection: some View {
-        Section(header: sectionHeader("Status & Progress")) {
-            Picker("Status", selection: $viewModel.status) {
-                Text("Planning").tag(Project.ProjectStatus.planning)
-                Text("Active").tag(Project.ProjectStatus.active)
-                Text("On Hold").tag(Project.ProjectStatus.onHold)
-                Text("Completed").tag(Project.ProjectStatus.completed)
-                Text("Archived").tag(Project.ProjectStatus.archived)
+        Section(header: sectionHeader("状态与进度")) {
+            Picker("状态", selection: $viewModel.status) {
+                Text("规划中").tag(Project.ProjectStatus.planning)
+                Text("进行中").tag(Project.ProjectStatus.active)
+                Text("暂停").tag(Project.ProjectStatus.onHold)
+                Text("已完成").tag(Project.ProjectStatus.completed)
+                Text("归档").tag(Project.ProjectStatus.archived)
             }
-            .font(.custom("Inter-Regular", size: 15))
+            .font(BsTypography.body)
             .disabled(viewModel.isSaving)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
                 HStack {
-                    Text("Progress")
-                        .font(.custom("Inter-Regular", size: 15))
+                    Text("进度")
+                        .font(BsTypography.body)
                     Spacer()
                     Text("\(viewModel.progress)%")
-                        .font(.custom("Inter-SemiBold", size: 14))
-                        .foregroundColor(Color.Brand.primary)
+                        .font(BsTypography.inter(14, weight: "SemiBold"))
+                        .foregroundColor(BsColor.brandAzure)
                 }
                 Slider(
                     value: Binding(
@@ -157,38 +157,38 @@ public struct ProjectEditSheet: View {
                     in: 0...100,
                     step: 1
                 )
-                .tint(Color.Brand.primary)
+                .tint(BsColor.brandAzure)
                 .disabled(viewModel.isSaving)
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, BsSpacing.xs)
         }
     }
 
     private var membersSection: some View {
         Section(header: membersSectionHeader) {
             if let message = viewModel.candidatesErrorMessage {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(Color.Brand.warning)
-                    Text("Couldn't load members: \(message)")
-                        .font(.custom("Inter-Regular", size: 12))
-                        .foregroundColor(Color.Brand.warning)
+                        .foregroundColor(BsColor.warning)
+                    Text("成员加载失败：\(message)")
+                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .foregroundColor(BsColor.warning)
                         .lineLimit(3)
                 }
             } else if viewModel.isLoadingCandidates {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     ProgressView()
-                    Text("Loading members…")
-                        .font(.custom("Inter-Regular", size: 13))
-                        .foregroundColor(Color.Brand.textSecondary)
+                    Text("正在加载成员…")
+                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .foregroundColor(BsColor.inkMuted)
                 }
             } else if viewModel.candidates.isEmpty {
-                Text("No active workspace members found.")
-                    .font(.custom("Inter-Regular", size: 13))
-                    .foregroundColor(Color.Brand.textSecondary)
+                Text("暂无可选成员。")
+                    .font(BsTypography.inter(13, weight: "Regular"))
+                    .foregroundColor(BsColor.inkMuted)
             } else {
-                TextField("Search members", text: $viewModel.memberSearch)
-                    .font(.custom("Inter-Regular", size: 15))
+                TextField("搜索成员", text: $viewModel.memberSearch)
+                    .font(BsTypography.body)
                     .textFieldStyle(.roundedBorder)
                     .disabled(viewModel.isSaving)
 
@@ -201,11 +201,11 @@ public struct ProjectEditSheet: View {
 
     private var membersSectionHeader: some View {
         HStack {
-            sectionHeader("Members")
+            sectionHeader("项目成员")
             Spacer()
-            Text("\(viewModel.selectedMemberIds.count) selected")
-                .font(.custom("Inter-Regular", size: 11))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("已选 \(viewModel.selectedMemberIds.count) 人")
+                .font(BsTypography.inter(11, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .textCase(nil)
         }
     }
@@ -216,30 +216,30 @@ public struct ProjectEditSheet: View {
         return Button {
             viewModel.toggleMember(candidate.id)
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: BsSpacing.md) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? Color.Brand.primary : Color.Brand.textSecondary)
+                    .foregroundColor(isSelected ? BsColor.brandAzure : BsColor.inkMuted)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(candidate.displayName)
-                            .font(.custom("Inter-Medium", size: 14))
-                            .foregroundColor(Color.Brand.text)
+                            .font(BsTypography.inter(14, weight: "Medium"))
+                            .foregroundColor(BsColor.ink)
                             .lineLimit(1)
                         if isOwner {
-                            Text("Owner")
-                                .font(.custom("Inter-SemiBold", size: 10))
+                            Text("所有者")
+                                .font(BsTypography.inter(10, weight: "SemiBold"))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.Brand.primaryLight)
-                                .foregroundColor(Color.Brand.primary)
+                                .background(BsColor.brandAzureLight)
+                                .foregroundColor(BsColor.brandAzure)
                                 .clipShape(Capsule())
                         }
                     }
                     if let secondary = secondaryLine(candidate: candidate) {
                         Text(secondary)
-                            .font(.custom("Inter-Regular", size: 11))
-                            .foregroundColor(Color.Brand.textSecondary)
+                            .font(BsTypography.inter(11, weight: "Regular"))
+                            .foregroundColor(BsColor.inkMuted)
                             .lineLimit(1)
                     }
                 }
@@ -264,8 +264,8 @@ public struct ProjectEditSheet: View {
 
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
-            .font(.custom("Inter-Medium", size: 13))
-            .foregroundColor(.gray)
+            .font(BsTypography.caption)
+            .foregroundColor(BsColor.inkMuted)
     }
 
     private func submit() async {

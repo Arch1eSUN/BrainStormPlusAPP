@@ -73,7 +73,7 @@ public final class MySubmissionsViewModel: ObservableObject {
 
             self.rows = fetched
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
 }

@@ -20,6 +20,10 @@ public struct ProjectListView: View {
     /// targeting the correct project.
     @State private var projectPendingDelete: Project? = nil
 
+    /// D.2a: presentation state for the create-project sheet. Mirrors Web's `showCreate`
+    /// dialog (`BrainStorm+-Web/src/app/dashboard/projects/page.tsx` line 31).
+    @State private var isShowingCreateSheet: Bool = false
+
     public init(viewModel: ProjectListViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
@@ -27,14 +31,14 @@ public struct ProjectListView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color.Brand.background
+                BsColor.surfaceSecondary
                     .ignoresSafeArea()
 
                 Group {
                     if viewModel.isLoading && viewModel.projects.isEmpty {
                         ProgressView()
                             .scaleEffect(1.3)
-                            .tint(Color.Brand.primary)
+                            .tint(BsColor.brandAzure)
                     } else if let error = viewModel.errorMessage, viewModel.projects.isEmpty {
                         errorStateView(message: error)
                     } else if viewModel.scopeOutcome == .noMembership {
@@ -50,17 +54,28 @@ public struct ProjectListView: View {
                     }
                 }
             }
-            .navigationTitle("Projects")
+            .navigationTitle("项目管理")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     statusFilterMenu
                 }
+                // D.2a: create entry. Any authenticated user can create a project (Web
+                // `createProject` gates on `serverGuard` only, no admin check).
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingCreateSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .foregroundColor(BsColor.brandAzure)
+                    }
+                    .accessibilityLabel("新建项目")
+                }
             }
             .searchable(
                 text: $viewModel.searchText,
                 placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "Search projects"
+                prompt: "搜索项目"
             )
             .onSubmit(of: .search) {
                 // User pressed the Search key on the keyboard — push the server-side `ilike`.
@@ -95,11 +110,23 @@ public struct ProjectListView: View {
                     }
                 )
             }
+            // D.2a: create sheet. Presents when the "+" toolbar button is tapped. The sheet
+            // calls `onCreated` with the fresh row; we reload the list so membership-scoped
+            // non-admin users see the new project they just became the owner of.
+            .sheet(isPresented: $isShowingCreateSheet) {
+                ProjectCreateSheet(
+                    client: supabase,
+                    currentUserId: userId,
+                    onCreated: { _ in
+                        Task { await reload() }
+                    }
+                )
+            }
             // 2.0: row-level delete confirmation. Mirrors Web `confirm('确定删除这个项目吗？')`
             // semantics via the native `.confirmationDialog` + `Button(role: .destructive)`
             // pattern. The destructive action is gated behind `isDeleting` to prevent double-taps.
             .confirmationDialog(
-                "Delete project?",
+                "确定删除这个项目吗？",
                 isPresented: Binding(
                     get: { projectPendingDelete != nil },
                     set: { newValue in if !newValue { projectPendingDelete = nil } }
@@ -107,7 +134,7 @@ public struct ProjectListView: View {
                 titleVisibility: .visible,
                 presenting: projectPendingDelete
             ) { project in
-                Button("Delete \"\(project.name)\"", role: .destructive) {
+                Button("删除 “\(project.name)”", role: .destructive) {
                     Task {
                         let succeeded = await viewModel.deleteProject(id: project.id)
                         projectPendingDelete = nil
@@ -116,20 +143,20 @@ public struct ProjectListView: View {
                         }
                     }
                 }
-                Button("Cancel", role: .cancel) {
+                Button("取消", role: .cancel) {
                     projectPendingDelete = nil
                 }
             } message: { project in
-                Text("This permanently deletes “\(project.name)” and all of its members. This cannot be undone.")
+                Text("将永久删除 “\(project.name)” 及其全部成员，此操作不可撤销。")
             }
             .alert(
-                "Delete failed",
+                "删除失败",
                 isPresented: Binding(
                     get: { viewModel.deleteErrorMessage != nil },
                     set: { newValue in if !newValue { viewModel.deleteErrorMessage = nil } }
                 ),
                 actions: {
-                    Button("OK", role: .cancel) { viewModel.deleteErrorMessage = nil }
+                    Button("好的", role: .cancel) { viewModel.deleteErrorMessage = nil }
                 },
                 message: {
                     Text(viewModel.deleteErrorMessage ?? "")
@@ -169,7 +196,7 @@ public struct ProjectListView: View {
                 filteredEmptyStateView
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 16) {
+                    LazyVStack(spacing: BsSpacing.lg) {
                         ForEach(rows) { project in
                             NavigationLink {
                                 ProjectDetailView(
@@ -201,7 +228,7 @@ public struct ProjectListView: View {
                                     // hides the count label rather than showing a stale value.
                                     taskCount: viewModel.taskCountsByProject[project.id]
                                 )
-                                    .padding(.horizontal, 20)
+                                    .padding(.horizontal, BsSpacing.lg + 4)
                             }
                             .buttonStyle(.plain)
                             // 1.9: secondary edit entry. Long-press the row to surface the
@@ -212,12 +239,12 @@ public struct ProjectListView: View {
                                 Button {
                                     projectBeingEdited = project
                                 } label: {
-                                    Label("Edit", systemImage: "pencil")
+                                    Label("编辑", systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {
                                     projectPendingDelete = project
                                 } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label("删除", systemImage: "trash")
                                 }
                             }
                         }
@@ -234,7 +261,7 @@ public struct ProjectListView: View {
             Button {
                 viewModel.statusFilter = nil
             } label: {
-                Label("All statuses", systemImage: viewModel.statusFilter == nil ? "checkmark" : "")
+                Label("全部状态", systemImage: viewModel.statusFilter == nil ? "checkmark" : "")
             }
             Divider()
             ForEach(Self.statusOptions, id: \.0) { option in
@@ -246,123 +273,139 @@ public struct ProjectListView: View {
             }
         } label: {
             Image(systemName: viewModel.statusFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                .foregroundColor(Color.Brand.primary)
+                .foregroundColor(BsColor.brandAzure)
         }
     }
 
+    // D.2a: Chinese labels to match Web STATUS_CFG in
+    // `BrainStorm+-Web/src/app/dashboard/projects/page.tsx` lines 18-24.
     private static let statusOptions: [(Project.ProjectStatus, String)] = [
-        (.planning, "Planning"),
-        (.active, "Active"),
-        (.onHold, "On Hold"),
-        (.completed, "Completed"),
-        (.archived, "Archived"),
+        (.planning, "规划中"),
+        (.active, "进行中"),
+        (.onHold, "暂停"),
+        (.completed, "已完成"),
+        (.archived, "归档"),
     ]
 
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: BsSpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(Color.Brand.accent.opacity(0.08))
+                    .fill(BsColor.brandMint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: "folder")
                     .font(.system(size: 40))
-                    .foregroundColor(Color.Brand.primary)
+                    .foregroundColor(BsColor.brandAzure)
             }
-            Text("No projects yet")
-                .font(.custom("Outfit-SemiBold", size: 20))
-                .foregroundColor(Color.Brand.text)
-            Text("Projects created on the web will appear here.")
-                .font(.custom("Inter-Regular", size: 14))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("暂无项目")
+                .font(BsTypography.sectionTitle)
+                .foregroundColor(BsColor.ink)
+            Text("点击右上角创建第一个项目。")
+                .font(BsTypography.bodySmall)
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, BsSpacing.xxxl - 8)
         }
-        .padding(.vertical, 40)
-        .background(Color.Brand.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .shadow(color: Color.black.opacity(0.03), radius: 10, y: 4)
-        .padding(.horizontal, 24)
+        .padding(.vertical, BsSpacing.xxxl - 8)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xxl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.xxl, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .padding(.horizontal, BsSpacing.xl)
     }
 
     /// Rendered when the server returns no rows because the current user is a non-admin
     /// with zero `project_members` rows — mirrors Web's early-return empty path.
     private var noMembershipStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: BsSpacing.lg) {
             ZStack {
                 Circle()
-                    .fill(Color.Brand.accent.opacity(0.08))
+                    .fill(BsColor.brandMint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: "person.2.slash")
                     .font(.system(size: 36))
-                    .foregroundColor(Color.Brand.primary)
+                    .foregroundColor(BsColor.brandAzure)
             }
-            Text("No accessible projects")
-                .font(.custom("Outfit-SemiBold", size: 20))
-                .foregroundColor(Color.Brand.text)
-            Text("You aren't a member of any project yet. A workspace admin can add you from the Web dashboard.")
-                .font(.custom("Inter-Regular", size: 14))
-                .foregroundColor(Color.Brand.textSecondary)
+            Text("暂无可访问的项目")
+                .font(BsTypography.sectionTitle)
+                .foregroundColor(BsColor.ink)
+            Text("你还不是任何项目的成员。可请管理员在 Web 端将你加入项目，或点击右上角“+”新建项目。")
+                .font(BsTypography.bodySmall)
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, BsSpacing.xxl)
         }
-        .padding(.vertical, 40)
-        .background(Color.Brand.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .shadow(color: Color.black.opacity(0.03), radius: 10, y: 4)
-        .padding(.horizontal, 24)
+        .padding(.vertical, BsSpacing.xxxl - 8)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xxl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.xxl, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .padding(.horizontal, BsSpacing.xl)
     }
 
     private var filteredEmptyStateView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: BsSpacing.md) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 36))
-                .foregroundColor(Color.Brand.textSecondary)
-            Text("No matches")
-                .font(.custom("Outfit-SemiBold", size: 18))
-                .foregroundColor(Color.Brand.text)
-            Text("Try a different search term or clear the status filter.")
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(Color.Brand.textSecondary)
+                .foregroundColor(BsColor.inkMuted)
+            Text("未找到匹配的项目")
+                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .foregroundColor(BsColor.ink)
+            Text("尝试修改搜索关键词或清除状态筛选。")
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, BsSpacing.xxl)
         }
-        .padding(.vertical, 32)
-        .padding(.horizontal, 24)
-        .background(Color.Brand.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
+        .padding(.vertical, BsSpacing.xxl)
+        .padding(.horizontal, BsSpacing.xl)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .padding(.horizontal, BsSpacing.xl)
+        .padding(.top, BsSpacing.xl)
     }
 
     private func errorStateView(message: String) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: BsSpacing.md) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 36))
-                .foregroundColor(Color.Brand.warning)
-            Text("Couldn't load projects")
-                .font(.custom("Outfit-SemiBold", size: 18))
-                .foregroundColor(Color.Brand.text)
+                .foregroundColor(BsColor.warning)
+            Text("项目加载失败")
+                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .foregroundColor(BsColor.ink)
             Text(message)
-                .font(.custom("Inter-Regular", size: 13))
-                .foregroundColor(Color.Brand.textSecondary)
+                .font(BsTypography.inter(13, weight: "Regular"))
+                .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, BsSpacing.xxl)
             Button {
                 Task { await reload() }
             } label: {
-                Text("Retry")
-                    .font(.custom("Inter-SemiBold", size: 14))
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color.Brand.primary)
+                Text("重试")
+                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .padding(.horizontal, BsSpacing.lg + 4)
+                    .padding(.vertical, BsSpacing.md - 2)
+                    .background(BsColor.brandAzure)
                     .foregroundColor(.white)
                     .clipShape(Capsule())
             }
         }
-        .padding(.vertical, 32)
-        .padding(.horizontal, 24)
-        .background(Color.Brand.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal, 24)
+        .padding(.vertical, BsSpacing.xxl)
+        .padding(.horizontal, BsSpacing.xl)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .padding(.horizontal, BsSpacing.xl)
     }
 }

@@ -26,7 +26,7 @@ public final class SettingsViewModel {
             
             self.profile = fetchedProfile
         } catch {
-            self.errorMessage = "Failed to load profile: \(error.localizedDescription)"
+            self.errorMessage = "加载个人资料失败：\(ErrorLocalizer.localize(error))"
         }
         
         isLoading = false

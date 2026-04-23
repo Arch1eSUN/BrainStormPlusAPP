@@ -28,8 +28,9 @@ public struct ChatRoomView: View {
 
     public var body: some View {
         ZStack {
-            Color(UIColor.systemGroupedBackground)
-                .ignoresSafeArea()
+            // Ambient 弥散底：暖米 paper + Azure/Mint blobs，
+            // 气泡 glass tint 漂在上方。
+            BsAmbientBackground()
 
             VStack(spacing: 0) {
                 content
@@ -70,10 +71,10 @@ public struct ChatRoomView: View {
         if viewModel.accessDenied {
             Spacer()
             Text("你没有权限查看此频道")
-                .font(.body)
-                .foregroundColor(.secondary)
+                .font(BsTypography.body)
+                .foregroundStyle(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding()
+                .padding(BsSpacing.lg)
             Spacer()
         } else if viewModel.isLoading && viewModel.messages.isEmpty {
             Spacer()
@@ -82,7 +83,7 @@ public struct ChatRoomView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: BsSpacing.md) {
                         ForEach(viewModel.messages) { msg in
                             messageBubble(
                                 msg: msg,
@@ -91,8 +92,8 @@ public struct ChatRoomView: View {
                             .id(msg.id)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, BsSpacing.lg)
+                    .padding(.vertical, BsSpacing.md)
                 }
                 .onChange(of: viewModel.messages.count) { _, _ in
                     withAnimation {
@@ -104,9 +105,11 @@ public struct ChatRoomView: View {
     }
 
     // MARK: - Input bar
+    // iOS 26 Liquid Glass composer — 真·.glassEffect(...)，不再是手搓
+    // ultraThinMaterial。顶部 hairline 保留分隔感，贴底 safe-area。
 
     private var inputBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             Menu {
                 PhotosPicker(
                     selection: $photoItems,
@@ -123,35 +126,55 @@ public struct ChatRoomView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 20))
-                    .foregroundColor(.gray)
+                    .foregroundStyle(BsColor.inkMuted)
             }
 
-            TextField("Type a message...", text: $messageText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color(UIColor.secondarySystemBackground))
+            TextField("输入消息…", text: $messageText)
+                .font(BsTypography.body)
+                .foregroundStyle(BsColor.ink)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.sm + 2)
+                .background(BsColor.surfaceSecondary)
                 .clipShape(Capsule())
 
+            // Send button —— Azure glass-tinted Circle（取代原来光 SF symbol）。
+            // 禁用时 tint 几乎透明；激活时品牌 Azure 气场。
             Button(action: sendTapped) {
-                if viewModel.isSending {
-                    ProgressView()
-                        .frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(isSendDisabled ? .gray : .blue)
-                        .rotationEffect(.degrees(45))
+                Group {
+                    if viewModel.isSending {
+                        ProgressView()
+                            .frame(width: 20, height: 20)
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(isSendDisabled ? BsColor.inkMuted : BsColor.brandAzure)
+                            .rotationEffect(.degrees(45))
+                    }
                 }
+                .frame(width: 36, height: 36)
+                .glassEffect(
+                    .regular
+                        .tint(
+                            isSendDisabled
+                                ? BsColor.inkFaint.opacity(0.10)
+                                : BsColor.brandAzure.opacity(0.35)
+                        )
+                        .interactive(),
+                    in: Circle()
+                )
             }
             .disabled(isSendDisabled)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, BsSpacing.lg)
+        .padding(.vertical, BsSpacing.md)
+        .glassEffect(
+            .regular,
+            in: RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+        )
         .overlay(
             Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color.gray.opacity(0.2)),
+                .frame(height: 0.5)
+                .foregroundStyle(BsColor.borderSubtle),
             alignment: .top
         )
     }
@@ -160,15 +183,15 @@ public struct ChatRoomView: View {
 
     private var pendingAttachmentsStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: BsSpacing.sm) {
                 ForEach(pendingUploads) { upload in
                     ZStack(alignment: .topTrailing) {
                         pendingThumbnail(for: upload)
                             .frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Color.gray.opacity(0.25), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                    .stroke(BsColor.borderSubtle, lineWidth: 0.5)
                             )
 
                         Button {
@@ -183,10 +206,14 @@ public struct ChatRoomView: View {
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, BsSpacing.lg)
+            .padding(.vertical, BsSpacing.sm)
         }
-        .background(.ultraThinMaterial)
+        // Liquid Glass 也应用于附件预览条 —— 跟 composer 贴合做整体悬浮感
+        .glassEffect(
+            .regular,
+            in: RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+        )
     }
 
     @ViewBuilder
@@ -197,17 +224,17 @@ public struct ChatRoomView: View {
                 .scaledToFill()
         } else {
             ZStack {
-                Color(UIColor.tertiarySystemBackground)
+                BsColor.surfaceTertiary
                 VStack(spacing: 2) {
                     Image(systemName: "doc.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     Text(upload.fileName)
                         .font(.system(size: 9))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .padding(.horizontal, 4)
-                        .foregroundColor(.secondary)
+                        .padding(.horizontal, BsSpacing.xs)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -244,7 +271,7 @@ public struct ChatRoomView: View {
                     )
                     attached.append(att)
                 } catch {
-                    viewModel.errorMessage = "上传失败: \(error.localizedDescription)"
+                    viewModel.errorMessage = "上传失败: \(ErrorLocalizer.localize(error))"
                     return
                 }
             }
@@ -276,7 +303,7 @@ public struct ChatRoomView: View {
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case let .success(urls) = result else {
             if case let .failure(error) = result {
-                viewModel.errorMessage = "选择文件失败: \(error.localizedDescription)"
+                viewModel.errorMessage = "选择文件失败: \(ErrorLocalizer.localize(error))"
             }
             return
         }
@@ -307,7 +334,7 @@ public struct ChatRoomView: View {
         HStack {
             if isCurrentUser { Spacer(minLength: 50) }
 
-            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: BsSpacing.xs) {
                 // Sprint 3.4: 如果这是一条回复消息，先画一条 "reply-to" 块。
                 // 原消息可能已被撤回（isWithdrawn）或查不到（从 replyLookup 缺席），
                 // 两种情况都要降级成占位文本，跟 Web 保持一致。
@@ -318,60 +345,91 @@ public struct ChatRoomView: View {
                 if msg.isWithdrawn {
                     // Web `MessageItem` (page.tsx 渲染逻辑) —— 撤回后只留占位。
                     Text("此消息已撤回")
-                        .font(.body.italic())
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .font(BsTypography.body.italic())
+                        .foregroundStyle(BsColor.inkMuted)
+                        .padding(.horizontal, BsSpacing.lg)
+                        .padding(.vertical, BsSpacing.sm + 2)
+                        .glassEffect(
+                            .regular,
+                            in: RoundedRectangle(cornerRadius: BsRadius.xl - 2, style: .continuous)
+                        )
                 } else {
                     // 文本部分：空字符串 + 纯附件时跳过气泡，避免多一个空框。
                     // Sprint 3.5: content 走 `ChatContentHighlighter` 给
-                    // `@mention` 套高亮样式。self-bubble 是蓝底白字，mention 用
-                    // 黄色；peer-bubble 是浅灰底，mention 用蓝色 —— 需要足够对比
-                    // 才能让 mention 可识别。
+                    // `@mention` 套高亮样式。
+                    //
+                    // Fusion 升级：自己一侧 → Azure glass tint + 非对称气泡
+                    // (bottomTrailing 4pt 收角，iMessage own-side 形状但带品牌色)；
+                    // 对方一侧 → neutral glass + bottomLeading 4pt 收角。
                     if !msg.content.isEmpty {
                         Text(ChatContentHighlighter.attributed(
                             msg.content,
-                            mentionColor: isCurrentUser ? .yellow : .blue
+                            mentionColor: isCurrentUser ? BsColor.brandCoral : BsColor.brandAzure
                         ))
-                            .font(.body)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
+                            .font(BsTypography.body)
+                            .padding(.horizontal, BsSpacing.lg)
+                            .padding(.vertical, BsSpacing.sm + 2)
+                            .glassEffect(
                                 isCurrentUser
-                                    ? Color.blue
-                                    : Color(UIColor.secondarySystemBackground)
+                                    ? .regular.tint(BsColor.brandAzure.opacity(0.18)).interactive()
+                                    : .regular.interactive(),
+                                in: bubbleShape(isCurrentUser: isCurrentUser)
                             )
-                            .foregroundColor(isCurrentUser ? .white : .primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .foregroundStyle(BsColor.ink)
                     }
 
                     ForEach(msg.attachments, id: \.url) { att in
                         attachmentView(att)
+                    }
+
+                    // Phase 4.5: reaction 芯片条 —— 对齐 Web page.tsx:773-790。
+                    if !msg.reactions.isEmpty {
+                        reactionChipRow(msg: msg, isCurrentUser: isCurrentUser)
                     }
                 }
 
                 let timeText = ChatDateFormatter.format(msg.createdAt)
                 if !timeText.isEmpty {
                     Text(timeText)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
-            // contextMenu: 长按消息气泡弹出 "回复" / "撤回" 菜单。
-            // `Withdraw` 只在 own-message + 未撤回 + 2 分钟内 显示 ——
-            // 跟 RPC 和 Web page.tsx:386-390 的判据严格一致，避免用户
-            // 点出来再被服务端拒绝。
+            // contextMenu: 长按消息气泡弹出 "复制文本" / "回复" / 快捷表情 /
+            // "撤回" 菜单。Fusion 增补：对齐 iOS 13+ native pattern，先复制再
+            // 回复。`Withdraw` 只在 own-message + 未撤回 + 2 分钟内 显示。
             .contextMenu {
                 if !msg.isWithdrawn {
+                    if !msg.content.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = msg.content
+                            Haptic.light()
+                        } label: {
+                            Label("复制文本", systemImage: "doc.on.doc")
+                        }
+                    }
                     Button {
+                        Haptic.light()
                         replyingTo = msg
                     } label: {
                         Label("回复", systemImage: "arrowshape.turn.up.left")
                     }
+                    // Phase 4.5: 快捷 emoji —— 对齐 Web QUICK_EMOJIS
+                    // (page.tsx:70)。iOS 用 Menu 形式呈现，点击即 toggle。
+                    Menu {
+                        ForEach(Self.quickEmojis, id: \.self) { emoji in
+                            Button {
+                                Task { await viewModel.toggleReaction(messageId: msg.id, emoji: emoji) }
+                            } label: {
+                                Text("\(emoji)")
+                            }
+                        }
+                    } label: {
+                        Label("添加表情", systemImage: "face.smiling")
+                    }
                     if isCurrentUser && canWithdraw(msg) {
                         Button(role: .destructive) {
+                            Haptic.error()
                             Task { await viewModel.withdrawMessage(msg.id) }
                         } label: {
                             Label("撤回", systemImage: "arrow.uturn.backward")
@@ -392,6 +450,19 @@ public struct ChatRoomView: View {
         return Date().timeIntervalSince(created) < 120
     }
 
+    /// Fusion 气泡形状 —— iMessage 风格非对称圆角。
+    /// 自己一侧（right-anchor）收右下尖角 4pt；对方一侧（left-anchor）
+    /// 收左下尖角 4pt。其他三角 16pt 圆角。
+    private func bubbleShape(isCurrentUser: Bool) -> UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: isCurrentUser ? 16 : 4,
+            bottomTrailingRadius: isCurrentUser ? 4 : 16,
+            topTrailingRadius: 16,
+            style: .continuous
+        )
+    }
+
     /// Sprint 3.4: 回复块。引用原消息一行预览 —— 被撤回 / 找不到 时降级。
     @ViewBuilder
     private func replyBlock(parentId: UUID, isCurrentUser: Bool) -> some View {
@@ -409,20 +480,20 @@ public struct ChatRoomView: View {
         HStack(spacing: 6) {
             Rectangle()
                 .frame(width: 2)
-                .foregroundColor(.gray.opacity(0.4))
+                .foregroundStyle(BsColor.inkFaint)
             Text(preview)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(BsTypography.caption)
+                .foregroundStyle(BsColor.inkMuted)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color(UIColor.tertiarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, BsSpacing.sm + 2)
+        .padding(.vertical, BsSpacing.xs + 2)
+        .background(BsColor.surfaceTertiary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous))
     }
 
-    // MARK: - Reply preview strip (above input bar)
+    // MARK: - Reply preview strip (above input bar) — Liquid Glass
 
     private func replyPreviewStrip(parent: ChatMessage) -> some View {
         let preview: String = {
@@ -433,13 +504,13 @@ public struct ChatRoomView: View {
             }
             return "[消息]"
         }()
-        return HStack(spacing: 8) {
+        return HStack(spacing: BsSpacing.sm) {
             Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.caption)
-                .foregroundColor(.blue)
+                .font(BsTypography.caption)
+                .foregroundStyle(BsColor.brandAzure)
             Text("回复: \(preview)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(BsTypography.caption)
+                .foregroundStyle(BsColor.inkMuted)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer()
@@ -448,18 +519,64 @@ public struct ChatRoomView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, BsSpacing.md + 2)
+        .padding(.vertical, BsSpacing.sm)
+        .glassEffect(
+            .regular,
+            in: RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+        )
         .overlay(
             Rectangle()
-                .frame(height: 1)
-                .foregroundColor(Color.gray.opacity(0.15)),
+                .frame(height: 0.5)
+                .foregroundStyle(BsColor.borderSubtle),
             alignment: .top
         )
+    }
+
+    // Phase 4.5: 与 Web `QUICK_EMOJIS` (page.tsx:70) 对齐。
+    private static let quickEmojis: [String] = ["👍", "❤️", "😂", "🎉", "🤔", "👀"]
+
+    /// Phase 4.5: 呈现 reaction 芯片 —— 每个 emoji 是一个可 tap 的 chip，显示
+    /// 计数；当前用户已投票的 chip 高亮。对齐 Web page.tsx:772-790。
+    @ViewBuilder
+    private func reactionChipRow(msg: ChatMessage, isCurrentUser: Bool) -> some View {
+        // Dictionary 顺序不稳定，手动按 emoji 排序让同一条消息的 chip 顺序稳定。
+        let entries = msg.reactions.sorted(by: { $0.key < $1.key })
+        HStack(spacing: 6) {
+            ForEach(entries, id: \.key) { emoji, userIds in
+                let mineAlready = viewModel.currentUserId.map { userIds.contains($0) } ?? false
+                Button {
+                    Task { await viewModel.toggleReaction(messageId: msg.id, emoji: emoji) }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(emoji)
+                        Text("\(userIds.count)")
+                            .font(BsTypography.captionSmall)
+                    }
+                    .padding(.horizontal, BsSpacing.sm)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule().fill(
+                            mineAlready
+                                ? BsColor.brandAzure.opacity(0.15)
+                                : BsColor.surfaceTertiary
+                        )
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            mineAlready ? BsColor.brandAzure.opacity(0.4) : BsColor.borderSubtle,
+                            lineWidth: 0.5
+                        )
+                    )
+                    .foregroundStyle(mineAlready ? BsColor.brandAzure : BsColor.ink)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -474,37 +591,37 @@ public struct ChatRoomView: View {
                         switch phase {
                         case .empty:
                             ZStack {
-                                Color(UIColor.tertiarySystemBackground)
+                                BsColor.surfaceTertiary
                                 ProgressView()
                             }
                         case .success(let image):
                             image.resizable().scaledToFill()
                         case .failure:
                             ZStack {
-                                Color(UIColor.tertiarySystemBackground)
+                                BsColor.surfaceTertiary
                                 Image(systemName: "photo")
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         @unknown default:
                             EmptyView()
                         }
                     }
                     .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
                 } else {
-                    HStack(spacing: 8) {
+                    HStack(spacing: BsSpacing.sm) {
                         Image(systemName: "doc.fill")
-                            .foregroundColor(.blue)
+                            .foregroundStyle(BsColor.brandAzure)
                         Text(att.name)
-                            .font(.callout)
+                            .font(BsTypography.bodySmall)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .foregroundColor(.primary)
+                            .foregroundStyle(BsColor.ink)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, BsSpacing.md)
+                    .padding(.vertical, BsSpacing.sm + 2)
+                    .background(BsColor.surfaceSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
                 }
             }
             .buttonStyle(.plain)

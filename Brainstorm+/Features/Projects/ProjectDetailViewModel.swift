@@ -85,18 +85,22 @@ public class ProjectDetailViewModel: ObservableObject {
     /// failed destructive action does not wipe unrelated read-only state.
     @Published public var deleteErrorMessage: String? = nil
 
-    // MARK: - 2.2 AI summary foundation state
+    // MARK: - 2.2 / Phase 6.1 AI summary state (Web bridge)
 
-    /// 2.2: resolved foundation snapshot from the most recent `generateSummary()` call.
-    /// `nil` when no summary has been generated yet (idle) OR when the most recent attempt
-    /// failed (see `summaryErrorMessage`). Not persisted — mirrors Web's ephemeral
-    /// `generateProjectSummary(...)` return shape.
-    @Published public var summary: ProjectSummaryFoundation? = nil
+    /// Phase 6.1: resolved structured summary from the most recent `generateSummary()` call
+    /// against the Web bridge `POST /api/ai/project-summary`. `nil` when no summary has been
+    /// generated yet (idle) OR when the most recent attempt failed (see `summaryErrorMessage`).
+    ///
+    /// The backing type now mirrors the Web JSON response 1:1 (snapshot_summary +
+    /// completed_highlights + in_progress + next_steps + risk_notes + provenance). The
+    /// previous 2.2 local-synthesis `ProjectSummaryFoundation` has been retired — see
+    /// the `// 已切换到 Web bridge /api/ai/project-summary` comments in this file.
+    @Published public var projectSummary: ProjectSummary? = nil
 
-    /// 2.2: true while `generateSummary()` is fanning out its parallel Supabase reads and
-    /// synthesizing the facts summary. Drives the "Generating…" button state in the UI.
-    /// Distinct from `isLoading` (first-load / gate / row refresh), `isLoadingEnrichment`
-    /// (per-section sub-fetches), and `isDeleting` (destructive action).
+    /// Phase 6.1: true while `generateSummary()` is awaiting the Web bridge response.
+    /// Drives the "生成中…" button state in the UI. Distinct from `isLoading`
+    /// (first-load / gate / row refresh), `isLoadingEnrichment` (per-section sub-fetches),
+    /// and `isDeleting` (destructive action).
     @Published public var isGeneratingSummary: Bool = false
 
     /// 2.2: isolated error surface for the AI summary foundation. Kept separate from
@@ -114,9 +118,17 @@ public class ProjectDetailViewModel: ObservableObject {
     /// `generateProjectRiskAnalysis(...)` is a server action with no HTTP exposure.
     @Published public var riskAnalysis: ProjectRiskAnalysis? = nil
 
-    /// 2.3: true while `refreshRiskAnalysis()` is reading the cached row. Drives the
-    /// "Checking…" button state in the UI.
+    /// Phase 6.1: true while `refreshRiskAnalysis()` is awaiting the Web bridge response
+    /// from `POST /api/ai/project-risk`. Drives the "生成中…" button state in the UI.
+    ///
+    /// Renamed semantically from the 2.3 "read the cached row" flow — iOS now triggers a
+    /// fresh LLM-backed analysis via the bridge rather than peeking at
+    /// `project_risk_summaries` directly. Kept under the same property name to avoid
+    /// churning every callsite in the view; the new name would be `isGeneratingRisk`.
     @Published public var isLoadingRiskAnalysis: Bool = false
+    /// Phase 6.1 alias mirroring the task brief's naming. Same value as
+    /// `isLoadingRiskAnalysis`; readers may use either.
+    public var isGeneratingRisk: Bool { isLoadingRiskAnalysis }
 
     /// 2.3: true when the most recent successful read returned ZERO cached rows. Lets the
     /// UI distinguish "haven't looked yet" from "looked, found nothing" so the user sees
@@ -357,7 +369,7 @@ public class ProjectDetailViewModel: ObservableObject {
             // the rest of the detail view.
             await loadEnrichment(for: refreshed)
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
 
         isLoading = false
@@ -394,7 +406,7 @@ public class ProjectDetailViewModel: ObservableObject {
         self.weeklySummaries = []
         self.profilesById = [:]
         self.enrichmentErrors = [:]
-        self.summary = nil
+        self.projectSummary = nil
         self.summaryErrorMessage = nil
         self.riskAnalysis = nil
         self.riskAnalysisErrorMessage = nil
@@ -482,7 +494,7 @@ public class ProjectDetailViewModel: ObservableObject {
             self.owner = rows.first
         } catch {
             self.owner = nil
-            self.enrichmentErrors[.owner] = error.localizedDescription
+            self.enrichmentErrors[.owner] = ErrorLocalizer.localize(error)
         }
     }
 
@@ -507,7 +519,7 @@ public class ProjectDetailViewModel: ObservableObject {
             self.tasks = rows
         } catch {
             self.tasks = []
-            self.enrichmentErrors[.tasks] = error.localizedDescription
+            self.enrichmentErrors[.tasks] = ErrorLocalizer.localize(error)
         }
     }
 
@@ -534,7 +546,7 @@ public class ProjectDetailViewModel: ObservableObject {
             self.dailyLogs = rows
         } catch {
             self.dailyLogs = []
-            self.enrichmentErrors[.dailyLogs] = error.localizedDescription
+            self.enrichmentErrors[.dailyLogs] = ErrorLocalizer.localize(error)
         }
     }
 
@@ -564,7 +576,7 @@ public class ProjectDetailViewModel: ObservableObject {
             self.weeklySummaries = rows
         } catch {
             self.weeklySummaries = []
-            self.enrichmentErrors[.weeklySummaries] = error.localizedDescription
+            self.enrichmentErrors[.weeklySummaries] = ErrorLocalizer.localize(error)
         }
     }
 
@@ -619,7 +631,7 @@ public class ProjectDetailViewModel: ObservableObject {
         } catch {
             // Keep previously rendered sections intact; only surface a soft per-section error.
             self.profilesById = [:]
-            self.enrichmentErrors[.sublistProfiles] = error.localizedDescription
+            self.enrichmentErrors[.sublistProfiles] = ErrorLocalizer.localize(error)
         }
     }
 
@@ -653,7 +665,7 @@ public class ProjectDetailViewModel: ObservableObject {
             isDeleting = false
             return true
         } catch {
-            deleteErrorMessage = error.localizedDescription
+            deleteErrorMessage = ErrorLocalizer.localize(error)
             isDeleting = false
             return false
         }
@@ -676,40 +688,40 @@ public class ProjectDetailViewModel: ObservableObject {
         return nil
     }
 
-    // MARK: - 2.2 AI summary foundation
+    // MARK: - 2.2 AI summary foundation (retired — replaced by Web bridge in Phase 6.1)
 
-    /// Minimal task DTO for summary synthesis. Distinct from `ProjectTaskSummary` (used by the
-    /// 1.7 enrichment section) because Web's `generateProjectSummary` selects `due_date` to
-    /// compute the overdue count, which the detail-page DTO does not include. Kept private to
-    /// the VM to avoid expanding the 1.7 public surface for a 2.2-only need.
-    private struct ProjectSummaryTaskRow: Decodable {
-        let title: String
-        let status: String
-        let priority: String?
-        let dueDate: String?
-        enum CodingKeys: String, CodingKey {
-            case title, status, priority
-            case dueDate = "due_date"
-        }
-    }
-
-    private struct ProjectSummaryDailyRow: Decodable {
-        let date: String
-        let content: String?
-        let progress: String?
-        let blockers: String?
-    }
-
-    private struct ProjectSummaryWeeklyRow: Decodable {
-        let weekStart: String
-        let summary: String?
-        let highlights: String?
-        let challenges: String?
-        enum CodingKeys: String, CodingKey {
-            case weekStart = "week_start"
-            case summary, highlights, challenges
-        }
-    }
+    // 已切换到 Web bridge /api/ai/project-summary —— 以下三个本地合成 DTO 原用于
+    // 复刻 Web `generateProjectSummary` 的并行 Supabase 读。新流程下不再需要它们，
+    // 保留为注释以方便后续回溯字段对齐。
+    //
+    // private struct ProjectSummaryTaskRow: Decodable {
+    //     let title: String
+    //     let status: String
+    //     let priority: String?
+    //     let dueDate: String?
+    //     enum CodingKeys: String, CodingKey {
+    //         case title, status, priority
+    //         case dueDate = "due_date"
+    //     }
+    // }
+    //
+    // private struct ProjectSummaryDailyRow: Decodable {
+    //     let date: String
+    //     let content: String?
+    //     let progress: String?
+    //     let blockers: String?
+    // }
+    //
+    // private struct ProjectSummaryWeeklyRow: Decodable {
+    //     let weekStart: String
+    //     let summary: String?
+    //     let highlights: String?
+    //     let challenges: String?
+    //     enum CodingKeys: String, CodingKey {
+    //         case weekStart = "week_start"
+    //         case summary, highlights, challenges
+    //     }
+    // }
 
     /// Fan out the same parallel Supabase reads Web's `generateProjectSummary(projectId)` runs,
     /// then synthesize a deterministic facts-only foundation summary.
@@ -732,177 +744,143 @@ public class ProjectDetailViewModel: ObservableObject {
     /// - A counting-style "not enough data" outcome (mirrors Web's `项目暂无足够数据生成摘要`
     ///   branch) is surfaced through `summaryErrorMessage`, not as a silent empty success.
     public func generateSummary() async {
-        guard let project = self.project else {
-            self.summaryErrorMessage = "Project data is not ready yet. Try again in a moment."
-            self.summary = nil
-            return
-        }
+        // `projectId` is a non-optional `let`, but we still preserve an explicit guard
+        // to match the pattern used by `refreshRiskAnalysis()` and keep the failure
+        // branch self-documenting if the constructor shape ever changes.
+        let targetId = self.project?.id ?? self.projectId
 
         isGeneratingSummary = true
         summaryErrorMessage = nil
 
+        // 已切换到 Web bridge /api/ai/project-summary —— 原本地合成逻辑已废弃，
+        // 保留在 `synthesizeFoundationSummary(...)` 注释块里以供回溯。
         do {
-            async let tasksFetch: [ProjectSummaryTaskRow] = client
-                .from("tasks")
-                .select("title, status, priority, due_date")
-                .eq("project_id", value: project.id)
-                .order("created_at", ascending: false)
-                .limit(30)
-                .execute()
-                .value
+            let session = try await client.auth.session
+            let token = session.accessToken
+            let url = AppEnvironment.webAPIBaseURL
+                .appendingPathComponent("api/ai/project-summary")
 
-            async let dailyFetch: [ProjectSummaryDailyRow] = client
-                .from("daily_logs")
-                .select("date, content, progress, blockers")
-                .eq("project_id", value: project.id)
-                .order("date", ascending: false)
-                .limit(10)
-                .execute()
-                .value
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.timeoutInterval = 90
 
-            async let weeklyFetch: [ProjectSummaryWeeklyRow] = client
-                .from("weekly_reports")
-                .select("week_start, summary, highlights, challenges")
-                .contains("project_ids", value: [project.id.uuidString])
-                .order("week_start", ascending: false)
-                .limit(3)
-                .execute()
-                .value
+            let payload: [String: Any] = ["project_id": targetId.uuidString]
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-            let (taskRows, dailyRows, weeklyRows) = try await (tasksFetch, dailyFetch, weeklyFetch)
-
-            // Mirrors Web's early-return `contextParts.length <= 1` branch: only the project
-            // metadata was available, nothing to summarize over.
-            if taskRows.isEmpty && dailyRows.isEmpty && weeklyRows.isEmpty {
-                self.summary = nil
-                self.summaryErrorMessage = "Not enough data to generate a summary yet. Add tasks, daily logs, or weekly reports first."
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else {
+                self.summaryErrorMessage = "摘要生成失败：网络异常，请稍后重试"
                 isGeneratingSummary = false
                 return
             }
 
-            let synthesized = Self.synthesizeFoundationSummary(
-                project: project,
-                tasks: taskRows,
-                dailyLogs: dailyRows,
-                weeklyReports: weeklyRows
-            )
-            self.summary = synthesized
+            if http.statusCode >= 400 {
+                let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let serverError = (json?["error"] as? String)
+                    ?? String(data: data, encoding: .utf8)
+                    ?? "HTTP \(http.statusCode)"
+                self.summaryErrorMessage = "摘要生成失败：\(serverError)"
+                self.projectSummary = nil
+                isGeneratingSummary = false
+                return
+            }
+
+            let decoded = try JSONDecoder().decode(ProjectSummary.self, from: data)
+            self.projectSummary = decoded
             self.summaryErrorMessage = nil
         } catch {
-            self.summary = nil
-            self.summaryErrorMessage = error.localizedDescription
+            self.projectSummary = nil
+            self.summaryErrorMessage = "摘要生成失败：\(ErrorLocalizer.localize(error))"
         }
 
         isGeneratingSummary = false
     }
 
-    /// Deterministic, locally computed "facts snapshot" — explicitly NOT an LLM-generated
-    /// narrative. Mirrors the *structure* of Web's project-summary prompt sections (overview /
-    /// done / in progress / risk / next) so the UI layer can eventually swap to an LLM-
-    /// generated string without restructuring the binding.
-    ///
-    /// Counts `overdue` the same way Web does: `due_date < today AND status != done`.
-    private static func synthesizeFoundationSummary(
-        project: Project,
-        tasks: [ProjectSummaryTaskRow],
-        dailyLogs: [ProjectSummaryDailyRow],
-        weeklyReports: [ProjectSummaryWeeklyRow]
-    ) -> ProjectSummaryFoundation {
-        let todayString = Self.iso8601DateOnlyFormatter.string(from: Date())
-
-        let doneCount = tasks.filter { $0.status == "done" }.count
-        let inProgressCount = tasks.filter { $0.status == "in_progress" }.count
-        let overdueCount = tasks.filter { row in
-            guard let due = row.dueDate, !due.isEmpty else { return false }
-            return due < todayString && row.status != "done"
-        }.count
-
-        var sections: [String] = []
-
-        // Overview
-        var overviewLine = "Status: \(Self.humanize(project.status.rawValue)) · Progress: \(project.progress)%"
-        if let end = project.endDate {
-            overviewLine += " · End date: \(Self.displayDateFormatter.string(from: end))"
-        }
-        sections.append("Overview\n\(overviewLine)")
-
-        // Tasks digest
-        if !tasks.isEmpty {
-            var taskLines: [String] = []
-            taskLines.append("Total \(tasks.count) · \(doneCount) done · \(inProgressCount) in progress · \(overdueCount) overdue")
-            let preview = tasks.prefix(5).map { "• [\(Self.humanize($0.status))] \($0.title)" }
-            taskLines.append(contentsOf: preview)
-            if tasks.count > 5 {
-                taskLines.append("… and \(tasks.count - 5) more")
-            }
-            sections.append("Tasks\n" + taskLines.joined(separator: "\n"))
-        }
-
-        // Recent daily log activity
-        if !dailyLogs.isEmpty {
-            var lines: [String] = ["\(dailyLogs.count) recent log\(dailyLogs.count == 1 ? "" : "s")"]
-            if let latest = dailyLogs.first {
-                let trimmedContent = (latest.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                let snippet = trimmedContent.isEmpty ? "(no content)" : String(trimmedContent.prefix(160))
-                lines.append("Latest (\(latest.date)): \(snippet)")
-                if let blockers = latest.blockers, !blockers.isEmpty {
-                    lines.append("Blockers: \(blockers)")
-                }
-            }
-            sections.append("Recent activity\n" + lines.joined(separator: "\n"))
-        }
-
-        // Weekly reports digest
-        if !weeklyReports.isEmpty {
-            var lines: [String] = ["\(weeklyReports.count) recent weekly report\(weeklyReports.count == 1 ? "" : "s")"]
-            if let latest = weeklyReports.first {
-                if let s = latest.summary, !s.isEmpty {
-                    lines.append("Week of \(latest.weekStart): \(String(s.prefix(200)))")
-                }
-                if let highlights = latest.highlights, !highlights.isEmpty {
-                    lines.append("Highlights: \(String(highlights.prefix(160)))")
-                }
-                if let challenges = latest.challenges, !challenges.isEmpty {
-                    lines.append("Challenges: \(String(challenges.prefix(160)))")
-                }
-            }
-            sections.append("Weekly reports\n" + lines.joined(separator: "\n"))
-        }
-
-        let body = sections.joined(separator: "\n\n")
-
-        return ProjectSummaryFoundation(
-            summary: body,
-            generatedAt: Date(),
-            facts: .init(
-                taskTotal: tasks.count,
-                taskDone: doneCount,
-                taskInProgress: inProgressCount,
-                taskOverdue: overdueCount,
-                dailyLogCount: dailyLogs.count,
-                weeklyReportCount: weeklyReports.count
-            )
-        )
-    }
-
-    private static func humanize(_ raw: String) -> String {
-        raw.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-
-    private static let iso8601DateOnlyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        return f
-    }()
-
-    private static let displayDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMM d, yyyy"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
+    // 已切换到 Web bridge /api/ai/project-summary —— 以下本地合成函数连同
+    // 它使用的日期格式化器、humanize 辅助函数一起停用。保留为注释块，便于后续
+    // 当 Web 端还没 ready 需要回滚时直接复原。类型签名里引用的 ProjectSummaryTaskRow
+    // / ProjectSummaryDailyRow / ProjectSummaryWeeklyRow / ProjectSummaryFoundation
+    // 都已在上方同步注释。
+    //
+    // private static func synthesizeFoundationSummary(
+    //     project: Project,
+    //     tasks: [ProjectSummaryTaskRow],
+    //     dailyLogs: [ProjectSummaryDailyRow],
+    //     weeklyReports: [ProjectSummaryWeeklyRow]
+    // ) -> ProjectSummaryFoundation {
+    //     let todayString = Self.iso8601DateOnlyFormatter.string(from: Date())
+    //     let doneCount = tasks.filter { $0.status == "done" }.count
+    //     let inProgressCount = tasks.filter { $0.status == "in_progress" }.count
+    //     let overdueCount = tasks.filter { row in
+    //         guard let due = row.dueDate, !due.isEmpty else { return false }
+    //         return due < todayString && row.status != "done"
+    //     }.count
+    //     var sections: [String] = []
+    //     var overviewLine = "Status: \(Self.humanize(project.status.rawValue)) · Progress: \(project.progress)%"
+    //     if let end = project.endDate {
+    //         overviewLine += " · End date: \(Self.displayDateFormatter.string(from: end))"
+    //     }
+    //     sections.append("Overview\n\(overviewLine)")
+    //     if !tasks.isEmpty {
+    //         var taskLines: [String] = []
+    //         taskLines.append("Total \(tasks.count) · \(doneCount) done · \(inProgressCount) in progress · \(overdueCount) overdue")
+    //         let preview = tasks.prefix(5).map { "• [\(Self.humanize($0.status))] \($0.title)" }
+    //         taskLines.append(contentsOf: preview)
+    //         if tasks.count > 5 {
+    //             taskLines.append("… and \(tasks.count - 5) more")
+    //         }
+    //         sections.append("Tasks\n" + taskLines.joined(separator: "\n"))
+    //     }
+    //     if !dailyLogs.isEmpty {
+    //         var lines: [String] = ["\(dailyLogs.count) recent log\(dailyLogs.count == 1 ? "" : "s")"]
+    //         if let latest = dailyLogs.first {
+    //             let trimmedContent = (latest.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    //             let snippet = trimmedContent.isEmpty ? "(no content)" : String(trimmedContent.prefix(160))
+    //             lines.append("Latest (\(latest.date)): \(snippet)")
+    //             if let blockers = latest.blockers, !blockers.isEmpty {
+    //                 lines.append("Blockers: \(blockers)")
+    //             }
+    //         }
+    //         sections.append("Recent activity\n" + lines.joined(separator: "\n"))
+    //     }
+    //     if !weeklyReports.isEmpty {
+    //         var lines: [String] = ["\(weeklyReports.count) recent weekly report\(weeklyReports.count == 1 ? "" : "s")"]
+    //         if let latest = weeklyReports.first {
+    //             if let s = latest.summary, !s.isEmpty {
+    //                 lines.append("Week of \(latest.weekStart): \(String(s.prefix(200)))")
+    //             }
+    //             if let highlights = latest.highlights, !highlights.isEmpty {
+    //                 lines.append("Highlights: \(String(highlights.prefix(160)))")
+    //             }
+    //             if let challenges = latest.challenges, !challenges.isEmpty {
+    //                 lines.append("Challenges: \(String(challenges.prefix(160)))")
+    //             }
+    //         }
+    //         sections.append("Weekly reports\n" + lines.joined(separator: "\n"))
+    //     }
+    //     let body = sections.joined(separator: "\n\n")
+    //     return ProjectSummaryFoundation(
+    //         summary: body,
+    //         generatedAt: Date(),
+    //         facts: .init(
+    //             taskTotal: tasks.count,
+    //             taskDone: doneCount,
+    //             taskInProgress: inProgressCount,
+    //             taskOverdue: overdueCount,
+    //             dailyLogCount: dailyLogs.count,
+    //             weeklyReportCount: weeklyReports.count
+    //         )
+    //     )
+    // }
+    //
+    // private static func humanize(_ raw: String) -> String {
+    //     raw.replacingOccurrences(of: "_", with: " ").capitalized
+    // }
+    //
+    // private static let iso8601DateOnlyFormatter: DateFormatter = { ... }()
+    // private static let displayDateFormatter: DateFormatter = { ... }()
 
     // MARK: - 2.3 Risk analysis foundation
 
@@ -959,40 +937,95 @@ public class ProjectDetailViewModel: ObservableObject {
         isLoadingRiskAnalysis = true
         riskAnalysisErrorMessage = nil
 
+        // 已切换到 Web bridge /api/ai/project-risk —— 原本地直读
+        // `project_risk_summaries` 的逻辑保留在下方注释块,便于回滚。
         do {
-            let rows: [ProjectRiskRow] = try await client
-                .from("project_risk_summaries")
-                .select("summary, risk_level, generated_at, model_used, scenario")
-                .eq("project_id", value: projectId)
-                .limit(1)
-                .execute()
-                .value
+            let session = try await client.auth.session
+            let token = session.accessToken
+            let url = AppEnvironment.webAPIBaseURL
+                .appendingPathComponent("api/ai/project-risk")
 
-            if let row = rows.first, let text = row.summary, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.riskAnalysis = ProjectRiskAnalysis(
-                    summary: text,
-                    riskLevel: Self.parseRiskLevel(row.riskLevel),
-                    generatedAt: Self.parseTimestamp(row.generatedAt),
-                    model: row.modelUsed,
-                    scenario: row.scenario
-                )
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.timeoutInterval = 90
+
+            let payload: [String: Any] = ["project_id": projectId.uuidString]
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else {
+                self.riskAnalysisErrorMessage = "风险分析生成失败：网络异常，请稍后重试"
                 self.riskAnalysisNotYetGenerated = false
-            } else {
-                // No cached row, or row exists but `summary` is empty. Treat both as
-                // "Web hasn't generated an analysis yet"; the UI shows an honest hint
-                // instead of a warning banner.
-                self.riskAnalysis = nil
-                self.riskAnalysisNotYetGenerated = true
+                isLoadingRiskAnalysis = false
+                return
             }
+
+            if http.statusCode >= 400 {
+                let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let serverError = (json?["error"] as? String)
+                    ?? String(data: data, encoding: .utf8)
+                    ?? "HTTP \(http.statusCode)"
+                self.riskAnalysisErrorMessage = "风险分析生成失败：\(serverError)"
+                self.riskAnalysisNotYetGenerated = false
+                isLoadingRiskAnalysis = false
+                return
+            }
+
+            let decoded = try JSONDecoder().decode(ProjectRiskAnalysisResponse.self, from: data)
+            let resolvedLevelRaw = decoded.riskLevel ?? decoded.overallRiskLevel
+            self.riskAnalysis = ProjectRiskAnalysis(
+                summary: decoded.summary,
+                riskLevel: Self.parseRiskLevel(resolvedLevelRaw),
+                risks: decoded.risks,
+                generatedAt: Self.parseTimestamp(decoded.generatedAt),
+                model: decoded.modelUsed,
+                scenario: decoded.scenario
+            )
+            self.riskAnalysisNotYetGenerated = false
         } catch {
-            // Preserve any previously-resolved snapshot so a flaky network call doesn't
-            // blank out valid risk context; only the error banner flips on.
-            self.riskAnalysisErrorMessage = error.localizedDescription
+            self.riskAnalysisErrorMessage = "风险分析生成失败：\(ErrorLocalizer.localize(error))"
             self.riskAnalysisNotYetGenerated = false
         }
 
         isLoadingRiskAnalysis = false
     }
+
+    // 已切换到 Web bridge /api/ai/project-risk —— 以下原本地读取 project_risk_summaries
+    // 的逻辑停用,保留为注释块便于回滚对照。
+    //
+    // public func refreshRiskAnalysis() async {
+    //     isLoadingRiskAnalysis = true
+    //     riskAnalysisErrorMessage = nil
+    //     do {
+    //         let rows: [ProjectRiskRow] = try await client
+    //             .from("project_risk_summaries")
+    //             .select("summary, risk_level, generated_at, model_used, scenario")
+    //             .eq("project_id", value: projectId)
+    //             .limit(1)
+    //             .execute()
+    //             .value
+    //         if let row = rows.first, let text = row.summary,
+    //            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    //             self.riskAnalysis = ProjectRiskAnalysis(
+    //                 summary: text,
+    //                 riskLevel: Self.parseRiskLevel(row.riskLevel),
+    //                 generatedAt: Self.parseTimestamp(row.generatedAt),
+    //                 model: row.modelUsed,
+    //                 scenario: row.scenario
+    //             )
+    //             self.riskAnalysisNotYetGenerated = false
+    //         } else {
+    //             self.riskAnalysis = nil
+    //             self.riskAnalysisNotYetGenerated = true
+    //         }
+    //     } catch {
+    //         self.riskAnalysisErrorMessage = ErrorLocalizer.localize(error)
+    //         self.riskAnalysisNotYetGenerated = false
+    //     }
+    //     isLoadingRiskAnalysis = false
+    // }
 
     private static func parseRiskLevel(_ raw: String?) -> ProjectRiskAnalysis.RiskLevel {
         guard let lower = raw?.lowercased() else { return .unknown }
@@ -1120,7 +1153,7 @@ public class ProjectDetailViewModel: ObservableObject {
             // Preserve prior snapshot: don't wipe `linkedRiskActions`; don't touch any
             // other error surface. Revert phase so the UI doesn't stay stuck on
             // "Loading…" — fall back to whatever the VM knew before the call.
-            self.linkedRiskActionsErrorMessage = error.localizedDescription
+            self.linkedRiskActionsErrorMessage = ErrorLocalizer.localize(error)
             self.linkedRiskActionsPhase = (priorPhase == .loading) ? .idle : priorPhase
         }
     }
@@ -1240,7 +1273,7 @@ public class ProjectDetailViewModel: ObservableObject {
                 self.resolutionFeedbackPhase = .loaded
             }
         } catch {
-            self.resolutionFeedbackErrorMessage = error.localizedDescription
+            self.resolutionFeedbackErrorMessage = ErrorLocalizer.localize(error)
             self.resolutionFeedbackPhase = (priorPhase == .loading) ? .idle : priorPhase
         }
     }
@@ -1611,7 +1644,7 @@ public class ProjectDetailViewModel: ObservableObject {
 
             return true
         } catch {
-            self.riskActionSyncErrorMessage = error.localizedDescription
+            self.riskActionSyncErrorMessage = ErrorLocalizer.localize(error)
             self.riskActionSyncPhase = .idle
             return false
         }

@@ -1,149 +1,106 @@
 import SwiftUI
 
+// ══════════════════════════════════════════════════════════════════
+// MainTabView — iOS 26 原生 TabView 重写 (Phase 11.x)
+//
+// 替换掉旧实现的两个反模式:
+//   1. .tabViewStyle(.page(indexDisplayMode: .never)) + 手搓 FloatingTabBar
+//      → 用户会误触横滑在 Dashboard/Tasks 之间切换 (两者无语义顺序关系)
+//   2. 每个 tab 内 .navigationBarHidden(true) + 全局 UINavigationBarAppearance
+//      hack → 会把 Phase 11 的 Large Title 吃掉
+//
+// 新实现 = iOS 26 原生 Liquid Glass tab bar (Slack / Instagram / WeChat 规范):
+//   • 5 个 tab: 工作台 / 任务 / 审批 / 消息 / 我的
+//   • 每个 tab 内部已自带 NavigationStack + .navigationTitle,这里不再套一层
+//   • LazyView 包装 —— 首次进入才构造,避免启动时同时初始化 5 个 Supabase 订阅
+//   • .badge(...) 原生红点 badge
+//   • Haptic.selection() 保持切换反馈
+//
+// 已刻意裁掉的内容 (不是遗漏):
+//   • Copilot tab — 移到 Dashboard toolbar trailing 按钮触发 sheet (后续 phase)
+//   • Schedule tab — 日程已经作为 Dashboard schedule section 呈现,不再独立 tab
+//   • FloatingTabBar struct — 整块删除,原生 tab bar 接管
+//   • UINavigationBarAppearance .onAppear hack — Phase 11 各视图已走
+//     .navigationTitle + .navigationBarTitleDisplayMode(.large) 原生链路
+// ══════════════════════════════════════════════════════════════════
+
 struct MainTabView: View {
     @Environment(SessionManager.self) private var sessionManager
-    @State private var selectedTab = 0
+    @State private var selectedTab: Tab = .dashboard
 
-    // Compute effective capabilities
-    private var hasCopilotAccess: Bool {
-        guard let profile = sessionManager.currentProfile else { return false }
-        let caps = RBACManager.shared.getEffectiveCapabilities(for: profile)
-        return RBACManager.shared.hasCapability(.ai_chatbot_access, in: caps)
+    // TODO(phase-12): 接 ApprovalCenterViewModel 汇总待我审的总 pending 数,
+    // 目前留占位 — 不拖住这次 tab bar 重写的交付。
+    @State private var approvalPendingBadge: Int = 0
+    // TODO(phase-12): 接 ChatListViewModel.unreadCount(汇总频道未读),
+    // 目前 ChatListViewModel 没有对外暴露汇总字段,先占位。
+    @State private var chatUnreadBadge: Int = 0
+
+    enum Tab: Hashable {
+        case dashboard, tasks, approvals, chat, me
     }
-    
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main Content Area
-            TabView(selection: $selectedTab) {
-                // Real Dashboard Tab
-                NavigationStack {
-                    DashboardView()
-                        .navigationTitle("Dashboard")
-                        .navigationBarHidden(true)
+        TabView(selection: $selectedTab) {
+            // ── 工作台 ──
+            LazyView(DashboardView())
+                .tabItem {
+                    Label("工作台", systemImage: "square.grid.2x2.fill")
                 }
-                .tag(0)
-                
-                // Schedule Tab Placeholder
-                NavigationStack {
-                    ScheduleView()
-                        .navigationBarHidden(true)
+                .tag(Tab.dashboard)
+
+            // ── 任务 ──
+            // TaskListView 的 init 需要显式 VM,VM 需要 supabase client。
+            // 用 LazyView 包住 → 首次切到该 tab 才构造 VM,不在启动时拉一次任务列表。
+            LazyView(TaskListView(viewModel: TaskListViewModel(client: supabase)))
+                .tabItem {
+                    Label("任务", systemImage: "checklist")
                 }
-                .tag(1)
-                
-                // Copilot Tab Placeholder (Protected by RBAC)
-                NavigationStack {
-                    ZStack {
-                        if hasCopilotAccess {
-                            AICopilotView()
-                        } else {
-                            Color.Brand.background.ignoresSafeArea()
-                            
-                            VStack(spacing: 16) {
-                                Image(systemName: "lock.shield.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(Color.gray.opacity(0.5))
-                                
-                                Text("BrainStorm+ Copilot (Coming Soon)")
-                                    .font(.custom("Outfit-Bold", size: 20))
-                                    .foregroundStyle(Color.Brand.text)
-                                
-                                Text("This feature is currently locked or under development. It will require the AI Chatbot Access capability.")
-                                    .font(.custom("Inter-Medium", size: 14))
-                                    .foregroundStyle(Color.gray)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 40)
-                            }
-                        }
-                    }
-                    .navigationTitle("Copilot")
+                .tag(Tab.tasks)
+
+            // ── 审批 ──
+            // ApprovalCenterView 默认 init 会用 module-level `supabase`,
+            // 内部 @StateObject 自行持有 MySubmissionsViewModel。
+            LazyView(ApprovalCenterView())
+                .tabItem {
+                    Label("审批", systemImage: "checkmark.seal.fill")
                 }
-                .tag(2)
-                
-                // Settings Tab
-                NavigationStack {
-                    SettingsView()
-                        .navigationBarHidden(true)
+                .badge(approvalPendingBadge > 0 ? approvalPendingBadge : 0)
+                .tag(Tab.approvals)
+
+            // ── 消息 ──
+            // ChatListView 的 init 要求外部传入 VM,与 TaskListView 同构。
+            LazyView(ChatListView(viewModel: ChatListViewModel(client: supabase)))
+                .tabItem {
+                    Label("消息", systemImage: "bubble.left.and.bubble.right.fill")
                 }
-                .tag(3)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never)) // We handle the tab selection manually
-            
-            // Custom Liquid Glass Floating Tab Bar
-            FloatingTabBar(selectedTab: $selectedTab)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .badge(chatUnreadBadge > 0 ? chatUnreadBadge : 0)
+                .tag(Tab.chat)
+
+            // ── 我的 (Profile + Settings) ──
+            LazyView(SettingsView())
+                .tabItem {
+                    Label("我的", systemImage: "person.crop.circle.fill")
+                }
+                .tag(Tab.me)
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        // Global attempt to alter nav bar appearance (UIKit)
-        .onAppear {
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithOpaqueBackground()
-            appearance.backgroundColor = UIColor(Color.Brand.background).withAlphaComponent(0.85)
-            appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-            appearance.shadowColor = .clear // Remove bottom border line
-            
-            // Note: In real app, load custom fonts for Large Title and inline title here
-            UINavigationBar.appearance().standardAppearance = appearance
-            UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        .tint(BsColor.brandAzure)
+        .onChange(of: selectedTab) { _, _ in
+            Haptic.selection()
         }
     }
 }
 
-// MARK: - Floating Tab Bar Component
-struct FloatingTabBar: View {
-    @Binding var selectedTab: Int
-    
-    let tabs = [
-        (icon: "rectangle.grid.2x2.fill", title: "Dashboard"),
-        (icon: "calendar.badge.clock", title: "Schedule"),
-        (icon: "brain.head.profile", title: "Copilot"),
-        (icon: "gearshape.fill", title: "Settings")
-    ]
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<tabs.count, id: \.self) { index in
-                GeometryReader { proxy in
-                    let isSelected = selectedTab == index
-                    
-                    VStack(spacing: 4) {
-                        Image(systemName: tabs[index].icon)
-                            .font(.system(size: 20, weight: isSelected ? .bold : .medium))
-                            .foregroundStyle(isSelected ? Color.Brand.primary : Color.gray.opacity(0.6))
-                            .scaleEffect(isSelected ? 1.1 : 1.0)
-                        
-                        if isSelected {
-                            Circle()
-                                .fill(Color.Brand.primary) // Updated from accent/teal to primary Azure Blue
-                                .frame(width: 4, height: 4)
-                        } else {
-                            Circle()
-                                .fill(Color.clear)
-                                .frame(width: 4, height: 4)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle()) // makes entire area tappable
-                    .onTapGesture {
-                        if selectedTab != index {
-                            HapticManager.shared.trigger(.soft)
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedTab = index
-                            }
-                        }
-                    }
-                }
-                .frame(height: 56)
-            }
-        }
-        // Liquid Glass effect
-        .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.white.opacity(0.6))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Color.black.opacity(0.08), radius: 15, x: 0, y: 10)
-        )
+// MARK: - LazyView
+// 经典 iOS 懒加载包装:TabView 默认会立即实例化所有 tab 的 root view,
+// 对于带 Supabase 订阅 / realtime 的 VM 会在启动时一次性起 N 条连接。
+// LazyView 把 view body 的构造推迟到真正访问时 —— 切到该 tab 才会
+// 调用 build()。
+struct LazyView<Content: View>: View {
+    let build: () -> Content
+    init(_ build: @autoclosure @escaping () -> Content) {
+        self.build = build
     }
+    var body: Content { build() }
 }
 
 #Preview {

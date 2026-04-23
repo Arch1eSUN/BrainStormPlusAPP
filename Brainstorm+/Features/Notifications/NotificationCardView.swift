@@ -2,13 +2,13 @@ import SwiftUI
 
 public struct NotificationCardView: View {
     public let notification: AppNotification
-    
+
     public init(notification: AppNotification) {
         self.notification = notification
     }
-    
+
     public var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: BsSpacing.lg) {
             // Icon
             ZStack {
                 Circle()
@@ -16,58 +16,60 @@ public struct NotificationCardView: View {
                     .frame(width: 48, height: 48)
                 Image(systemName: typeIcon(notification.type))
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(typeColor(notification.type))
+                    .foregroundStyle(typeColor(notification.type))
             }
-            
-            VStack(alignment: .leading, spacing: 6) {
+
+            VStack(alignment: .leading, spacing: BsSpacing.xs + 2) {
                 HStack {
                     Text(notification.title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(notification.isEffectivelyRead ? .primary.opacity(0.7) : .primary)
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(notification.isEffectivelyRead ? BsColor.inkMuted : BsColor.ink)
                         .lineLimit(1)
-                    
+
                     Spacer()
-                    
+
                     if let date = notification.createdAt {
                         Text(date, style: .time)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
-                
+
                 let msg = notification.displayMessage
                 if !msg.isEmpty {
                     Text(msg)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(BsTypography.bodySmall)
+                        .foregroundStyle(BsColor.inkMuted)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
             }
-            
-            // Unread Indicator
+
+            // Unread Indicator —— Fusion coral glass dot
             if !notification.isEffectivelyRead {
-                Circle()
-                    .fill(Color.orange)
+                Color.clear
                     .frame(width: 8, height: 8)
-                    .padding(.top, 6)
+                    .glassEffect(
+                        .regular.tint(BsColor.brandCoral.opacity(0.85)),
+                        in: Circle()
+                    )
+                    .padding(.top, BsSpacing.xs + 2)
             }
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(BsSpacing.lg)
+        // Fusion glass envelope —— 替换 solid surfacePrimary + hairline border
+        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
-    
+
     private func typeColor(_ type: AppNotification.NotificationType) -> Color {
         switch type {
-        case .info: return .blue
-        case .success: return .green
-        case .warning: return .orange
-        case .error: return .red
+        case .info:    return BsColor.brandAzure
+        case .success: return BsColor.success
+        case .warning: return BsColor.warning
+        case .error:   return BsColor.danger
         }
     }
-    
+
     private func typeIcon(_ type: AppNotification.NotificationType) -> String {
         switch type {
         case .info: return "info.circle.fill"

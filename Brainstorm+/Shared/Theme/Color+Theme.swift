@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 public extension Color {
     struct ZY {
@@ -38,7 +39,7 @@ public extension Color {
 }
 
 // Helper for Hex Colors
-extension Color {
+public extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0

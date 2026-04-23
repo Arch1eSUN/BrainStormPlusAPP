@@ -15,10 +15,10 @@ public struct PayrollListView: View {
                     ProgressView()
                         .scaleEffect(1.2)
                 } else if viewModel.payrolls.isEmpty {
-                    ContentUnavailableView("No Payroll Records", systemImage: "yensign.arrow.circlepath", description: Text("You have no payroll history yet."))
+                    ContentUnavailableView("暂无薪资记录", systemImage: "yensign.arrow.circlepath", description: Text("你还没有任何薪资历史记录。"))
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 16) {
+                        LazyVStack(spacing: BsSpacing.lg) {
                             ForEach(viewModel.payrolls) { payroll in
                                 PayrollCardView(payroll: payroll)
                                     .padding(.horizontal)
@@ -26,17 +26,18 @@ public struct PayrollListView: View {
                         }
                         .padding(.vertical)
                     }
+                    .background(BsColor.pageBackground)
                 }
             }
-            .navigationTitle("Payroll")
+            .navigationTitle("薪资")
             .refreshable {
                 await viewModel.fetchPayrolls()
             }
             .task {
                 await viewModel.fetchPayrolls()
             }
-            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-                Button("OK") { viewModel.errorMessage = nil }
+            .alert("加载失败", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("确定") { viewModel.errorMessage = nil }
             } message: {
                 if let error = viewModel.errorMessage {
                     Text(error)

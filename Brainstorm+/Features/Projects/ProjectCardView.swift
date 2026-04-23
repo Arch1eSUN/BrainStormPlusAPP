@@ -21,18 +21,18 @@ public struct ProjectCardView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: BsSpacing.md) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(project.name)
-                        .font(.custom("Outfit-SemiBold", size: 18))
-                        .foregroundColor(Color.Brand.text)
+                        .font(BsTypography.outfit(18, weight: "SemiBold"))
+                        .foregroundColor(BsColor.ink)
                         .lineLimit(2)
 
                     if let description = project.description, !description.isEmpty {
                         Text(description)
-                            .font(.custom("Inter-Regular", size: 13))
-                            .foregroundColor(Color.Brand.textSecondary)
+                            .font(BsTypography.inter(13, weight: "Regular"))
+                            .foregroundColor(BsColor.inkMuted)
                             .lineLimit(2)
                     }
 
@@ -42,8 +42,8 @@ public struct ProjectCardView: View {
                             // through to an SF-symbol placeholder for nil / invalid / load-failure.
                             avatarView(urlString: owner?.avatarUrl, diameter: 16)
                             Text(byline)
-                                .font(.custom("Inter-Medium", size: 11))
-                                .foregroundColor(Color.Brand.textSecondary)
+                                .font(BsTypography.inter(11, weight: "Medium"))
+                                .foregroundColor(BsColor.inkMuted)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
@@ -55,11 +55,11 @@ public struct ProjectCardView: View {
                 statusBadge
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: BsSpacing.md) {
                 if let endDate = project.endDate {
                     Label(Self.dateFormatter.string(from: endDate), systemImage: "calendar")
-                        .font(.custom("Inter-Medium", size: 12))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.captionSmall)
+                        .foregroundColor(BsColor.inkMuted)
                 }
 
                 // 2.1: task count read from the list VM's batched `tasks` aggregate. Hidden
@@ -68,28 +68,31 @@ public struct ProjectCardView: View {
                 // project genuinely has no tasks.
                 if let taskCount {
                     Label(Self.taskCountLabel(taskCount), systemImage: "checklist")
-                        .font(.custom("Inter-Medium", size: 12))
-                        .foregroundColor(Color.Brand.textSecondary)
+                        .font(BsTypography.captionSmall)
+                        .foregroundColor(BsColor.inkMuted)
                 }
 
                 Spacer()
 
                 HStack(spacing: 6) {
                     Text("\(project.progress)%")
-                        .font(.custom("Inter-SemiBold", size: 12))
-                        .foregroundColor(Color.Brand.primary)
+                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .foregroundColor(BsColor.brandAzure)
 
                     ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
                         .progressViewStyle(.linear)
-                        .tint(Color.Brand.primary)
+                        .tint(BsColor.brandAzure)
                         .frame(width: 80)
                 }
             }
         }
-        .padding(16)
-        .background(Color.Brand.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
+        .padding(BsSpacing.lg)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
     }
 
     /// Owner byline shown under the title. Priority:
@@ -105,39 +108,40 @@ public struct ProjectCardView: View {
     private var statusBadge: some View {
         let (label, fg, bg) = Self.statusStyle(for: project.status)
         return Text(label)
-            .font(.custom("Inter-SemiBold", size: 11))
-            .padding(.horizontal, 10)
+            .font(BsTypography.inter(11, weight: "SemiBold"))
+            .padding(.horizontal, BsSpacing.md - 2)
             .padding(.vertical, 5)
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
     }
 
+    // D.2a: Chinese labels matching Web STATUS_CFG.
     private static func statusStyle(for status: Project.ProjectStatus) -> (String, Color, Color) {
         switch status {
         case .planning:
-            return ("Planning", Color.Brand.primary, Color.Brand.primaryLight)
+            return ("规划中", BsColor.brandAzure, BsColor.brandAzureLight)
         case .active:
-            return ("Active", .white, Color.Brand.primary)
+            return ("进行中", .white, BsColor.brandAzure)
         case .onHold:
-            return ("On Hold", Color.Brand.warning, Color.Brand.warning.opacity(0.15))
+            return ("暂停", BsColor.brandCoral, BsColor.brandCoral.opacity(0.15))
         case .completed:
-            return ("Completed", Color.Brand.textSecondary, Color.gray.opacity(0.15))
+            return ("已完成", BsColor.inkMuted, BsColor.inkFaint.opacity(0.2))
         case .archived:
-            return ("Archived", Color.Brand.textSecondary, Color.gray.opacity(0.10))
+            return ("归档", BsColor.inkMuted, BsColor.inkFaint.opacity(0.15))
         }
     }
 
-    /// "0 tasks" / "1 task" / "N tasks" with simple English pluralization. Foundation-scope
-    /// copy — locale-aware pluralization is future work once iOS picks up i18n.
+    /// D.2a: Chinese units, no pluralization needed.
     private static func taskCountLabel(_ count: Int) -> String {
-        count == 1 ? "1 task" : "\(count) tasks"
+        "\(count) 个任务"
     }
 
+    // D.2a: Chinese date format matching Web `toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })`.
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM d, yyyy"
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "M月d日"
+        f.locale = Locale(identifier: "zh_CN")
         return f
     }()
 
@@ -160,7 +164,7 @@ public struct ProjectCardView: View {
             }
             .frame(width: diameter, height: diameter)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.Brand.primaryLight.opacity(0.35), lineWidth: 0.5))
+            .overlay(Circle().stroke(BsColor.brandAzureLight.opacity(0.35), lineWidth: 0.5))
         } else {
             avatarPlaceholder
                 .frame(width: diameter, height: diameter)
@@ -171,6 +175,6 @@ public struct ProjectCardView: View {
         Image(systemName: "person.crop.circle.fill")
             .resizable()
             .scaledToFit()
-            .foregroundColor(Color.Brand.textSecondary.opacity(0.7))
+            .foregroundColor(BsColor.inkMuted.opacity(0.8))
     }
 }

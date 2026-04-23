@@ -11,10 +11,21 @@ public struct ActionItemHelper {
             TaskListView(viewModel: TaskListViewModel(client: supabase))
         case .projects:
             ProjectListView(viewModel: ProjectListViewModel(client: supabase))
+        case .okr:
+            // Phase 2.3 — read-only OKR list + detail ported from
+            // BrainStorm+-Web/src/app/dashboard/okr. Create/edit/check-in
+            // are deliberately out of scope this pass.
+            OKRListView(viewModel: OKRListViewModel(client: supabase))
         case .daily, .weekly:
             ReportingListView(viewModel: ReportingViewModel(client: supabase))
         case .schedules:
             ScheduleView()
+        case .leaves:
+            // Phase 2.2 — balance + history center (read-only user view).
+            // Submission modal is presented from inside LeavesView via
+            // the existing `LeaveSubmitView`; the approval queue is a
+            // separate destination under `.approval`.
+            LeavesView(client: supabase)
         case .attendance:
             AttendanceView()
         case .chat:
@@ -27,12 +38,46 @@ public struct ActionItemHelper {
             ApprovalCenterView(client: supabase)
         case .knowledge:
             KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase))
+        case .team:
+            TeamDirectoryView()
+        case .announcements:
+            AnnouncementsListView(viewModel: AnnouncementsListViewModel(client: supabase))
+        case .deliverables:
+            // Phase 2.1 — iOS list+detail; Phase 6.3 补齐 create 流
+            // (DeliverableCreateSheet via toolbar "+" and empty-state CTA).
+            DeliverableListView(viewModel: DeliverableListViewModel(client: supabase))
         case .notifications:
             NotificationListView(viewModel: NotificationListViewModel(client: supabase))
+        case .activity:
+            // Phase 3 — 1:1 port of BrainStorm+-Web/src/app/dashboard/activity.
+            // Read-only feed reachable from the Communication quick-link tile
+            // (DashboardRoleSections.swift L160) or the sidebar.
+            ActivityFeedView(viewModel: ActivityFeedViewModel(client: supabase))
         case .payroll:
             PayrollListView(viewModel: PayrollListViewModel(client: supabase))
+        case .hiring:
+            // Phase 4.4 — 1:1 port of BrainStorm+-Web/src/app/dashboard/hiring.
+            // Capability gate (hr_ops / admin+) lives inside HiringCenterView
+            // so sidebar / quick-action tiles can link unconditionally.
+            HiringCenterView()
+        case .finance:
+            // Phase 4.3 + 5.3 — 1:1 port of
+            // BrainStorm+-Web/src/app/dashboard/finance. Submit action goes
+            // through POST /api/mobile/finance/ai-process; history + chart +
+            // structured-output viewer all live-fed from ai_work_records.
+            FinanceView(client: supabase)
         case .settings:
             SettingsView()
+        case .aiAnalysis:
+            // Phase 4.2 — 1:1 port of
+            // BrainStorm+-Web/src/app/dashboard/ai-analysis/page.tsx.
+            // Streams `/api/ai/analyze` SSE and renders the intel-card report.
+            AIAnalysisView()
+        case .admin:
+            // Phase 4.1 — 1:1 port of BrainStorm+-Web/src/app/dashboard/admin.
+            // 子模块：用户 / 组织 / 公休 / 广播 / 审计；创建用户受 service_role
+            // 限制仍需 Web 端操作（见 AdminUserCreateSheet 注释）。
+            AdminCenterView()
         default:
             ParityBacklogDestination(moduleName: module.displayName, webRoute: module.webRoute)
         }
@@ -59,6 +104,7 @@ public struct ActionItemHelper {
         if normalized.contains("task") { return .tasks }
         if normalized.contains("project") { return .projects }
         if normalized.contains("okr") { return .okr }
+        if normalized.contains("deliverable") { return .deliverables }
         if normalized.contains("daily") { return .daily }
         if normalized.contains("weekly") { return .weekly }
         if normalized.contains("approval") { return .approval }
@@ -78,6 +124,7 @@ public struct ActionItemHelper {
         if normalized.contains("admin") { return .admin }
         if normalized.contains("finance") { return .finance }
         if normalized.contains("analytics") { return .analytics }
+        if normalized.contains("ai") { return .aiAnalysis }
         return nil
     }
 }

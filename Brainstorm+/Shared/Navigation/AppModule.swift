@@ -111,11 +111,19 @@ public enum AppModule: String, CaseIterable, Identifiable {
     
     public var implementationStatus: AppImplementationStatus {
         switch self {
-        case .tasks, .daily, .weekly, .schedules, .attendance, .chat, .knowledge, .notifications, .payroll, .settings:
+        case .tasks, .daily, .weekly, .schedules, .attendance, .chat, .knowledge, .notifications, .payroll, .settings, .leaves, .activity, .announcements, .team:
             return .implemented
-        case .okr, .leaves:
-            return .backlog
+        case .okr:
+            // Phase 2.3 — list + detail shipped (read-only); create/edit/check-in deferred.
+            return .partial
         case .projects:
+            return .partial
+        case .deliverables:
+            // Phase 2.1 — list + detail shipped; create/edit deferred.
+            return .partial
+        case .finance:
+            // Phase 4.3 — read-only viewer for ai_work_records + charts.
+            // Submit/orchestrator wiring deferred (TODO finance-ai-orchestrator-bridge).
             return .partial
         default:
             return .backlog
@@ -136,8 +144,6 @@ public enum AppModule: String, CaseIterable, Identifiable {
         switch self {
         case .approval, .request:
             return [.approval_access]
-        case .leaves:
-            return [.leave_approval] // Minimum for managing, though default view might be empty constraints
         case .hiring:
             return [.recruitment_approval]
         case .aiAnalysis:
@@ -148,7 +154,10 @@ public enum AppModule: String, CaseIterable, Identifiable {
             return [.role_policy_admin] 
         case .payroll:
             return [.finance_ops]
-        case .settings, .tasks, .projects, .okr, .deliverables, .daily, .weekly, .schedules, .attendance, .team, .chat, .announcements, .knowledge, .notifications, .activity, .analytics:
+        case .settings, .tasks, .projects, .okr, .deliverables, .daily, .weekly, .schedules, .leaves, .attendance, .team, .chat, .announcements, .knowledge, .notifications, .activity, .analytics:
+            // `.leaves` is the user-facing balance + history center
+            // (Phase 2.2). Every employee can view their own quotas;
+            // manager-side bulk view lives behind `.approval` / HR caps.
             return [] // Base features requiring minimal capabilities mapped out.
         }
     }

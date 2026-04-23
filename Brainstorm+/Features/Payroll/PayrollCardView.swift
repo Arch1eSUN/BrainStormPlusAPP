@@ -2,129 +2,135 @@ import SwiftUI
 
 public struct PayrollCardView: View {
     public let payroll: PayrollRecord
-    
+
     public init(payroll: PayrollRecord) {
         self.payroll = payroll
     }
-    
+
     public var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text(payroll.period)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                Spacer()
-                statusTag(status: payroll.status)
-            }
-            
-            VStack(spacing: 8) {
-                row(title: "Base Salary", amount: payroll.baseSalary)
-                
-                if let allowances = payroll.allowances, allowances > 0 {
-                    row(title: "Allowances", amount: allowances)
-                }
-                
-                if payroll.bonus > 0 {
-                    row(title: "Bonus", amount: payroll.bonus)
-                }
-                
-                if payroll.deductions > 0 {
-                    row(title: "Total Deductions", amount: payroll.deductions, isNegative: true)
-                }
-                
-                if let late = payroll.latePenalty, late > 0 {
-                    row(title: " • Late Penalty", amount: late, isNegative: true, isSub: true)
-                }
-                
-                if let early = payroll.earlyLeavePenalty, early > 0 {
-                    row(title: " • Early Leave Penalty", amount: early, isNegative: true, isSub: true)
-                }
-                
-                if let missed = payroll.missedClockPenalty, missed > 0 {
-                    row(title: " • Missed Clock Penalty", amount: missed, isNegative: true, isSub: true)
-                }
-                
-                if let absent = payroll.absentPenalty, absent > 0 {
-                    row(title: " • Absent Penalty", amount: absent, isNegative: true, isSub: true)
-                }
-                
-                if let leaveM = payroll.leaveDeduction, leaveM > 0 {
-                    row(title: " • Unpaid Leave", amount: leaveM, isNegative: true, isSub: true)
-                }
-                
-                Divider()
-                    .background(Color.secondary.opacity(0.3))
-                
+        BsCard(variant: .flat, padding: .medium) {
+            VStack(spacing: BsSpacing.lg) {
                 HStack {
-                    if let attDays = payroll.attendanceDays {
-                       Text("Net Pay (\(attDays) attendance days)")
-                           .font(.footnote)
-                           .foregroundColor(.secondary)
-                    } else {
-                       Text("Net Pay")
-                           .font(.headline)
-                           .fontWeight(.semibold)
+                    Text(payroll.period)
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(BsColor.ink)
+                    Spacer()
+                    statusTag(status: payroll.status)
+                }
+
+                VStack(spacing: BsSpacing.sm) {
+                    row(title: "基本工资", amount: payroll.baseSalary)
+
+                    if let allowances = payroll.allowances, allowances > 0 {
+                        row(title: "津贴补助", amount: allowances)
                     }
-                    Spacer()
-                    Text("¥\(payroll.netPay as NSNumber, formatter: currencyFormatter)")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
+
+                    if payroll.bonus > 0 {
+                        row(title: "奖金", amount: payroll.bonus)
+                    }
+
+                    if payroll.deductions > 0 {
+                        row(title: "扣款合计", amount: payroll.deductions, isNegative: true)
+                    }
+
+                    if let late = payroll.latePenalty, late > 0 {
+                        row(title: " • 迟到扣款", amount: late, isNegative: true, isSub: true)
+                    }
+
+                    if let early = payroll.earlyLeavePenalty, early > 0 {
+                        row(title: " • 早退扣款", amount: early, isNegative: true, isSub: true)
+                    }
+
+                    if let missed = payroll.missedClockPenalty, missed > 0 {
+                        row(title: " • 漏打卡扣款", amount: missed, isNegative: true, isSub: true)
+                    }
+
+                    if let absent = payroll.absentPenalty, absent > 0 {
+                        row(title: " • 缺勤扣款", amount: absent, isNegative: true, isSub: true)
+                    }
+
+                    if let leaveM = payroll.leaveDeduction, leaveM > 0 {
+                        row(title: " • 无薪假扣款", amount: leaveM, isNegative: true, isSub: true)
+                    }
+
+                    Divider()
+                        .background(BsColor.borderSubtle)
+
+                    HStack {
+                        if let attDays = payroll.attendanceDays {
+                            Text("实发工资（出勤 \(attDays) 天）")
+                                .font(BsTypography.captionSmall)
+                                .foregroundStyle(BsColor.inkMuted)
+                        } else {
+                            Text("实发工资")
+                                .font(BsTypography.cardTitle)
+                                .foregroundStyle(BsColor.ink)
+                        }
+                        Spacer()
+                        Text("¥\(payroll.netPay as NSNumber, formatter: currencyFormatter)")
+                            .font(BsTypography.statMedium)
+                            .foregroundStyle(BsColor.ink)
+                    }
                 }
-            }
-            
-            if let paidAt = payroll.paidAt {
-                HStack {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(.green)
-                    Text("Paid on \(paidAt, style: .date)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
+
+                if let paidAt = payroll.paidAt {
+                    HStack {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(BsColor.success)
+                        Text("发放于 \(paidAt, style: .date)")
+                            .font(BsTypography.caption)
+                            .foregroundStyle(BsColor.inkMuted)
+                        Spacer()
+                    }
+                } else {
+                    Text("此为预估金额，最终薪资可能根据 KPI 等指标调整。")
+                        .font(BsTypography.meta)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
-            } else {
-                Text("Pre-calculation. Final salary may change based on KPIs.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
-    
+
     private func row(title: String, amount: Decimal, isNegative: Bool = false, isSub: Bool = false) -> some View {
         HStack {
             Text(title)
-                .font(.subheadline)
-                .foregroundColor(isSub ? .secondary.opacity(0.8) : .secondary)
+                .font(BsTypography.bodySmall)
+                .foregroundStyle(isSub ? BsColor.inkFaint : BsColor.inkMuted)
             Spacer()
             Text("\(isNegative ? "-" : "+")¥\(amount as NSNumber, formatter: currencyFormatter)")
-                .font(.subheadline)
-                .foregroundColor(isNegative ? .red : .primary)
+                .font(BsTypography.statSmall)
+                .foregroundStyle(isNegative ? BsColor.danger : BsColor.ink)
         }
     }
-    
+
     @ViewBuilder
     private func statusTag(status: PayrollRecord.PayrollStatus) -> some View {
-        Text(status.rawValue.capitalized)
-            .font(.caption2)
-            .fontWeight(.bold)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+        Text(statusLabel(status))
+            .font(BsTypography.meta)
+            .padding(.horizontal, BsSpacing.sm + 2)
+            .padding(.vertical, BsSpacing.xs + 2)
             .background(statusColor(status).opacity(0.2))
-            .foregroundColor(statusColor(status))
+            .foregroundStyle(statusColor(status))
             .clipShape(Capsule())
     }
-    
-    private func statusColor(_ status: PayrollRecord.PayrollStatus) -> Color {
+
+    private func statusLabel(_ status: PayrollRecord.PayrollStatus) -> String {
         switch status {
-        case .draft: return .gray
-        case .processing: return .blue
-        case .paid, .confirmed: return .green
+        case .draft: return "草稿"
+        case .processing: return "处理中"
+        case .paid: return "已发放"
+        case .confirmed: return "已确认"
         }
     }
-    
+
+    private func statusColor(_ status: PayrollRecord.PayrollStatus) -> Color {
+        switch status {
+        case .draft: return BsColor.inkMuted
+        case .processing: return BsColor.brandAzure
+        case .paid, .confirmed: return BsColor.success
+        }
+    }
+
     private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal

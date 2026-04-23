@@ -2,10 +2,10 @@ import SwiftUI
 import Supabase
 
 /// Sprint 4.3 — Approval module root. Replaces the direct
-/// `ApprovalsListView` route (from 4.1) with a 7-tab shell:
+/// `ApprovalsListView` route (from 4.1) with a multi-tab shell:
 ///
 ///   - 我提交的 (mine) → `ApprovalsListView` + `MySubmissionsViewModel`
-///   - 请假 / 外勤 / 出差 / 报销/采购 / 日报/周报 / 通用
+///   - 请假 / 外勤 / 出差 / 报销+采购 / 通用
 ///     → `ApprovalQueueView(kind:)` + `ApprovalQueueViewModel`
 ///
 /// Sprint 4.4 — "+" toolbar button opens a type-picker sheet, which
@@ -14,34 +14,26 @@ import Supabase
 /// "我提交的" list and switch to that tab — the user immediately sees
 /// their new row.
 ///
-/// Parity target: Web `src/app/dashboard/approval/page.tsx`. Deltas:
+/// Batch C.1 — 5 P1 parity items landed:
+///   1. Capabilities gating: only render queue tabs the viewer can
+///      actually act on (matches Web's `canApprove` +
+///      `APPROVAL_TYPE_CAPABILITY_MAP`). Ordinary employees see only
+///      `mine`.
+///   2. Default tab: approvers land on their first visible pending
+///      queue, non-approvers on `mine` (matches Web page.tsx:54).
+///   3. Pending badges: red 99+-capped pill per queue tab, driven by
+///      a head-only count query per visible kind on appear.
 ///
-///   - Web hides approver tabs when
-///     `!hasAnyCapability(capabilities, ALL_APPROVAL_CAPABILITIES)`.
-///     iOS does *not* do this gate client-side yet — RLS + the RPC
-///     enforce the actual permission boundary on the server, so a
-///     non-approver sees empty queues but can't act. A future polish
-///     pass can fetch `profiles.capabilities` and hide the pills
-///     they'll never see rows in; deferred to keep 4.3 scoped.
-///   - Web lands approvers on the first pending queue, non-approvers
-///     on `mine`. iOS starts on `mine` for everyone — simpler default,
-///     and the pills are one tap away.
-///   - Badge counts (pending per tab) are skipped this sprint. They
-///     need either 6 parallel fetches on mount or a single
-///     `GROUP BY request_type` count query. Revisit as a polish item.
-///   - 4.4 adds only 4 submit types (the MVP set). Business trip,
-///     daily/weekly log submission, generic, attendance exception are
-///     all deferred — business trip is a separate domain model,
-///     daily/weekly flow through a different pipeline, generic has no
-///     server-side RPC yet.
-///
-/// Owning the `NavigationStack` here means both `ApprovalsListView`
-/// and `ApprovalQueueView` can push `ApprovalDetailView` the same
-/// way — both use value-based `NavigationLink(value: UUID)` with the
-/// `.navigationDestination(for: UUID.self)` registered on this view.
+/// Parity target: Web `src/app/dashboard/approval/page.tsx`. Remaining
+/// deltas (carried forward):
+///   - AI assist audit list deferred.
+///   - Web page renders badges with a framer-motion spring scale-in
+///     on count change; iOS uses a plain `.contentTransition(.numericText())`
+///     + implicit Spring animation via `.animation(.spring, value:)` —
+///     equivalent feel, Apple-native motion stack.
 public struct ApprovalCenterView: View {
 
-    // Top-level tab enum. `mine` is special-cased; the 6 queue tabs
+    // Top-level tab enum. `mine` is special-cased; the queue tabs
     // share a single case with the kind as associated value so we can
     // iterate cleanly in the pill bar.
     public enum Tab: Hashable, Identifiable {
@@ -61,18 +53,20 @@ public struct ApprovalCenterView: View {
             case .queue(let k): return k.displayLabel
             }
         }
-
-        /// The ordered list rendered by the pill bar.
-        public static let all: [Tab] = {
-            var items: [Tab] = [.mine]
-            items.append(contentsOf: ApprovalQueueKind.allCases.map { .queue($0) })
-            return items
-        }()
     }
 
+    @Environment(SessionManager.self) private var sessionManager
     @State private var selectedTab: Tab = .mine
     @State private var showTypePicker: Bool = false
     @State private var pendingSubmitKind: ApprovalSubmitKind?
+    @State private var pendingCounts: [ApprovalQueueKind: Int] = [:]
+    @State private var didApplyInitialDefault: Bool = false
+    /// Phase 24 — shared zoom namespace for row → detail push. Rows in
+    /// `ApprovalsListView` / `ApprovalQueueView` call
+    /// `matchedTransitionSource(id: row.id, in: zoomNamespace)`; the
+    /// `.navigationDestination(for: UUID.self)` registered below uses
+    /// the same id to drive `.navigationTransition(.zoom(…))`.
+    @Namespace private var zoomNamespace
     private let client: SupabaseClient
 
     // Hoisted so submit-success handlers can call `listMySubmissions()`
@@ -86,27 +80,67 @@ public struct ApprovalCenterView: View {
         _mineViewModel = StateObject(wrappedValue: MySubmissionsViewModel(client: client))
     }
 
+    // MARK: - Capability-filtered tab list
+
+    /// Effective capabilities of the current viewer (role defaults +
+    /// explicit assignments − excluded). Computed per-render so that
+    /// a profile refresh in `SessionManager` re-evaluates the gate.
+    private var effectiveCapabilities: [Capability] {
+        RBACManager.shared.getEffectiveCapabilities(for: sessionManager.currentProfile)
+    }
+
+    /// Whether the viewer holds ANY of the 11 approval caps. Mirrors
+    /// Web `hasAnyCapability(capabilities, ALL_APPROVAL_CAPABILITIES)`
+    /// (page.tsx:51).
+    private var canApprove: Bool {
+        hasAnyApprovalCapability(effectiveCapabilities)
+    }
+
+    /// Visible queue kinds in pill-bar order. A queue is visible iff
+    /// the viewer has ANY of its `requiredCapabilities`.
+    private var visibleQueueKinds: [ApprovalQueueKind] {
+        ApprovalQueueKind.allCases.filter { kind in
+            hasAnyCapability(effectiveCapabilities, required: kind.requiredCapabilities)
+        }
+    }
+
+    /// Full ordered list rendered by the pill bar: `mine` always
+    /// leads; approver queues append only when the viewer holds the
+    /// matching capability.
+    private var visibleTabs: [Tab] {
+        [.mine] + visibleQueueKinds.map { .queue($0) }
+    }
+
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                tabPillBar
-                Divider().opacity(0.4)
-                tabContent
+            ZStack {
+                BsAmbientBackground()
+                    .ignoresSafeArea()
+                VStack(spacing: 0) {
+                    tabPillBar
+                    Divider().opacity(0.4)
+                    tabContent
+                }
             }
             .navigationTitle("审批中心")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showTypePicker = true
                     } label: {
                         Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(BsColor.brandAzure)
+                            .frame(width: 32, height: 32)
+                            .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(), in: Circle())
                     }
                     .accessibilityLabel("新建审批")
                 }
             }
             .navigationDestination(for: UUID.self) { id in
                 ApprovalDetailView(requestId: id, client: client)
+                    .navigationTransition(.zoom(sourceID: id, in: zoomNamespace))
             }
             // Type picker → sets `pendingSubmitKind` on selection; that
             // drives the per-type sheet below via `.sheet(item:)`.
@@ -120,6 +154,23 @@ public struct ApprovalCenterView: View {
             .sheet(item: $pendingSubmitKind) { kind in
                 submitSheet(for: kind)
             }
+            .task {
+                // Default-tab parity: Web (page.tsx:54) lands approvers
+                // on the first pending queue and non-approvers on
+                // `mine`. We apply this once on first appearance — a
+                // subsequent capability toggle shouldn't silently jump
+                // the user off their current tab.
+                if !didApplyInitialDefault {
+                    didApplyInitialDefault = true
+                    if canApprove, let firstQueue = visibleQueueKinds.first {
+                        selectedTab = .queue(firstQueue)
+                    }
+                    await refreshAllPendingCounts()
+                }
+            }
+            .refreshable {
+                await refreshAllPendingCounts()
+            }
         }
     }
 
@@ -129,7 +180,7 @@ public struct ApprovalCenterView: View {
     private var tabPillBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Tab.all) { tab in
+                ForEach(visibleTabs) { tab in
                     pillButton(tab)
                 }
             }
@@ -144,18 +195,51 @@ public struct ApprovalCenterView: View {
         Button {
             selectedTab = tab
         } label: {
-            Text(tab.displayLabel)
-                .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    Capsule().fill(
-                        isSelected ? Color.accentColor : Color(.secondarySystemBackground)
-                    )
-                )
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
+            HStack(spacing: 6) {
+                Text(tab.displayLabel)
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
+
+                if case .queue(let kind) = tab,
+                   let count = pendingCounts[kind], count > 0 {
+                    pendingBadge(count: count, onDark: isSelected)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.ink)
+            .glassEffect(
+                isSelected
+                    ? .regular.tint(BsColor.brandAzure.opacity(0.28)).interactive()
+                    : .regular.interactive(),
+                in: Capsule()
+            )
         }
         .buttonStyle(.plain)
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: pendingCounts)
+    }
+
+    /// Red 99+-capped badge. Mirrors Web page.tsx:147-158 — min-width
+    /// 18pt circle, white bold text, shadowing ring. We use
+    /// `.contentTransition(.numericText())` so count changes animate
+    /// as tick-ups rather than abrupt swaps, closest native analog to
+    /// Web's framer-motion spring scale-in on `key={count}`.
+    @ViewBuilder
+    private func pendingBadge(count: Int, onDark: Bool) -> some View {
+        Text(count > 99 ? "99+" : "\(count)")
+            .font(.caption2.bold())
+            .foregroundStyle(.white)
+            .contentTransition(.numericText())
+            .padding(.horizontal, 5)
+            .frame(minWidth: 18, minHeight: 18)
+            .glassEffect(.regular.tint(BsColor.danger.opacity(0.85)), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        onDark ? Color.white.opacity(0.75) : Color(.systemBackground),
+                        lineWidth: 1.5
+                    )
+            )
+            .accessibilityLabel("\(count) 条待审批")
     }
 
     // MARK: - Content
@@ -173,15 +257,22 @@ public struct ApprovalCenterView: View {
             // view, so the behavior is identical either way.
             ApprovalsListView(
                 viewModel: mineViewModel,
-                client: client
+                client: client,
+                zoomNamespace: zoomNamespace
             )
         case .queue(let kind):
             // Keying the view identity on `kind` means switching tabs
             // creates a fresh `ApprovalQueueViewModel` each time
             // (lazy load on first view; the refreshable gesture lets
-            // the user reload without leaving the tab).
-            ApprovalQueueView(kind: kind, client: client)
+            // the user reload without leaving the tab). After the
+            // queue VM's load settles, we refresh this queue's
+            // pending badge so the header stays truthy.
+            ApprovalQueueView(kind: kind, client: client, zoomNamespace: zoomNamespace)
                 .id(kind.rawValue)
+                .task(id: kind.rawValue) {
+                    pendingCounts[kind] = await ApprovalQueueViewModel
+                        .fetchPendingCount(kind: kind, client: client)
+                }
         }
     }
 
@@ -206,6 +297,17 @@ public struct ApprovalCenterView: View {
             FieldWorkSubmitView(client: client) { _ in
                 handleSubmitted()
             }
+        case .businessTrip:
+            // Batch B.3 — direct-insert submit, no RPC. Parent still
+            // dispatches to `handleSubmitted` so the "我提交的" tab
+            // gets refreshed; however note that business_trip_requests
+            // rows don't land in `approval_requests`, so the mine list
+            // won't surface them unless it's extended to join this
+            // table. That's an existing limitation — the approver
+            // queue tab already shows them via ApprovalQueueKind.businessTrip.
+            BusinessTripSubmitView(client: client) { _ in
+                handleSubmitted()
+            }
         }
     }
 
@@ -216,10 +318,45 @@ public struct ApprovalCenterView: View {
         selectedTab = .mine
         Task {
             await mineViewModel.listMySubmissions()
+            // Refresh badges too — the submitter may also be an
+            // approver of the same type, in which case the new row
+            // lands in their own queue via a parallel code path.
+            await refreshAllPendingCounts()
+        }
+    }
+
+    // MARK: - Badge refresh
+
+    /// Runs N parallel head-count queries (one per visible queue) in
+    /// a TaskGroup. 5 queries is cheap enough to not need batching —
+    /// the alternative (a single `GROUP BY request_type` count) would
+    /// require a dedicated RPC because PostgREST only returns the
+    /// GROUP keys via `.select("request_type, count:id")` which isn't
+    /// exact-count-aware; sticking to parallel HEADs for now.
+    private func refreshAllPendingCounts() async {
+        let kinds = visibleQueueKinds
+        guard !kinds.isEmpty else { return }
+
+        await withTaskGroup(of: (ApprovalQueueKind, Int).self) { group in
+            for kind in kinds {
+                group.addTask {
+                    let n = await ApprovalQueueViewModel.fetchPendingCount(
+                        kind: kind,
+                        client: client
+                    )
+                    return (kind, n)
+                }
+            }
+            for await (kind, n) in group {
+                await MainActor.run {
+                    pendingCounts[kind] = n
+                }
+            }
         }
     }
 }
 
 #Preview {
     ApprovalCenterView(client: supabase)
+        .environment(SessionManager())
 }

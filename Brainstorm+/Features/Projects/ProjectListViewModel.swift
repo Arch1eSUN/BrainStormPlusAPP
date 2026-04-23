@@ -152,7 +152,7 @@ public class ProjectListViewModel: ObservableObject {
             // soft (see `taskCountsErrorMessage`) and never touches the main list fetch.
             await refreshTaskCountsForCurrentProjects()
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
 
         isLoading = false
@@ -240,7 +240,7 @@ public class ProjectListViewModel: ObservableObject {
         } catch {
             // Keep the project rows visible with UUID-fallback cards; surface a soft error.
             self.ownersById = [:]
-            self.ownersErrorMessage = error.localizedDescription
+            self.ownersErrorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -294,7 +294,7 @@ public class ProjectListViewModel: ObservableObject {
         } catch {
             // Keep project rows visible; cards will hide the count line via the nil fallback.
             self.taskCountsByProject = [:]
-            self.taskCountsErrorMessage = error.localizedDescription
+            self.taskCountsErrorMessage = ErrorLocalizer.localize(error)
         }
     }
 
@@ -325,7 +325,7 @@ public class ProjectListViewModel: ObservableObject {
             isDeleting = false
             return true
         } catch {
-            deleteErrorMessage = error.localizedDescription
+            deleteErrorMessage = ErrorLocalizer.localize(error)
             isDeleting = false
             return false
         }

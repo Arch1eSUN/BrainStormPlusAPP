@@ -25,17 +25,17 @@ public struct UserPickerView: View {
         VStack(spacing: 0) {
             TextField("搜索同事", text: $searchText)
                 .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-                .padding(.top, 8)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.top, BsSpacing.sm)
                 .onChange(of: searchText) { _, newValue in
                     scheduleSearch(query: newValue)
                 }
 
             if isLoading && users.isEmpty {
-                ProgressView().padding(.top, 24)
+                ProgressView().padding(.top, BsSpacing.xl)
                 Spacer()
             } else if users.isEmpty {
-                ContentUnavailableView("未找到用户", systemImage: "person.slash")
+                BsEmptyState(title: "未找到用户", systemImage: "person.slash")
                 Spacer()
             } else {
                 List(users) { user in
@@ -51,9 +51,9 @@ public struct UserPickerView: View {
 
             if let error = errorMessage {
                 Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding()
+                    .font(BsTypography.caption)
+                    .foregroundStyle(BsColor.danger)
+                    .padding(BsSpacing.lg)
             }
         }
         .task {
@@ -63,36 +63,36 @@ public struct UserPickerView: View {
 
     @ViewBuilder
     private func row(for user: Profile) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             ZStack {
                 Circle()
-                    .fill(Color.blue.opacity(0.15))
+                    .fill(BsColor.brandAzure.opacity(0.15))
                     .frame(width: 40, height: 40)
                 Text(initials(for: user))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.blue)
+                    .font(BsTypography.cardSubtitle)
+                    .foregroundStyle(BsColor.brandAzure)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName(for: user))
-                    .font(.body)
-                    .foregroundStyle(.primary)
+                    .font(BsTypography.body)
+                    .foregroundStyle(BsColor.ink)
                 if let dept = user.department, !dept.isEmpty {
                     Text(dept)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(BsTypography.caption)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             Spacer()
             if selectedUserIds.contains(user.id) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(BsColor.brandAzure)
             } else {
                 Image(systemName: "circle")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
         .contentShape(Rectangle())
-        .padding(.vertical, 4)
+        .padding(.vertical, BsSpacing.xs)
     }
 
     private func toggle(_ id: UUID) {
@@ -132,7 +132,7 @@ public struct UserPickerView: View {
             let fetched = try await viewModel.fetchUsers(search: query)
             users = fetched
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorLocalizer.localize(error)
         }
     }
 }

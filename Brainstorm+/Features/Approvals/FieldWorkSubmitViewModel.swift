@@ -42,6 +42,17 @@ public final class FieldWorkSubmitViewModel: ObservableObject {
         self.client = client
     }
 
+    /// Batch C.3 — quick-apply overload. Accepts a caller-supplied start
+    /// date; clamped to the "at least 1 day ahead" minimum so the form
+    /// doesn't open in an invalid state (the server rule is enforced
+    /// either way, this just keeps the default pleasant).
+    public convenience init(client: SupabaseClient, initialDate: Date) {
+        self.init(client: client)
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
+        self.targetDate = max(initialDate, tomorrow)
+    }
+
     // MARK: - Derived
 
     /// Matches the server's "at least 1 day ahead" rule. Uses UTC for

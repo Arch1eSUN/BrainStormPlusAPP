@@ -29,7 +29,7 @@ public class NotificationListViewModel: ObservableObject {
                 .execute()
                 .value
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
         isLoading = false
     }
@@ -58,7 +58,7 @@ public class NotificationListViewModel: ObservableObject {
             }
             
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
     
@@ -81,7 +81,7 @@ public class NotificationListViewModel: ObservableObject {
                 
             await fetchNotifications()
         } catch {
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
 }

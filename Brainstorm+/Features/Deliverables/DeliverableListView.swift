@@ -1,0 +1,400 @@
+import SwiftUI
+import Supabase
+
+// ══════════════════════════════════════════════════════════════════
+// Phase 2.1 — Deliverables list view.
+//
+// 1:1 surface port of
+// `BrainStorm+-Web/src/app/dashboard/deliverables/page.tsx` minus the
+// create/edit dialogs (scope is list + detail this pass — see batch
+// brief). iOS-specific deviations:
+//   • The Web page mixes filters + search + stats on a single scroll
+//     container. On iOS we fold the stats into a compact row and put
+//     the filter controls inside a collapsible section to keep the
+//     nav bar usable on iPhone SE-class widths.
+//   • Platform detection for the external link chip reuses the same
+//     regexes Web uses (page.tsx:23-36) so the UX — "Google Drive /
+//     百度网盘 / 夸克网盘" — reads identically to Web.
+//   • Create is shipped via `DeliverableCreateSheet` (see Phase 2.1
+//     follow-up — the sheet mirrors Web's "新建交付物" dialog at
+//     page.tsx:199-254). Edit + delete stay out of scope for this
+//     pass.
+// ══════════════════════════════════════════════════════════════════
+
+public struct DeliverableListView: View {
+    @StateObject private var viewModel: DeliverableListViewModel
+    @State private var showFilters: Bool = false
+    @State private var showCreateSheet: Bool = false
+
+    public init(viewModel: DeliverableListViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    public var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.isLoading && viewModel.items.isEmpty {
+                    ProgressView()
+                } else {
+                    content
+                }
+            }
+            .navigationTitle("交付物")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showCreateSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("新建交付物")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showFilters.toggle()
+                        }
+                    } label: {
+                        Image(systemName: showFilters
+                              ? "line.3.horizontal.decrease.circle.fill"
+                              : "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityLabel("筛选")
+                }
+            }
+            .sheet(isPresented: $showCreateSheet) {
+                DeliverableCreateSheet(viewModel: viewModel)
+            }
+            .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
+            .onSubmit(of: .search) {
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.searchText) { old, new in
+                // Web reloads on every keystroke; we reload on "clear"
+                // (the native x button fires no onSubmit) and keep the
+                // explicit submit for typed-in queries. Matches the
+                // KnowledgeListView pattern.
+                if !old.isEmpty, new.isEmpty {
+                    Task { await viewModel.reloadItems() }
+                }
+            }
+            .onChange(of: viewModel.statusFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.projectFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.assigneeFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.dateFrom) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.dateTo) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .refreshable {
+                await viewModel.loadAll()
+            }
+            .task {
+                await viewModel.loadAll()
+            }
+            .zyErrorBanner($viewModel.errorMessage)
+        }
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                statsRow
+                statusChipRow
+                if showFilters {
+                    advancedFilters
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if viewModel.filteredItems.isEmpty {
+                    VStack(spacing: 16) {
+                        ContentUnavailableView(
+                            "暂无交付物",
+                            systemImage: "shippingbox",
+                            description: Text(emptyDescription)
+                        )
+                        // Mirrors Web's gradient CTA at page.tsx:202 — the
+                        // empty state gives users a direct entry into the
+                        // create flow without hunting for the toolbar.
+                        Button {
+                            showCreateSheet = true
+                        } label: {
+                            Label("新建交付物", systemImage: "plus")
+                                .font(BsTypography.inter(15, weight: "SemiBold"))
+                                .padding(.horizontal, BsSpacing.lg)
+                                .padding(.vertical, BsSpacing.md - 2)
+                                .background(BsColor.brandAzure)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.top, 40)
+                } else {
+                    list
+                }
+            }
+            .padding(.vertical)
+        }
+    }
+
+    @ViewBuilder
+    private var statsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(viewModel.statusCounts[s] ?? 0)")
+                            .font(.title3.weight(.bold))
+                        Text(s.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var statusChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(label: "全部", isSelected: viewModel.statusFilter == nil) {
+                    viewModel.statusFilter = nil
+                }
+                ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
+                    chip(label: s.displayName, isSelected: viewModel.statusFilter == s) {
+                        viewModel.statusFilter = s
+                    }
+                }
+                Divider().frame(height: 16)
+                chip(label: "仅我负责", isSelected: viewModel.onlyMine) {
+                    viewModel.onlyMine.toggle()
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    @ViewBuilder
+    private var advancedFilters: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("项目")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    Button("所有项目") { viewModel.projectFilter = nil }
+                    ForEach(viewModel.projects, id: \.id) { p in
+                        if let pid = p.id {
+                            Button(p.name ?? "(未命名)") { viewModel.projectFilter = pid }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(projectFilterLabel)
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .font(.caption)
+                }
+            }
+            HStack {
+                Text("负责人")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Menu {
+                    Button("所有人") { viewModel.assigneeFilter = nil }
+                    ForEach(viewModel.members, id: \.id) { m in
+                        if let mid = m.id {
+                            Button(m.fullName ?? "未命名") { viewModel.assigneeFilter = mid }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(assigneeFilterLabel)
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .font(.caption)
+                }
+            }
+            HStack {
+                DatePicker(
+                    "开始",
+                    selection: Binding(
+                        get: { viewModel.dateFrom ?? Date() },
+                        set: { viewModel.dateFrom = $0 }
+                    ),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .font(.caption)
+                Text("—")
+                    .foregroundStyle(.tertiary)
+                DatePicker(
+                    "结束",
+                    selection: Binding(
+                        get: { viewModel.dateTo ?? Date() },
+                        set: { viewModel.dateTo = $0 }
+                    ),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .font(.caption)
+                Spacer()
+                if viewModel.dateFrom != nil || viewModel.dateTo != nil
+                    || viewModel.projectFilter != nil || viewModel.assigneeFilter != nil {
+                    Button("清除") {
+                        viewModel.dateFrom = nil
+                        viewModel.dateTo = nil
+                        viewModel.projectFilter = nil
+                        viewModel.assigneeFilter = nil
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var projectFilterLabel: String {
+        guard let pid = viewModel.projectFilter else { return "所有项目" }
+        return viewModel.projects.first(where: { $0.id == pid })?.name ?? "所有项目"
+    }
+
+    private var assigneeFilterLabel: String {
+        guard let aid = viewModel.assigneeFilter else { return "所有人" }
+        return viewModel.members.first(where: { $0.id == aid })?.fullName ?? "所有人"
+    }
+
+    private var emptyDescription: String {
+        let hasFilter = !viewModel.searchText.isEmpty
+            || viewModel.statusFilter != nil
+            || viewModel.projectFilter != nil
+            || viewModel.assigneeFilter != nil
+            || viewModel.dateFrom != nil
+            || viewModel.dateTo != nil
+            || viewModel.onlyMine
+        return hasFilter ? "没有匹配的交付物，尝试调整筛选条件" : "提交你的第一个交付物"
+    }
+
+    // MARK: - Row list
+
+    @ViewBuilder
+    private var list: some View {
+        LazyVStack(spacing: 10) {
+            ForEach(viewModel.filteredItems) { d in
+                NavigationLink {
+                    DeliverableDetailView(
+                        viewModel: DeliverableDetailViewModel(
+                            deliverable: d,
+                            client: supabase,
+                            listViewModel: viewModel
+                        )
+                    )
+                } label: {
+                    DeliverableRow(item: d)
+                        .padding(.horizontal)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
+                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Row
+
+private struct DeliverableRow: View {
+    let item: Deliverable
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    if let project = item.project?.name, !project.isEmpty {
+                        Label(project, systemImage: "folder")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+                }
+                if let desc = item.description, !desc.isEmpty {
+                    Text(desc)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 8) {
+                    DeliverableStatusChip(status: item.status)
+                    if let urlStr = item.url ?? item.fileUrl,
+                       !urlStr.isEmpty,
+                       let platform = DeliverablePlatform.detect(urlStr) {
+                        Label(platform.label, systemImage: "link")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(platform.color.opacity(0.12))
+                            .foregroundStyle(platform.color)
+                            .clipShape(Capsule())
+                    }
+                    if let submittedAt = item.submittedAt {
+                        Text(submittedAt, style: .date)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    } else if let createdAt = item.createdAt {
+                        Text(createdAt, style: .date)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(12)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}

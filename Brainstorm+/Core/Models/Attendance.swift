@@ -9,9 +9,10 @@ public struct Attendance: Codable, Identifiable, Hashable {
     public var status: String?
     public var notes: String?
     public var workHours: Double?
+    public var lateMinutes: Int?
     public var isFieldWork: Bool?
     public let createdAt: Date?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
@@ -21,6 +22,7 @@ public struct Attendance: Codable, Identifiable, Hashable {
         case status
         case notes
         case workHours = "work_hours"
+        case lateMinutes = "late_minutes"
         case isFieldWork = "is_field_work"
         case createdAt = "created_at"
     }
