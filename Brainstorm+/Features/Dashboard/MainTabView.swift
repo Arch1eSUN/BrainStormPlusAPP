@@ -1,27 +1,32 @@
 import SwiftUI
 
 // ══════════════════════════════════════════════════════════════════
-// MainTabView — iOS 26 原生 TabView 重写 (Phase 11.x)
+// MainTabView — iOS 26 原生 TabView（v1.1 骨架）
 //
-// 替换掉旧实现的两个反模式:
-//   1. .tabViewStyle(.page(indexDisplayMode: .never)) + 手搓 FloatingTabBar
-//      → 用户会误触横滑在 Dashboard/Tasks 之间切换 (两者无语义顺序关系)
-//   2. 每个 tab 内 .navigationBarHidden(true) + 全局 UINavigationBarAppearance
-//      hack → 会把 Phase 11 的 Large Title 吃掉
+// 5 tab 骨架（plan docs/plans/2026-04-24-ios-full-redesign-plan.md §三）:
+//   1. 首页  —— Widget-card Dashboard（wordmark 代替 Large Title；Phase 4 重建）
+//   2. 任务  —— Tasks list/kanban（高频每日）
+//   3. 审批  —— Approvals 提交 + 我审 queue
+//   4. 消息  —— 聊天 + 通知合并（Phase 6 顶部 sub-tab 切换）
+//   5. 我的  —— Profile + 偏好 + 支持 + 退出（Phase 6 admin entry 移至 launcher）
 //
-// 新实现 = iOS 26 原生 Liquid Glass tab bar (Slack / Instagram / WeChat 规范):
-//   • 5 个 tab: 工作台 / 任务 / 审批 / 消息 / 我的
-//   • 每个 tab 内部已自带 NavigationStack + .navigationTitle,这里不再套一层
+// 实现要点:
+//   • iOS 26 原生 Liquid Glass tab bar (Slack / Instagram / WeChat 规范)
+//   • 每 tab 内部已自带 NavigationStack + .navigationTitle,这里不再套一层
+//     （Phase 3 会给 destination 加 isEmbedded 参数进一步统一）
 //   • LazyView 包装 —— 首次进入才构造,避免启动时同时初始化 5 个 Supabase 订阅
 //   • .badge(...) 原生红点 badge
-//   • Haptic.selection() 保持切换反馈
+//   • .tint(BsColor.brandAzure) — v1.1 主交互色
+//   • Haptic.selection() 切换反馈
 //
-// 已刻意裁掉的内容 (不是遗漏):
-//   • Copilot tab — 移到 Dashboard toolbar trailing 按钮触发 sheet (后续 phase)
-//   • Schedule tab — 日程已经作为 Dashboard schedule section 呈现,不再独立 tab
-//   • FloatingTabBar struct — 整块删除,原生 tab bar 接管
-//   • UINavigationBarAppearance .onAppear hack — Phase 11 各视图已走
-//     .navigationTitle + .navigationBarTitleDisplayMode(.large) 原生链路
+// 已刻意裁掉的 tab (不是遗漏):
+//   • AI Copilot tab — 用户要求 Phase 0/8 期间删除 Copilot 功能
+//   • Schedule tab — 日程已作为 Dashboard 内 section,不再独立
+//   • FloatingTabBar struct — 原生 tab bar 接管,手搓实现整块删除
+//
+// v1.1 后续微调（不在 Phase 2 范围）:
+//   • Role-based tab 2 排序（员工=任务 / 经理=审批，根据 RBAC 动态）— Phase 6
+//   • Messages = Chat + Notifications 合并 sub-tab — Phase 6
 // ══════════════════════════════════════════════════════════════════
 
 struct MainTabView: View {
@@ -41,10 +46,12 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // ── 工作台 ──
+            // ── 首页 ──
+            // v1.1: 名字从"工作台"改"首页"（plan §三）；视觉 Phase 4 重建
+            // 为 widget-card Dashboard + wordmark NavBar + liquid fill hero。
             LazyView(DashboardView())
                 .tabItem {
-                    Label("工作台", systemImage: "square.grid.2x2.fill")
+                    Label("首页", systemImage: "house.fill")
                 }
                 .tag(Tab.dashboard)
 
