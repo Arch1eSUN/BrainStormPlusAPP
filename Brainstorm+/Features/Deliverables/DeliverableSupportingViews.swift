@@ -44,7 +44,10 @@ public struct DeliverablePlatform {
     public let color: Color
 
     private static let table: [(NSRegularExpression, DeliverablePlatform)] = {
-        // TODO(batch-3): vendor platform colors — define BsColor.platform namespace later
+        // Intentional: vendor brand colors —— 外部平台官方识别色（Google Drive
+        // blue / Figma purple / Dropbox blue / etc），这是用户识别链接来源的
+        // 关键线索，不走 token。未来如需统一管理，可迁到 BsColor.platform.*
+        // 命名空间（TODO batch-3）。
         let entries: [(String, String, Color)] = [
             (#"drive\.google\.com"#,      "Google Drive", Color(red: 66/255,  green: 133/255, blue: 244/255)),
             (#"docs\.google\.com"#,       "Google Docs",  Color(red: 66/255,  green: 133/255, blue: 244/255)),
@@ -52,7 +55,7 @@ public struct DeliverablePlatform {
             (#"pan\.quark\.cn"#,          "夸克网盘",      Color(red: 79/255,  green: 70/255,  blue: 229/255)),
             (#"github\.com"#,             "GitHub",       Color(red: 36/255,  green: 41/255,  blue: 47/255)),
             (#"figma\.com"#,              "Figma",        Color(red: 162/255, green: 89/255,  blue: 255/255)),
-            (#"notion\.so"#,              "Notion",       .black),
+            (#"notion\.so"#,              "Notion",       .black), // Notion 官方 wordmark 就是纯黑
             (#"dropbox\.com"#,            "Dropbox",      Color(red: 0/255,   green: 97/255,  blue: 254/255)),
             (#"onedrive\.live\.com|1drv\.ms"#, "OneDrive", Color(red: 0/255,  green: 120/255, blue: 212/255)),
             (#"weiyun\.com"#,             "微云",         Color(red: 0/255,   green: 102/255, blue: 255/255)),
@@ -75,6 +78,7 @@ public struct DeliverablePlatform {
                 return platform
             }
         }
-        return DeliverablePlatform(label: "链接", color: .gray)
+        // Unknown domain fallback —— 走 neutral inkMuted（token），dark mode 友好
+        return DeliverablePlatform(label: "链接", color: BsColor.inkMuted)
     }
 }

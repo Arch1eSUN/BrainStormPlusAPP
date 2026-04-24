@@ -48,7 +48,8 @@ public struct ZYErrorBannerModifier: ViewModifier {
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .shadow(color: Color.black.opacity(0.12), radius: 6, y: 2)
+                // Batch 7: migrate raw shadow → BsShadow.banner token
+                .bsShadow(BsShadow.banner)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .task(id: msg) {
                     try? await Task.sleep(nanoseconds: UInt64(autoDismissAfter * 1_000_000_000))

@@ -131,10 +131,10 @@ public struct AdminUsersView: View {
             if viewModel.isLoading && viewModel.users.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.filteredUsers.isEmpty {
-                ContentUnavailableView(
-                    "暂无用户",
+                BsEmptyState(
+                    title: "暂无用户",
                     systemImage: "person.2.slash",
-                    description: Text(viewModel.searchText.isEmpty ? "没有找到用户数据" : "没有匹配的用户")
+                    description: viewModel.searchText.isEmpty ? "没有找到用户数据" : "没有匹配的用户"
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

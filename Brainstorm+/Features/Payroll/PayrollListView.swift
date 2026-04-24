@@ -52,10 +52,10 @@ public struct PayrollListView: View {
                             .padding(.top, BsSpacing.sm)
                     }
                     Spacer(minLength: 0)
-                    ContentUnavailableView(
-                        emptyTitle,
+                    BsEmptyState(
+                        title: emptyTitle,
                         systemImage: "yensign.arrow.circlepath",
-                        description: Text(emptyDescription)
+                        description: emptyDescription
                     )
                     Spacer(minLength: 0)
                 }

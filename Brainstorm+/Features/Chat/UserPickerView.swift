@@ -72,6 +72,8 @@ public struct UserPickerView: View {
                     .font(BsTypography.cardSubtitle)
                     .foregroundStyle(BsColor.brandAzure)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(displayName(for: user))
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName(for: user))
                     .font(BsTypography.body)

@@ -8,7 +8,10 @@ public struct ActionItemHelper {
     public static func destination(for module: AppModule) -> some View {
         switch module {
         case .tasks:
-            TaskListView(viewModel: TaskListViewModel(client: supabase))
+            // Phase 3 isEmbedded: destination 从非-tab 入口 (DashboardRoleSections
+            // / DashboardView NavigationLink) 进入时借用 caller 的 NavigationStack，
+            // 避免 TaskListView 内层再开一层嵌套。
+            TaskListView(viewModel: TaskListViewModel(client: supabase), isEmbedded: true)
         case .projects:
             ProjectListView(viewModel: ProjectListViewModel(client: supabase), isEmbedded: true)
         case .okr:
@@ -29,7 +32,9 @@ public struct ActionItemHelper {
         case .attendance:
             AttendanceView(isEmbedded: true)
         case .chat:
-            ChatListView(viewModel: ChatListViewModel(client: supabase))
+            // Phase 3 isEmbedded: 同上 —— 从 Dashboard 等非-tab 入口进入时借用
+            // caller 的 NavigationStack。Tab 4「消息」走 MessagesView 合并容器。
+            ChatListView(viewModel: ChatListViewModel(client: supabase), isEmbedded: true)
         case .approval:
             // Sprint 4.3 — routes to the 7-tab approval center
             // (mine + 6 approver queues). ApprovalsListView (4.1) is

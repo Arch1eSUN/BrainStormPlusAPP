@@ -61,14 +61,14 @@ public struct ApprovalDetailView: View {
                 } else if let request = viewModel.request {
                     detailScroll(request)
                 } else if let message = viewModel.errorMessage {
-                    ContentUnavailableView(
-                        "加载失败",
+                    BsEmptyState(
+                        title: "加载失败",
                         systemImage: "exclamationmark.triangle",
-                        description: Text(message)
+                        description: message
                     )
                 } else {
-                    ContentUnavailableView(
-                        "审批请求不存在",
+                    BsEmptyState(
+                        title: "审批请求不存在",
                         systemImage: "tray"
                     )
                 }

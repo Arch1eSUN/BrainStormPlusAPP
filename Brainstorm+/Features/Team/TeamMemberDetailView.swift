@@ -197,6 +197,8 @@ public struct TeamMemberDetailView: View {
             Circle()
                 .stroke(BsColor.brandAzure.opacity(0.25), lineWidth: 0.5)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(profile.fullName ?? "用户头像")
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {

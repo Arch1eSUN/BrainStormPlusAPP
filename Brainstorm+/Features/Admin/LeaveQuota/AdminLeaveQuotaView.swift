@@ -107,6 +107,8 @@ public struct AdminLeaveQuotaView: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(BsColor.brandAzure)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(row.displayName)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.displayName)
                     .font(.subheadline.weight(.semibold))

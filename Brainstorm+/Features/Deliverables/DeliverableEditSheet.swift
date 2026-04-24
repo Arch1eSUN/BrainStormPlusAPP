@@ -74,16 +74,20 @@ public struct DeliverableEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                        .font(BsTypography.inter(16, weight: "Medium"))
-                        .foregroundColor(BsColor.inkMuted)
-                        .disabled(isSaving)
+                    Button("取消") {
+                        Haptic.light()
+                        dismiss()
+                    }
+                    .font(BsTypography.inter(16, weight: "Medium", relativeTo: .callout))
+                    .foregroundColor(BsColor.inkMuted)
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
-                    .font(BsTypography.inter(16, weight: "SemiBold"))
+                    .font(BsTypography.inter(16, weight: "SemiBold", relativeTo: .callout))
                     .foregroundColor(isSaveEnabled ? BsColor.brandAzure : BsColor.inkMuted)
                     .disabled(!isSaveEnabled)
                 }
@@ -91,12 +95,13 @@ public struct DeliverableEditSheet: View {
             .overlay {
                 if isSaving {
                     ZStack {
+                        // Raw Color.black scrim —— 系统标准 modal 遮罩背景色。
                         Color.black.opacity(0.35).ignoresSafeArea()
                         ProgressView()
-                            .padding()
+                            .padding(BsSpacing.md)
                             .background(BsColor.surfacePrimary)
-                            .cornerRadius(BsRadius.md)
-                            .shadow(radius: 8)
+                            .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                            .bsShadow(BsShadow.md)
                     }
                 }
             }
@@ -134,7 +139,7 @@ public struct DeliverableEditSheet: View {
     private var titleSection: some View {
         Section(header: sectionHeader("名称")) {
             TextField("交付物名称", text: $title)
-                .font(BsTypography.inter(16, weight: "Regular"))
+                .font(BsTypography.inter(16, weight: "Regular", relativeTo: .callout))
                 .disabled(isSaving)
         }
     }

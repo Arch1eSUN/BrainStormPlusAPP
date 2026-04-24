@@ -48,10 +48,10 @@ public struct HiringCenterView: View {
             if hasAccess {
                 gateContent
             } else {
-                ContentUnavailableView(
-                    "无权访问",
+                BsEmptyState(
+                    title: "无权访问",
                     systemImage: "lock",
-                    description: Text("招聘管理需要「hr_ops」能力或 admin+ 角色。请联系管理员开通权限。")
+                    description: "招聘管理需要「hr_ops」能力或 admin+ 角色。请联系管理员开通权限。"
                 )
             }
         }

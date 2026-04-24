@@ -102,6 +102,7 @@ public struct ProjectListView: View {
             }
         }
         .onChange(of: viewModel.statusFilter) { _, _ in
+            Haptic.selection()
             // Discrete choice — safe to trigger server-side `eq('status', s)` immediately.
             Task { await reload() }
         }

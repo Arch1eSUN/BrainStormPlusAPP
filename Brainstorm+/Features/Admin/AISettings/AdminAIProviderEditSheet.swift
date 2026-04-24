@@ -96,6 +96,7 @@ public struct AdminAIProviderEditSheet: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(viewModel.isSaving ? "保存中…" : "保存") {
+                    Haptic.medium()
                     Task { await save() }
                 }
                 .disabled(viewModel.isSaving || !hasChanges)

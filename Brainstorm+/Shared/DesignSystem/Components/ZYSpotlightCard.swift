@@ -58,8 +58,12 @@ public struct ZYSpotlightCard<Content: View>: View {
                 }
             )
             .zyCardStyle()
-            // Slight spatial lift effect while tracking
+            // Slight spatial lift effect while tracking.
             .scaleEffect(isPressing ? 1.02 : 1.0)
+            // Intentionally raw shadow (not BsShadow token) —— 长按 spotlight 的
+            // dynamic lift shadow 需要在 .clear ↔ 黑半透明间平滑动画；
+            // 现有 BsShadow.lg (0.08/16/6) radius/y 不匹配（需要 20/10 突出
+            // lift 感），且 token 系统不表达 "nil shadow toggle" 语义。
             .shadow(color: isPressing ? Color.black.opacity(0.08) : Color.clear, radius: 20, y: 10)
     }
 }

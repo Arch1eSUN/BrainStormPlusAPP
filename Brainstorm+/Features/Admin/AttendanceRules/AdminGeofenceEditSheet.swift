@@ -163,8 +163,11 @@ struct AdminGeofenceEditSheet: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("保存") { saveAndDismiss() }
-                        .disabled(!canSave)
+                    Button("保存") {
+                        Haptic.medium()
+                        saveAndDismiss()
+                    }
+                    .disabled(!canSave)
                 }
             }
         }

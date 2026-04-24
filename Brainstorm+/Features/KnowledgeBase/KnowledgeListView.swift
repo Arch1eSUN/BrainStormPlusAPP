@@ -102,6 +102,7 @@ public struct KnowledgeListView: View {
             }
         }
         .onChange(of: viewModel.categoryFilter) { _, _ in
+            Haptic.selection()
             Task { await viewModel.fetchArticles() }
         }
         .refreshable {
@@ -151,12 +152,12 @@ public struct KnowledgeListView: View {
                 categoryChips
 
                 if viewModel.articles.isEmpty {
-                    ContentUnavailableView(
-                        "暂无文档",
+                    BsEmptyState(
+                        title: "暂无文档",
                         systemImage: "book.closed",
-                        description: Text(searchOrCategoryActive
+                        description: searchOrCategoryActive
                             ? "没有匹配的文档"
-                            : "创建你的第一篇知识文档")
+                            : "创建你的第一篇知识文档"
                     )
                     .padding(.top, BsSpacing.xxl + 8)
                 } else {

@@ -59,16 +59,20 @@ public struct DeliverableCreateSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                        .font(BsTypography.inter(16, weight: "Medium"))
-                        .foregroundColor(BsColor.inkMuted)
-                        .disabled(isSubmitting)
+                    Button("取消") {
+                        Haptic.light()
+                        dismiss()
+                    }
+                    .font(BsTypography.inter(16, weight: "Medium", relativeTo: .callout))
+                    .foregroundColor(BsColor.inkMuted)
+                    .disabled(isSubmitting)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("提交") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
-                    .font(BsTypography.inter(16, weight: "SemiBold"))
+                    .font(BsTypography.inter(16, weight: "SemiBold", relativeTo: .callout))
                     .foregroundColor(isSaveEnabled ? BsColor.brandAzure : BsColor.inkMuted)
                     .disabled(!isSaveEnabled)
                 }
@@ -76,12 +80,14 @@ public struct DeliverableCreateSheet: View {
             .overlay {
                 if isSubmitting {
                     ZStack {
+                        // Raw Color.black scrim —— 系统标准 modal 遮罩背景色，
+                        // 不走 token (BsColor.* 无对应值)，行为对齐 iOS sheet scrim。
                         Color.black.opacity(0.35).ignoresSafeArea()
                         ProgressView()
-                            .padding()
+                            .padding(BsSpacing.md)
                             .background(BsColor.surfacePrimary)
-                            .cornerRadius(BsRadius.md)
-                            .shadow(radius: 8)
+                            .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                            .bsShadow(BsShadow.md)
                     }
                 }
             }
@@ -109,7 +115,7 @@ public struct DeliverableCreateSheet: View {
     private var detailsSection: some View {
         Section(header: sectionHeader("名称")) {
             TextField("交付物名称", text: $title)
-                .font(BsTypography.inter(16, weight: "Regular"))
+                .font(BsTypography.inter(16, weight: "Regular", relativeTo: .callout))
                 .disabled(isSubmitting)
         }
     }
@@ -141,10 +147,16 @@ public struct DeliverableCreateSheet: View {
     private var projectSection: some View {
         Section(header: sectionHeader("关联项目")) {
             Menu {
-                Button("不关联项目") { projectId = nil }
+                Button("不关联项目") {
+                    Haptic.selection()
+                    projectId = nil
+                }
                 ForEach(viewModel.projects, id: \.id) { p in
                     if let pid = p.id {
-                        Button(p.name ?? "(未命名)") { projectId = pid }
+                        Button(p.name ?? "(未命名)") {
+                            Haptic.selection()
+                            projectId = pid
+                        }
                     }
                 }
             } label: {

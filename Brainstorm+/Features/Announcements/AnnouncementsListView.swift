@@ -169,7 +169,7 @@ public struct AnnouncementsListView: View {
                                 .accessibilityLabel(item.pinned ? "取消置顶" : "置顶")
 
                                 Button(role: .destructive) {
-                                    Haptic.rigid()
+                                    Haptic.warning()
                                     pendingDelete = item
                                 } label: {
                                     Image(systemName: "trash")
@@ -177,6 +177,7 @@ public struct AnnouncementsListView: View {
                                         .frame(minWidth: 44, minHeight: 44)
                                         .contentShape(Rectangle())
                                 }
+                                .accessibilityLabel("删除公告")
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("删除")
                             }

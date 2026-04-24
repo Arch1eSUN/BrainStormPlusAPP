@@ -142,6 +142,7 @@ public struct WeeklyReportEditView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(existingReport == nil ? "保存" : "更新") {
+                        Haptic.medium()
                         Task { await save() }
                     }
                     .disabled(viewModel.isSaving || summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

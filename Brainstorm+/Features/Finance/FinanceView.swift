@@ -59,10 +59,10 @@ public struct FinanceView: View {
     private var coreContent: some View {
         Group {
             if !canAccess {
-                ContentUnavailableView(
-                    "无权访问",
+                BsEmptyState(
+                    title: "无权访问",
                     systemImage: "lock",
-                    description: Text("财务 AI 工作台仅对拥有财务相关能力的管理员开放。")
+                    description: "财务 AI 工作台仅对拥有财务相关能力的管理员开放。"
                 )
             } else {
                 content
@@ -455,10 +455,10 @@ public struct FinanceView: View {
         NavigationStack {
             Group {
                 if viewModel.records.isEmpty {
-                    ContentUnavailableView(
-                        "暂无处理记录",
+                    BsEmptyState(
+                        title: "暂无处理记录",
                         systemImage: "tray",
-                        description: Text("历史记录仅显示当前账号发起的 AI 处理。")
+                        description: "历史记录仅显示当前账号发起的 AI 处理。"
                     )
                 } else {
                     List {

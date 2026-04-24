@@ -154,6 +154,7 @@ public struct LeaveSubmitView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
                 }
 
                 Section("事由") {

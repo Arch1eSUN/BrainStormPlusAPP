@@ -52,6 +52,7 @@ public struct ProjectCreateSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("创建") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
                     .font(.system(.callout, weight: .semibold))

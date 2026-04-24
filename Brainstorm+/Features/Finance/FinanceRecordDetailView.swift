@@ -45,10 +45,10 @@ public struct FinanceRecordDetailView: View {
                         RawTextCard(text: raw)
                     }
                 } else {
-                    ContentUnavailableView(
-                        "输出为空",
+                    BsEmptyState(
+                        title: "输出为空",
                         systemImage: "tray",
-                        description: Text("该记录未包含可解析的结构化输出。")
+                        description: "该记录未包含可解析的结构化输出。"
                     )
                     .padding(.top, 40)
                 }

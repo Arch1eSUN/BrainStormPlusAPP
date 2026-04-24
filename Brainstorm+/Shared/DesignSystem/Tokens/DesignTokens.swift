@@ -195,6 +195,21 @@ public enum BsShadow {
     /// 签名 hero glass card（Web 对齐：0 8px 32px -8px rgba(0,0,0,0.08)）
     public static let glassCard        = Values(color: .black.opacity(0.08), radius: 32, x: 0, y: 8)
     public static let glassCardHover   = Values(color: .black.opacity(0.12), radius: 48, x: 0, y: 16)
+
+    /// v1.1 Batch 7: 顶部 toast / error banner 用的浮层阴影（0 2px 6px black@12%）
+    /// 比 md 更扎实一点（opacity 0.12 vs 0.06）以保证在任意页面背景上可辨识边缘。
+    public static let banner           = Values(color: .black.opacity(0.12), radius: 6,  x: 0, y: 2)
+
+    // MARK: - Brand glow helpers
+    // Batch 7: 品牌色发光（非阴影语义）。当组件要表达"发光 / pulsing 强调"
+    // 而不是"悬浮遮光"时用。接收任意 Color（brandCoral/brandMint 等），
+    // 调用方通常叠 2 层（近+远）制造光晕。
+    //
+    // 与 BsShadow.glow 的区别：那个写死 brandMint 单层，属于"登录成功粒子"
+    // 这类固定语义；glow() 工厂是组件级 helper。
+    public static func glow(_ color: Color, opacity: Double = 0.35, radius: CGFloat = 5) -> Values {
+        Values(color: color.opacity(opacity), radius: radius, x: 0, y: 0)
+    }
 }
 
 // MARK: - Motion

@@ -231,13 +231,18 @@ struct DashboardView: View {
         }
     }
 
-    private static func isoDate(_ date: Date) -> String {
+    /// 共享 ISO 日期 formatter（避免每次调用都 alloc）
+    private static let isoDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        return f
+    }()
+
+    private static func isoDate(_ date: Date) -> String {
+        isoDayFormatter.string(from: date)
     }
 
     // MARK: - Day peek (long-press on week strip)
@@ -246,12 +251,7 @@ struct DashboardView: View {
     /// 从 `attendance.thisWeek[iso]` 查该日打卡行；Date 从 iso 反解回来，
     /// 避免再算一遍 Monday offset。反解失败 → 退回 Date() 兜底（显示"无数据"）。
     private func makeDayPeek(for day: WeekDayCadence) -> DayPeekSheetItem {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        let date = f.date(from: day.id) ?? Date()
+        let date = Self.isoDayFormatter.date(from: day.id) ?? Date()
         let record = attendance.thisWeek[day.id]
         return DayPeekSheetItem(
             data: DayPeekData(

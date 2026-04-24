@@ -132,6 +132,7 @@ public struct ProcurementSubmitView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
                 }
                 }
                 .scrollContentBackground(.hidden)

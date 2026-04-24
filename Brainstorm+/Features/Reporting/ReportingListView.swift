@@ -96,10 +96,10 @@ public struct ReportingListView: View {
     @ViewBuilder
     private var dailySection: some View {
         if viewModel.dailyLogs.isEmpty {
-            ContentUnavailableView(
-                "暂无日志",
+            BsEmptyState(
+                title: "暂无日志",
                 systemImage: "doc.text",
-                description: Text("开始记录你的第一篇工作日志")
+                description: "开始记录你的第一篇工作日志"
             )
             .padding(.top, 40)
         } else {
@@ -138,10 +138,10 @@ public struct ReportingListView: View {
     @ViewBuilder
     private var weeklySection: some View {
         if viewModel.weeklyReports.isEmpty {
-            ContentUnavailableView(
-                "暂无周报",
+            BsEmptyState(
+                title: "暂无周报",
                 systemImage: "calendar",
-                description: Text("保存你的第一篇周报")
+                description: "保存你的第一篇周报"
             )
             .padding(.top, 40)
         } else {

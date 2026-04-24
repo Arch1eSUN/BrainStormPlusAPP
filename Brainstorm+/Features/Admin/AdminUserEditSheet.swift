@@ -52,10 +52,10 @@ public struct AdminUserEditSheet: View {
                 } else if let detail = detail {
                     form(detail: detail)
                 } else {
-                    ContentUnavailableView(
-                        "加载失败",
+                    BsEmptyState(
+                        title: "加载失败",
                         systemImage: "exclamationmark.triangle",
-                        description: Text(errorText ?? "无法获取用户信息")
+                        description: errorText ?? "无法获取用户信息"
                     )
                 }
             }
@@ -67,6 +67,7 @@ public struct AdminUserEditSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(saving ? "保存中…" : "保存") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
                     .disabled(saving || loading || detail == nil)
@@ -96,6 +97,7 @@ public struct AdminUserEditSheet: View {
                         Text("超级管理员").tag("superadmin")
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: appRole) { _, _ in Haptic.selection() }
                 }
             } else {
                 Section("角色") {

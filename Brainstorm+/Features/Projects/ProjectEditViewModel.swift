@@ -256,7 +256,7 @@ public class ProjectEditViewModel: ObservableObject {
             endDate: includeEndDate ? Self.dateOnlyFormatter.string(from: endDate) : nil,
             status: status.rawValue,
             progress: clampedProgress,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
+            updatedAt: Self.iso8601Formatter.string(from: Date())
         )
 
         do {
@@ -345,6 +345,9 @@ public class ProjectEditViewModel: ObservableObject {
         f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
+
+    /// 共享 ISO8601 formatter（避免每次 `.update(payload)` 都 alloc）
+    private static let iso8601Formatter = ISO8601DateFormatter()
 }
 
 // MARK: - Wire payloads

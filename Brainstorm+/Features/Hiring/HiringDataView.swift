@@ -69,6 +69,7 @@ public struct HiringDataView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 8)
+            .onChange(of: selectedSection) { _, _ in Haptic.selection() }
 
             Group {
                 if viewModel.isLoading && viewModel.contracts.isEmpty && viewModel.seniority.isEmpty {
@@ -89,10 +90,10 @@ public struct HiringDataView: View {
     @ViewBuilder
     private var contractsList: some View {
         if viewModel.contracts.isEmpty {
-            ContentUnavailableView(
-                "暂无合同记录",
+            BsEmptyState(
+                title: "暂无合同记录",
                 systemImage: "doc.text",
-                description: Text("合同的新建/编辑当前只在 Web 端提供。")
+                description: "合同的新建/编辑当前只在 Web 端提供。"
             )
         } else {
             List {
@@ -136,10 +137,10 @@ public struct HiringDataView: View {
     @ViewBuilder
     private var seniorityList: some View {
         if viewModel.seniority.isEmpty {
-            ContentUnavailableView(
-                "暂无职级记录",
+            BsEmptyState(
+                title: "暂无职级记录",
                 systemImage: "award",
-                description: Text("职级记录的新建/编辑当前只在 Web 端提供。")
+                description: "职级记录的新建/编辑当前只在 Web 端提供。"
             )
         } else {
             List {

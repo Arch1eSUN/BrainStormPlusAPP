@@ -83,6 +83,7 @@ public struct KnowledgeEditView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        Haptic.medium()
                         Task { await save() }
                     } label: {
                         Text(existingArticle == nil ? "发布" : "保存")

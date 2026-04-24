@@ -54,10 +54,10 @@ public struct ApprovalsListView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.rows.isEmpty {
-                ContentUnavailableView(
-                    "暂无提交记录",
+                BsEmptyState(
+                    title: "暂无提交记录",
                     systemImage: "tray",
-                    description: Text("你还没有提交过审批申请。")
+                    description: "你还没有提交过审批申请。"
                 )
             } else {
                 submissionsList

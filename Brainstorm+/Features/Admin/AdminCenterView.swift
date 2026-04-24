@@ -32,10 +32,10 @@ public struct AdminCenterView: View {
             if viewModel.canEnterAdmin {
                 content
             } else {
-                ContentUnavailableView(
-                    "无权访问",
+                BsEmptyState(
+                    title: "无权访问",
                     systemImage: "lock",
-                    description: Text("只有管理员可以访问")
+                    description: "只有管理员可以访问"
                 )
             }
         }
@@ -130,6 +130,8 @@ public struct AdminCenterView: View {
                 Text("\(value)")
                     .font(BsTypography.statMedium)
                     .foregroundStyle(BsColor.ink)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
             }
         }
     }

@@ -77,6 +77,7 @@ public struct AttendanceView: View {
                 .fill(fenceTone)
                 .frame(width: 8, height: 8)
                 .scaleEffect(isPulsing ? 1.2 : 0.8)
+                // intentional: breathing pulse 1s loop —— 不换成 BsMotion.smooth（2s 节奏会太慢）
                 .animation(.easeInOut(duration: 1).repeatForever(), value: isPulsing)
 
             Text(fenceLabel)
@@ -150,6 +151,7 @@ public struct AttendanceView: View {
                     .stroke(buttonTone.opacity(0.35), lineWidth: 2)
                     .scaleEffect(isAwaitingSuccess ? 1.08 : 1.0)
                     .opacity(isAwaitingSuccess ? 0 : 0.6)
+                    // intentional: heartbeat outer ring 1.2s loop（对齐 Web Framer Motion scale keyframes）
                     .animation(
                         .easeInOut(duration: 1.2).repeatForever(autoreverses: false),
                         value: isAwaitingSuccess
@@ -160,6 +162,7 @@ public struct AttendanceView: View {
                     .fill(buttonTone.opacity(0.18))
                     .scaleEffect(isAwaitingSuccess ? 1.12 : 1.0)
                     .opacity(isAwaitingSuccess ? 0 : 0.4)
+                    // intentional: heartbeat inner ring 1.6s loop（和 1.2s ring 错相）
                     .animation(
                         .easeInOut(duration: 1.6).repeatForever(autoreverses: false),
                         value: isAwaitingSuccess

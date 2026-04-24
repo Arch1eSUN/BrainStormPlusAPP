@@ -58,7 +58,7 @@ public struct AIAnalysisView: View {
 
     private var main: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: BsSpacing.lg + BsSpacing.xs) { // 20pt
                 header
 
                 if let msg = viewModel.providerLoadError, viewModel.provider == nil, isIdleLike {
@@ -78,9 +78,9 @@ public struct AIAnalysisView: View {
                     emptyHint
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 32)
+            .padding(.horizontal, BsSpacing.lg)
+            .padding(.top, BsSpacing.md)
+            .padding(.bottom, BsSpacing.xxl)
         }
         .background(BsColor.pageBackground.ignoresSafeArea())
     }
@@ -95,8 +95,8 @@ public struct AIAnalysisView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+        HStack(spacing: BsSpacing.md) {
+            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [BsColor.brandAzure, BsColor.brandMint],
@@ -111,16 +111,16 @@ public struct AIAnalysisView: View {
                         .foregroundStyle(.white)
                 )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                 Text("媒体智能分析")
-                    .font(.system(.title2, weight: .bold))
+                    .font(BsTypography.sectionTitle)
                     .foregroundStyle(BsColor.ink)
-                HStack(spacing: 6) {
+                HStack(spacing: BsSpacing.xs + 2) {
                     Text("社交媒体内容智能分析 ·")
                         .font(.footnote)
                         .foregroundStyle(BsColor.inkMuted)
                     if let p = viewModel.provider {
-                        HStack(spacing: 4) {
+                        HStack(spacing: BsSpacing.xs) {
                             Image(systemName: "cpu")
                                 .font(.caption2)
                             Text("\(p.providerName) / \(p.model)")
@@ -141,22 +141,22 @@ public struct AIAnalysisView: View {
     // MARK: - Provider warning
 
     private func providerWarning(_ msg: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: BsSpacing.smd) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(BsColor.warning)
                 .font(.system(.body))
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: BsSpacing.xs) {
                 Text("未配置 AI 供应商").font(.subheadline.weight(.semibold)).foregroundStyle(BsColor.warning)
-                Text(msg).font(.caption).foregroundStyle(.orange.opacity(0.85))
+                Text(msg).font(.caption).foregroundStyle(BsColor.warning.opacity(0.85))
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(BsSpacing.md + 2) // 14pt
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                 .fill(BsColor.warning.opacity(0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                         .strokeBorder(BsColor.warning.opacity(0.4), lineWidth: 1)
                 )
         )
@@ -165,129 +165,131 @@ public struct AIAnalysisView: View {
     // MARK: - Input form
 
     private var inputForm: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Platform picker
-            VStack(alignment: .leading, spacing: 10) {
-                label("选择平台")
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                    spacing: 8
-                ) {
-                    ForEach(MediaPlatform.allCases) { p in
-                        platformTile(p)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.lg + BsSpacing.xs) { // 20pt
+                // Platform picker
+                VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                    label("选择平台")
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: BsSpacing.sm), count: 3),
+                        spacing: BsSpacing.sm
+                    ) {
+                        ForEach(MediaPlatform.allCases) { p in
+                            platformTile(p)
+                        }
                     }
                 }
-            }
 
-            // URL input
-            VStack(alignment: .leading, spacing: 8) {
-                label("内容链接", systemImage: "link")
-                HStack(spacing: 8) {
-                    Image(systemName: "globe")
-                        .foregroundStyle(BsColor.inkMuted)
-                    TextField(
-                        "粘贴\(viewModel.platform.label)分享文案或内容链接…",
-                        text: $viewModel.inputUrl,
-                        axis: .vertical
-                    )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .lineLimit(1...4)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(BsColor.inkMuted.opacity(0.08))
-                )
-            }
-
-            // Image URLs
-            VStack(alignment: .leading, spacing: 8) {
-                label("截图链接（可选）", systemImage: "photo")
-                TextEditor(text: $viewModel.imageUrlsText)
-                    .frame(minHeight: 72)
-                    .padding(8)
+                // URL input
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                    label("内容链接", systemImage: "link")
+                    HStack(spacing: BsSpacing.sm) {
+                        Image(systemName: "globe")
+                            .foregroundStyle(BsColor.inkMuted)
+                        TextField(
+                            "粘贴\(viewModel.platform.label)分享文案或内容链接…",
+                            text: $viewModel.inputUrl,
+                            axis: .vertical
+                        )
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .lineLimit(1...4)
+                    }
+                    .padding(.horizontal, BsSpacing.md)
+                    .padding(.vertical, BsSpacing.smd)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                             .fill(BsColor.inkMuted.opacity(0.08))
                     )
-                Text("AI 会直接读取截图中的用户名、发布时间、点赞 / 收藏 / 评论 / 分享 / 播放等数据。每行一个链接或以逗号分隔。")
-                    .font(.caption2)
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-
-            if case let .error(msg) = viewModel.pageState, !msg.isEmpty {
-                errorRow(msg)
-            }
-
-            HStack {
-                Spacer()
-                Button(action: { viewModel.submit() }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "paperplane.fill")
-                        Text("开始分析").font(.subheadline.weight(.semibold))
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(
-                        LinearGradient(
-                            colors: [BsColor.brandAzure, BsColor.brandMint],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .opacity(viewModel.canSubmit ? 1 : 0.5)
                 }
-                .buttonStyle(.plain)
-                .disabled(!viewModel.canSubmit)
+
+                // Image URLs
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                    label("截图链接（可选）", systemImage: "photo")
+                    TextEditor(text: $viewModel.imageUrlsText)
+                        .frame(minHeight: 72)
+                        .padding(BsSpacing.sm)
+                        .background(
+                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                .fill(BsColor.inkMuted.opacity(0.08))
+                        )
+                    Text("AI 会直接读取截图中的用户名、发布时间、点赞 / 收藏 / 评论 / 分享 / 播放等数据。每行一个链接或以逗号分隔。")
+                        .font(.caption2)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+
+                if case let .error(msg) = viewModel.pageState, !msg.isEmpty {
+                    errorRow(msg)
+                }
+
+                HStack {
+                    Spacer()
+                    Button {
+                        Haptic.medium()
+                        viewModel.submit()
+                    } label: {
+                        HStack(spacing: BsSpacing.xs + 2) { // 6pt
+                            Image(systemName: "paperplane.fill")
+                            Text("开始分析").font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.horizontal, BsSpacing.lg - 6) // 18pt
+                        .padding(.vertical, BsSpacing.smd)
+                        .background(
+                            LinearGradient(
+                                colors: [BsColor.brandAzure, BsColor.brandMint],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                        .opacity(viewModel.canSubmit ? 1 : 0.5)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!viewModel.canSubmit)
+                    .accessibilityLabel("开始分析")
+                }
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(BsColor.surfacePrimary)
-                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-        )
     }
 
     private func platformTile(_ p: MediaPlatform) -> some View {
         let selected = viewModel.platform == p
         return Button {
+            Haptic.selection()
             viewModel.platform = p
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: BsSpacing.xs + 2) { // 6pt
                 Image(systemName: p.icon)
                     .font(.system(.title3))
                 Text(p.label)
                     .font(.caption.weight(.medium))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, BsSpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                     .fill(selected ? BsColor.brandAzure.opacity(0.08) : BsColor.inkMuted.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                             .strokeBorder(selected ? BsColor.brandAzure : BsColor.inkMuted.opacity(0.18), lineWidth: selected ? 1.5 : 1)
                     )
             )
             .foregroundStyle(selected ? BsColor.brandAzure : BsColor.ink)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("选择平台 \(p.label)")
     }
 
     private func label(_ text: String, systemImage: String? = nil) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: BsSpacing.xs + 2) {
             if let systemImage = systemImage {
                 Image(systemName: systemImage)
                     .font(.caption2)
             }
             Text(text)
-                .font(.caption.weight(.bold))
+                .font(BsTypography.label)
                 .kerning(0.6)
                 .textCase(.uppercase)
         }
@@ -295,29 +297,31 @@ public struct AIAnalysisView: View {
     }
 
     private func errorRow(_ msg: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: BsSpacing.sm) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(BsColor.danger)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                 Text("分析失败").font(.caption.weight(.semibold)).foregroundStyle(BsColor.danger)
-                Text(msg).font(.caption).foregroundStyle(.red.opacity(0.8))
+                Text(msg).font(.caption).foregroundStyle(BsColor.danger.opacity(0.8))
             }
             Spacer()
             Button {
+                Haptic.light()
                 viewModel.reset()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: BsSpacing.xs) {
                     Image(systemName: "arrow.clockwise").font(.caption2)
                     Text("重试").font(.caption.weight(.semibold))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(BsColor.danger.opacity(0.12)))
+                .padding(.horizontal, BsSpacing.smd)
+                .padding(.vertical, BsSpacing.xs + 2)
+                .background(RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous).fill(BsColor.danger.opacity(0.12)))
                 .foregroundStyle(BsColor.danger)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("重试分析")
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(BsColor.danger.opacity(0.06)))
+        .padding(BsSpacing.smd)
+        .background(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous).fill(BsColor.danger.opacity(0.06)))
     }
 
     // MARK: - Progress section
@@ -325,49 +329,45 @@ public struct AIAnalysisView: View {
     @ViewBuilder
     private var progressSection: some View {
         if let progress = viewModel.progress {
-            VStack(alignment: .leading, spacing: 12) {
-                // Phase pills
-                HStack(spacing: 4) {
-                    ForEach(Array(AIAnalysisPhase.ordered.enumerated()), id: \.element) { idx, phase in
-                        phasePill(idx: idx, phase: phase, current: progress.phase)
-                        if idx < AIAnalysisPhase.ordered.count - 1 {
-                            Rectangle()
-                                .fill(viewModel.phaseHistory.contains(phase) ? BsColor.success.opacity(0.4) : BsColor.inkMuted.opacity(0.2))
-                                .frame(height: 1)
-                                .frame(maxWidth: .infinity)
+            BsContentCard(padding: .small) {
+                VStack(alignment: .leading, spacing: BsSpacing.md) {
+                    // Phase pills
+                    HStack(spacing: BsSpacing.xs) {
+                        ForEach(Array(AIAnalysisPhase.ordered.enumerated()), id: \.element) { idx, phase in
+                            phasePill(idx: idx, phase: phase, current: progress.phase)
+                            if idx < AIAnalysisPhase.ordered.count - 1 {
+                                Rectangle()
+                                    .fill(viewModel.phaseHistory.contains(phase) ? BsColor.success.opacity(0.4) : BsColor.inkMuted.opacity(0.2))
+                                    .frame(height: 1)
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
                     }
-                }
 
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(BsColor.inkMuted.opacity(0.15))
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(
-                                LinearGradient(
-                                    colors: viewModel.pageState == .done
-                                        ? [.green, .green.opacity(0.7)]
-                                        : [BsColor.brandAzure, BsColor.brandMint],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                    // Progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(BsColor.inkMuted.opacity(0.15))
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(
+                                    LinearGradient(
+                                        colors: viewModel.pageState == .done
+                                            ? [BsColor.success, BsColor.success.opacity(0.7)]
+                                            : [BsColor.brandAzure, BsColor.brandMint],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .frame(width: geo.size.width * CGFloat(max(0, min(100, progress.percent))) / 100.0)
-                            .animation(BsMotion.Anim.smooth, value: progress.percent)
+                                .frame(width: geo.size.width * CGFloat(max(0, min(100, progress.percent))) / 100.0)
+                                .animation(BsMotion.Anim.smooth, value: progress.percent)
+                        }
                     }
-                }
-                .frame(height: 6)
+                    .frame(height: 6)
 
-                Text(progress.message).font(.caption2).foregroundStyle(BsColor.inkMuted)
+                    Text(progress.message).font(.caption2).foregroundStyle(BsColor.inkMuted)
+                }
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(BsColor.surfacePrimary)
-                    .shadow(color: .black.opacity(0.04), radius: 6, y: 1)
-            )
         }
     }
 
@@ -377,7 +377,7 @@ public struct AIAnalysisView: View {
         let isComplete = history.contains(phase) && !isCurrent
         let isPending = !history.contains(phase)
 
-        return HStack(spacing: 4) {
+        return HStack(spacing: BsSpacing.xs) {
             ZStack {
                 Circle()
                     .fill(isComplete ? BsColor.success : (isCurrent ? BsColor.brandAzure : BsColor.inkMuted.opacity(0.2)))
@@ -389,12 +389,12 @@ public struct AIAnalysisView: View {
                 } else {
                     Text("\(idx + 1)")
                         .font(BsTypography.label)
-                        .foregroundStyle(isPending ? Color.secondary : Color.white)
+                        .foregroundStyle(isPending ? BsColor.inkMuted : Color.white)
                 }
             }
             Text(phase.label)
                 .font(BsTypography.meta.weight(isPending ? .regular : .medium))
-                .foregroundStyle(isPending ? .secondary : BsColor.ink)
+                .foregroundStyle(isPending ? BsColor.inkMuted : BsColor.ink)
                 .lineLimit(1)
         }
     }
@@ -404,29 +404,25 @@ public struct AIAnalysisView: View {
     @ViewBuilder
     private var scrapedDataSection: some View {
         if let data = viewModel.scrapedData, !data.isEmpty {
-            DisclosureGroup {
-                ScrollView(.vertical) {
-                    Text(Self.prettyJson(data))
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(BsColor.inkMuted)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
+            BsContentCard(padding: .small) {
+                DisclosureGroup {
+                    ScrollView(.vertical) {
+                        Text(Self.prettyJson(data))
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(BsColor.inkMuted)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(BsSpacing.sm)
+                    }
+                    .frame(maxHeight: 260)
+                } label: {
+                    HStack(spacing: BsSpacing.xs + 2) {
+                        Image(systemName: "doc.text").font(.caption)
+                        Text("抓取数据预览").font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(BsColor.inkMuted)
                 }
-                .frame(maxHeight: 260)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "doc.text").font(.caption)
-                    Text("抓取数据预览").font(.caption.weight(.medium))
-                }
-                .foregroundStyle(BsColor.inkMuted)
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(BsColor.surfacePrimary)
-                    .shadow(color: .black.opacity(0.04), radius: 6, y: 1)
-            )
         }
     }
 
@@ -443,49 +439,47 @@ public struct AIAnalysisView: View {
 
     @ViewBuilder
     private var reportSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "brain.head.profile").foregroundStyle(BsColor.brandAzure).font(.caption)
-                Text("智能情报报告").font(.subheadline.weight(.semibold)).foregroundStyle(BsColor.ink)
-                if viewModel.pageState == .streaming {
-                    HStack(spacing: 4) {
-                        Circle().fill(BsColor.brandAzure).frame(width: 6, height: 6)
-                        Text("生成中").font(.caption2)
-                    }
-                    .foregroundStyle(BsColor.brandAzure)
-                }
-                Spacer(minLength: 0)
-                if viewModel.pageState == .done, !viewModel.report.isEmpty {
-                    Button {
-                        UIPasteboard.general.string = viewModel.report
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc").font(.caption2)
-                            Text("复制").font(.caption)
+        BsContentCard(padding: .small) {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(spacing: BsSpacing.sm) {
+                    Image(systemName: "brain.head.profile").foregroundStyle(BsColor.brandAzure).font(.caption)
+                    Text("智能情报报告").font(.subheadline.weight(.semibold)).foregroundStyle(BsColor.ink)
+                    if viewModel.pageState == .streaming {
+                        HStack(spacing: BsSpacing.xs) {
+                            Circle().fill(BsColor.brandAzure).frame(width: 6, height: 6)
+                            Text("生成中").font(.caption2)
                         }
-                        .foregroundStyle(BsColor.inkMuted)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+                        .foregroundStyle(BsColor.brandAzure)
                     }
-                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
+                    if viewModel.pageState == .done, !viewModel.report.isEmpty {
+                        Button {
+                            Haptic.light()
+                            UIPasteboard.general.string = viewModel.report
+                        } label: {
+                            HStack(spacing: BsSpacing.xs) {
+                                Image(systemName: "doc.on.doc").font(.caption2)
+                                Text("复制").font(.caption)
+                            }
+                            .foregroundStyle(BsColor.inkMuted)
+                            .padding(.horizontal, BsSpacing.smd)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("复制报告内容")
+                    }
                 }
+                Divider()
+                reportBody
             }
-            Divider()
-            reportBody
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(BsColor.surfacePrimary)
-                .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-        )
     }
 
     @ViewBuilder
     private var reportBody: some View {
         if viewModel.report.isEmpty {
-            VStack(spacing: 8) {
+            VStack(spacing: BsSpacing.sm) {
                 Image(systemName: "exclamationmark.circle")
                     .font(.title3)
                     .foregroundStyle(BsColor.warning)
@@ -494,27 +488,27 @@ public struct AIAnalysisView: View {
                     .foregroundStyle(BsColor.warning)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            .padding(.vertical, BsSpacing.xl)
         } else {
             switch MediaAnalysisParser.parse(viewModel.report) {
             case .ok(let m):
                 IntelReportView(result: m)
             case .failed(let reason):
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 6) {
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                    HStack(alignment: .top, spacing: BsSpacing.xs + 2) {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(BsColor.warning)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                             Text("AI 输出未匹配情报卡结构，显示原始内容：")
                                 .font(.caption.weight(.semibold)).foregroundStyle(BsColor.warning)
-                            Text(reason).font(.caption2).foregroundStyle(.orange.opacity(0.8))
+                            Text(reason).font(.caption2).foregroundStyle(BsColor.warning.opacity(0.8))
                         }
                     }
                     Text(viewModel.report)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(BsColor.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(BsColor.inkMuted.opacity(0.06)))
+                        .padding(BsSpacing.smd)
+                        .background(RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous).fill(BsColor.inkMuted.opacity(0.06)))
                         .textSelection(.enabled)
                 }
             }
@@ -524,32 +518,35 @@ public struct AIAnalysisView: View {
     // MARK: - Action bar
 
     private var actionBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             Spacer()
             if viewModel.pageState == .streaming {
                 Button(role: .destructive) {
+                    Haptic.warning()
                     viewModel.stop()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: BsSpacing.xs + 2) {
                         Image(systemName: "stop.circle").font(.caption)
                         Text("停止生成").font(.caption.weight(.semibold))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 10).strokeBorder(BsColor.danger.opacity(0.5)))
+                    .padding(.horizontal, BsSpacing.md + 2) // 14pt
+                    .padding(.vertical, BsSpacing.sm)
+                    .background(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous).strokeBorder(BsColor.danger.opacity(0.5)))
                     .foregroundStyle(BsColor.danger)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("停止当前分析")
             }
             Button {
+                Haptic.light()
                 viewModel.reset()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: BsSpacing.xs + 2) {
                     Image(systemName: "arrow.clockwise").font(.caption)
                     Text("新的分析").font(.caption.weight(.semibold))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, BsSpacing.md + 2)
+                .padding(.vertical, BsSpacing.sm)
                 .background(
                     LinearGradient(
                         colors: [BsColor.brandAzure, BsColor.brandMint],
@@ -558,42 +555,43 @@ public struct AIAnalysisView: View {
                     )
                 )
                 .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("开始新的分析")
         }
     }
 
     // MARK: - Empty hint
 
     private var emptyHint: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.title)
-                .foregroundStyle(BsColor.brandAzure)
-                .padding(12)
-                .background(Circle().fill(BsColor.brandAzure.opacity(0.1)))
-            Text("开始你的第一个分析")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(BsColor.ink)
-            Text("输入社交媒体链接 + 截图（可选），AI 会抽取平台 / 作者 / 互动数据 / 卖点 / 受众，并输出三档投流预算与 10 关键词的情报卡片。")
-                .font(.caption)
-                .foregroundStyle(BsColor.inkMuted)
-                .multilineTextAlignment(.center)
-            HStack(spacing: 16) {
-                hintChip(icon: "globe", text: "支持 9 大平台")
-                hintChip(icon: "photo", text: "多模态截图")
-                hintChip(icon: "doc.text.magnifyingglass", text: "结构化情报卡")
+        BsContentCard(padding: .large) {
+            VStack(spacing: BsSpacing.sm) {
+                Image(systemName: "sparkles")
+                    .font(.title)
+                    .foregroundStyle(BsColor.brandAzure)
+                    .padding(BsSpacing.md)
+                    .background(Circle().fill(BsColor.brandAzure.opacity(0.1)))
+                Text("开始你的第一个分析")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BsColor.ink)
+                Text("输入社交媒体链接 + 截图（可选），AI 会抽取平台 / 作者 / 互动数据 / 卖点 / 受众，并输出三档投流预算与 10 关键词的情报卡片。")
+                    .font(.caption)
+                    .foregroundStyle(BsColor.inkMuted)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: BsSpacing.lg) {
+                    hintChip(icon: "globe", text: "支持 9 大平台")
+                    hintChip(icon: "photo", text: "多模态截图")
+                    hintChip(icon: "doc.text.magnifyingglass", text: "结构化情报卡")
+                }
+                .padding(.top, BsSpacing.xs + 2)
             }
-            .padding(.top, 6)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(RoundedRectangle(cornerRadius: BsRadius.lg - 2).fill(BsColor.surfacePrimary.opacity(0.6)))
     }
 
     private func hintChip(icon: String, text: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: BsSpacing.xs) {
             Image(systemName: icon).font(.caption2)
             Text(text).font(.caption2)
         }
@@ -607,7 +605,7 @@ private struct IntelReportView: View {
     let result: MediaAnalysisResult
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: BsSpacing.md + 2) { // 14pt
             if let summary = result.summary, !summary.isEmpty {
                 summaryBanner(summary)
             }
@@ -650,9 +648,9 @@ private struct IntelReportView: View {
     // ── Subviews ──
 
     private func summaryBanner(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text("一句话速览")
-                .font(.caption2.weight(.bold))
+                .font(BsTypography.captionSmall)
                 .kerning(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(BsColor.brandAzure)
@@ -661,39 +659,39 @@ private struct IntelReportView: View {
                 .foregroundStyle(BsColor.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(BsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [BsColor.brandAzure.opacity(0.08), BsColor.brandAzure.opacity(0.06)],  // TODO(batch-3): evaluate .indigo → brandAzure
+                        colors: [BsColor.brandAzure.opacity(0.08), BsColor.brandAzure.opacity(0.06)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                         .strokeBorder(BsColor.brandAzure.opacity(0.2), lineWidth: 1)
                 )
         )
     }
 
     private func section<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
+            HStack(spacing: BsSpacing.xs + 2) {
                 Image(systemName: icon).font(.caption2)
-                Text(title).font(.caption.weight(.bold)).kerning(0.6).textCase(.uppercase)
+                Text(title).font(BsTypography.label).kerning(0.6).textCase(.uppercase)
             }
             .foregroundStyle(BsColor.inkMuted)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(BsSpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                 .fill(BsColor.inkMuted.opacity(0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                         .strokeBorder(BsColor.inkMuted.opacity(0.12), lineWidth: 1)
                 )
         )
@@ -701,21 +699,21 @@ private struct IntelReportView: View {
 
     private var basicsGrid: some View {
         let b = result.basics
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+        return VStack(alignment: .leading, spacing: BsSpacing.smd) {
+            HStack(alignment: .top, spacing: BsSpacing.md) {
                 infoCell(label: "平台", valueView: AnyView(
                     Text(b.platform.label)
                         .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, BsSpacing.sm)
                         .padding(.vertical, 3)
                         .background(
-                            RoundedRectangle(cornerRadius: 10).fill(BsColor.brandAzure.opacity(0.1))  // TODO(batch-3): evaluate .indigo → brandAzure
+                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous).fill(BsColor.brandAzure.opacity(0.1))
                         )
-                        .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
+                        .foregroundStyle(BsColor.brandAzure)
                 ))
                 infoCell(label: "账号", text: b.authorHandle.map { "@\($0)" })
             }
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: BsSpacing.md) {
                 infoCell(label: "发布时间", text: b.publishTime)
             }
             if let title = b.coverTitle {
@@ -728,7 +726,7 @@ private struct IntelReportView: View {
         infoCell(label: label, valueView: AnyView(
             Text(text ?? "—")
                 .font(.caption)
-                .foregroundStyle(text == nil ? .secondary : BsColor.ink)
+                .foregroundStyle(text == nil ? BsColor.inkMuted : BsColor.ink)
         ), fullWidth: fullWidth)
     }
 
@@ -762,7 +760,7 @@ private struct IntelReportView: View {
         ]
         let allZero = data.allSatisfy { $0.value == 0 }
 
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: BsSpacing.smd) {
             if !allZero {
                 Chart(data) { d in
                     BarMark(
@@ -774,23 +772,26 @@ private struct IntelReportView: View {
                 }
                 .frame(height: 140)
                 .chartYAxis {
+                    // chart axis: fixed size —— SwiftUI Chart axis labels 默认走
+                    // system default；此处未自定义 font，保持默认。
                     AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
                 }
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: BsSpacing.xs + 2) {
                 ForEach(data) { d in
-                    VStack(spacing: 4) {
+                    VStack(spacing: BsSpacing.xs) {
                         Text("\(d.emoji) \(d.label)")
                             .font(BsTypography.captionSmall)
                             .foregroundStyle(BsColor.inkMuted)
                         Text(d.value > 0 ? Self.formatInt(d.value) : "—")
                             .font(.system(.footnote, weight: .bold))
-                            .foregroundStyle(d.value > 0 ? BsColor.ink : .secondary)
+                            .foregroundStyle(d.value > 0 ? BsColor.ink : BsColor.inkMuted)
+                            .contentTransition(.numericText())
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(BsColor.inkMuted.opacity(0.05)))
+                    .padding(.vertical, BsSpacing.xs + 2)
+                    .background(RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous).fill(BsColor.inkMuted.opacity(0.05)))
                 }
             }
         }
@@ -803,17 +804,17 @@ private struct IntelReportView: View {
     }
 
     private var contentBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("主题").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                 Text(result.content.theme).font(.caption).foregroundStyle(BsColor.ink)
             }
             if !result.content.sellingPoints.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: BsSpacing.xs) {
                     Text("核心卖点").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                     ForEach(Array(result.content.sellingPoints.enumerated()), id: \.offset) { _, item in
-                        HStack(alignment: .top, spacing: 4) {
-                            Text("•").foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
+                        HStack(alignment: .top, spacing: BsSpacing.xs) {
+                            Text("•").foregroundStyle(BsColor.brandAzure)
                             Text(item).font(.caption).foregroundStyle(BsColor.ink)
                         }
                     }
@@ -827,21 +828,21 @@ private struct IntelReportView: View {
     }
 
     private var evaluationBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             evaluationList(title: "✅ 优势", items: result.evaluation.strengths, color: BsColor.success)
             evaluationList(title: "🔧 改进", items: result.evaluation.improvements, color: BsColor.warning)
         }
     }
 
     private func evaluationList(title: String, items: [String], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text(title)
-                .font(.caption2.weight(.bold))
+                .font(BsTypography.captionSmall.weight(.bold))
                 .kerning(0.4)
                 .foregroundStyle(color)
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .top, spacing: 4) {
+                    HStack(alignment: .top, spacing: BsSpacing.xs) {
                         Text("•").foregroundStyle(color)
                         Text(item).font(.caption).foregroundStyle(BsColor.ink)
                     }
@@ -849,12 +850,12 @@ private struct IntelReportView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(BsSpacing.smd)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
                 .fill(color.opacity(0.06))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
                         .strokeBorder(color.opacity(0.25), lineWidth: 1)
                 )
         )
@@ -862,20 +863,20 @@ private struct IntelReportView: View {
 
     private var promotionBlock: some View {
         let p = result.paidPromotion
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: BsSpacing.smd) {
+            HStack(spacing: BsSpacing.xs + 2) {
                 budgetTile(label: "低档", tier: p.budgetTiers.low, accent: BsColor.inkMuted)
-                budgetTile(label: "中档", tier: p.budgetTiers.medium, accent: BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
+                budgetTile(label: "中档", tier: p.budgetTiers.medium, accent: BsColor.brandAzure)
                 budgetTile(label: "高档", tier: p.budgetTiers.high, accent: BsColor.brandAzure)
             }
             if !p.audienceTargeting.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: BsSpacing.xs) {
                     Text("定向人群").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
-                    chipRow(items: p.audienceTargeting, color: BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
+                    chipRow(items: p.audienceTargeting, color: BsColor.brandAzure)
                 }
             }
             if !p.bestTimeSlots.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: BsSpacing.xs) {
                     Text("最佳投放时段").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                     chipRow(items: p.bestTimeSlots, color: BsColor.brandMint)
                 }
@@ -884,7 +885,7 @@ private struct IntelReportView: View {
     }
 
     private func budgetTile(label: String, tier: MediaAnalysisResult.PaidPromotion.Tier, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             HStack {
                 Text(label).font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                 Spacer()
@@ -893,21 +894,21 @@ private struct IntelReportView: View {
             Text(tier.expected).font(.caption2).foregroundStyle(BsColor.inkMuted).lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
+        .padding(BsSpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
                 .fill(accent.opacity(0.06))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
                         .strokeBorder(accent.opacity(0.25), lineWidth: 1)
                 )
         )
     }
 
     private var keywordsBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             if !result.keywords.brand.isEmpty {
-                keywordGroup(title: "Brand · 品牌词", items: result.keywords.brand, color: BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
+                keywordGroup(title: "Brand · 品牌词", items: result.keywords.brand, color: BsColor.brandAzure)
             }
             if !result.keywords.category.isEmpty {
                 keywordGroup(title: "Category · 品类词", items: result.keywords.category, color: BsColor.brandAzure)
@@ -919,24 +920,24 @@ private struct IntelReportView: View {
     }
 
     private func keywordGroup(title: String, items: [String], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text(title).font(BsTypography.label).textCase(.uppercase).foregroundStyle(color)
             chipRow(items: items, color: color, prefix: "#")
         }
     }
 
     private func chipRow(items: [String], color: Color, prefix: String = "") -> some View {
-        FlowLayout(spacing: 6) {
+        FlowLayout(spacing: BsSpacing.xs + 2) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 Text("\(prefix)\(item)")
                     .font(.caption2.weight(.medium))
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, BsSpacing.sm)
                     .padding(.vertical, 3)
                     .background(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: BsRadius.xs + 2, style: .continuous) // 6pt chip
                             .fill(color.opacity(0.1))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: BsRadius.xs + 2, style: .continuous)
                                     .strokeBorder(color.opacity(0.25), lineWidth: 1)
                             )
                     )

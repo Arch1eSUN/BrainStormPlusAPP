@@ -89,6 +89,7 @@ public struct AdminUserCreateSheet: View {
                             Text("超级管理员").tag("superadmin")
                         }
                         .pickerStyle(.segmented)
+                        .onChange(of: appRole) { _, _ in Haptic.selection() }
                     }
 
                     Section {
@@ -147,6 +148,7 @@ public struct AdminUserCreateSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(submitting ? "提交中…" : "创建") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
                     .disabled(submitting || fullName.isEmpty || displayName.isEmpty || email.isEmpty || password.count < 6)

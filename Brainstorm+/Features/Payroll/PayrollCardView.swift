@@ -70,6 +70,8 @@ public struct PayrollCardView: View {
                         Text("¥\(payroll.netPay as NSNumber, formatter: currencyFormatter)")
                             .font(BsTypography.statMedium)
                             .foregroundStyle(BsColor.ink)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
                     }
                 }
 

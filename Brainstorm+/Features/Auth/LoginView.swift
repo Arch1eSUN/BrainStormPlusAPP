@@ -350,6 +350,7 @@ struct LoginView: View {
     private func triggerShake(message: String) {
         Haptic.error()
         errorMessage = message
+        // intentional: tight shake spring（response 0.2 / damp 0.3）—— 不等价 overshoot token
         withAnimation(.spring(response: 0.2, dampingFraction: 0.3)) {
             shakeTrigger += 1
         }

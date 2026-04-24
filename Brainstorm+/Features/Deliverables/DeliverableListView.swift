@@ -109,7 +109,7 @@ public struct DeliverableListView: View {
     @ViewBuilder
     private var content: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: BsSpacing.lg) {
                 statsRow
                 statusChipRow
                 if showFilters {
@@ -118,7 +118,7 @@ public struct DeliverableListView: View {
                 }
 
                 if viewModel.filteredItems.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: BsSpacing.lg) {
                         ContentUnavailableView(
                             "暂无交付物",
                             systemImage: "shippingbox",
@@ -128,36 +128,38 @@ public struct DeliverableListView: View {
                         // empty state gives users a direct entry into the
                         // create flow without hunting for the toolbar.
                         Button {
-                            Haptic.light()
+                            Haptic.medium()
                             showCreateSheet = true
                         } label: {
                             Label("新建交付物", systemImage: "plus")
-                                .font(BsTypography.inter(15, weight: "SemiBold"))
+                                .font(BsTypography.inter(15, weight: "SemiBold", relativeTo: .subheadline))
                                 .padding(.horizontal, BsSpacing.lg)
-                                .padding(.vertical, BsSpacing.md - 2)
+                                .padding(.vertical, BsSpacing.smd)
                                 .background(BsColor.brandAzure)
                                 .foregroundColor(.white)
                                 .clipShape(Capsule())
                         }
                     }
-                    .padding(.top, 40)
+                    .padding(.top, BsSpacing.xxl + BsSpacing.sm) // 40pt
                 } else {
                     list
                 }
             }
-            .padding(.vertical)
+            .padding(.vertical, BsSpacing.md)
         }
+        .background(BsColor.pageBackground.ignoresSafeArea())
     }
 
     @ViewBuilder
     private var statsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: BsSpacing.sm) {
                 ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
                     BsContentCard(padding: .small) {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                             Text("\(viewModel.statusCounts[s] ?? 0)")
-                                .font(.title3.weight(.bold))
+                                .font(BsTypography.statSmall)
+                                .foregroundStyle(BsColor.ink)
                                 .contentTransition(.numericText())
                             Text(s.displayName)
                                 .font(.caption2)
@@ -167,14 +169,14 @@ public struct DeliverableListView: View {
                     .fixedSize(horizontal: true, vertical: false)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, BsSpacing.lg)
         }
     }
 
     @ViewBuilder
     private var statusChipRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: BsSpacing.sm) {
                 chip(label: "全部", isSelected: viewModel.statusFilter == nil) {
                     viewModel.statusFilter = nil
                 }
@@ -183,97 +185,101 @@ public struct DeliverableListView: View {
                         viewModel.statusFilter = s
                     }
                 }
-                Divider().frame(height: 16)
+                Divider().frame(height: BsSpacing.lg)
                 chip(label: "仅我负责", isSelected: viewModel.onlyMine) {
                     viewModel.onlyMine.toggle()
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, BsSpacing.lg)
         }
     }
 
     @ViewBuilder
     private var advancedFilters: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("项目")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(BsColor.inkMuted)
-                Spacer()
-                Menu {
-                    Button("所有项目") { Haptic.selection(); viewModel.projectFilter = nil }
-                    ForEach(viewModel.projects, id: \.id) { p in
-                        if let pid = p.id {
-                            Button(p.name ?? "(未命名)") { Haptic.selection(); viewModel.projectFilter = pid }
+        BsContentCard(padding: .small) {
+            VStack(spacing: BsSpacing.smd) {
+                HStack {
+                    Text("项目")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BsColor.inkMuted)
+                    Spacer()
+                    Menu {
+                        Button("所有项目") { Haptic.selection(); viewModel.projectFilter = nil }
+                        ForEach(viewModel.projects, id: \.id) { p in
+                            if let pid = p.id {
+                                Button(p.name ?? "(未命名)") { Haptic.selection(); viewModel.projectFilter = pid }
+                            }
                         }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(projectFilterLabel)
-                        Image(systemName: "chevron.up.chevron.down")
-                    }
-                    .font(.caption)
-                }
-            }
-            HStack {
-                Text("负责人")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(BsColor.inkMuted)
-                Spacer()
-                Menu {
-                    Button("所有人") { Haptic.selection(); viewModel.assigneeFilter = nil }
-                    ForEach(viewModel.members, id: \.id) { m in
-                        if let mid = m.id {
-                            Button(m.fullName ?? "未命名") { Haptic.selection(); viewModel.assigneeFilter = mid }
+                    } label: {
+                        HStack(spacing: BsSpacing.xs) {
+                            Text(projectFilterLabel)
+                            Image(systemName: "chevron.up.chevron.down")
                         }
+                        .font(.caption)
+                        .foregroundStyle(BsColor.brandAzure)
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(assigneeFilterLabel)
-                        Image(systemName: "chevron.up.chevron.down")
-                    }
-                    .font(.caption)
                 }
-            }
-            HStack {
-                DatePicker(
-                    "开始",
-                    selection: Binding(
-                        get: { viewModel.dateFrom ?? Date() },
-                        set: { viewModel.dateFrom = $0 }
-                    ),
-                    displayedComponents: .date
-                )
-                .labelsHidden()
-                .font(.caption)
-                Text("—")
-                    .foregroundStyle(BsColor.inkFaint)
-                DatePicker(
-                    "结束",
-                    selection: Binding(
-                        get: { viewModel.dateTo ?? Date() },
-                        set: { viewModel.dateTo = $0 }
-                    ),
-                    displayedComponents: .date
-                )
-                .labelsHidden()
-                .font(.caption)
-                Spacer()
-                if viewModel.dateFrom != nil || viewModel.dateTo != nil
-                    || viewModel.projectFilter != nil || viewModel.assigneeFilter != nil {
-                    Button("清除") {
-                        Haptic.light()
-                        viewModel.dateFrom = nil
-                        viewModel.dateTo = nil
-                        viewModel.projectFilter = nil
-                        viewModel.assigneeFilter = nil
+                HStack {
+                    Text("负责人")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BsColor.inkMuted)
+                    Spacer()
+                    Menu {
+                        Button("所有人") { Haptic.selection(); viewModel.assigneeFilter = nil }
+                        ForEach(viewModel.members, id: \.id) { m in
+                            if let mid = m.id {
+                                Button(m.fullName ?? "未命名") { Haptic.selection(); viewModel.assigneeFilter = mid }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: BsSpacing.xs) {
+                            Text(assigneeFilterLabel)
+                            Image(systemName: "chevron.up.chevron.down")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(BsColor.brandAzure)
                     }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(BsColor.danger)
+                }
+                HStack {
+                    DatePicker(
+                        "开始",
+                        selection: Binding(
+                            get: { viewModel.dateFrom ?? Date() },
+                            set: { viewModel.dateFrom = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .font(.caption)
+                    Text("—")
+                        .foregroundStyle(BsColor.inkFaint)
+                    DatePicker(
+                        "结束",
+                        selection: Binding(
+                            get: { viewModel.dateTo ?? Date() },
+                            set: { viewModel.dateTo = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .font(.caption)
+                    Spacer()
+                    if viewModel.dateFrom != nil || viewModel.dateTo != nil
+                        || viewModel.projectFilter != nil || viewModel.assigneeFilter != nil {
+                        Button("清除") {
+                            Haptic.light()
+                            viewModel.dateFrom = nil
+                            viewModel.dateTo = nil
+                            viewModel.projectFilter = nil
+                            viewModel.assigneeFilter = nil
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BsColor.danger)
+                    }
                 }
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, BsSpacing.lg)
     }
 
     private var projectFilterLabel: String {
@@ -301,7 +307,7 @@ public struct DeliverableListView: View {
 
     @ViewBuilder
     private var list: some View {
-        LazyVStack(spacing: 10) {
+        LazyVStack(spacing: BsSpacing.smd) {
             ForEach(viewModel.filteredItems) { d in
                 NavigationLink {
                     DeliverableDetailView(
@@ -313,7 +319,7 @@ public struct DeliverableListView: View {
                     )
                 } label: {
                     DeliverableRow(item: d)
-                        .padding(.horizontal)
+                        .padding(.horizontal, BsSpacing.lg)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -324,7 +330,7 @@ public struct DeliverableListView: View {
                         Label("编辑", systemImage: "pencil")
                     }
                     Button(role: .destructive) {
-                        Haptic.light()
+                        Haptic.warning()
                         deleteTarget = d
                     } label: {
                         Label("删除", systemImage: "trash")
@@ -349,8 +355,8 @@ public struct DeliverableListView: View {
         } label: {
             Text(label)
                 .font(.caption.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, BsSpacing.md)
+                .padding(.vertical, BsSpacing.xs + 2) // 6pt — keeps capsule vertical rhythm
                 .background(isSelected ? BsColor.brandAzure.opacity(0.15) : BsColor.inkMuted.opacity(0.08))
                 .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.ink)
                 .clipShape(Capsule())
@@ -366,19 +372,20 @@ private struct DeliverableRow: View {
 
     var body: some View {
         BsContentCard(padding: .small) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
+            HStack(alignment: .top, spacing: BsSpacing.md) {
+                VStack(alignment: .leading, spacing: BsSpacing.xs + 2) { // 6pt inner rhythm
+                    HStack(spacing: BsSpacing.xs + 2) {
                         Text(item.title)
                             .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(BsColor.ink)
                             .lineLimit(1)
                         if let project = item.project?.name, !project.isEmpty {
                             Label(project, systemImage: "folder")
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(BsColor.brandAzure)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, BsSpacing.xs + 2)
+                                .padding(.vertical, BsSpacing.xxs)
                                 .background(BsColor.brandAzure.opacity(0.12))
                                 .clipShape(Capsule())
                         }
@@ -389,16 +396,17 @@ private struct DeliverableRow: View {
                             .foregroundStyle(BsColor.inkMuted)
                             .lineLimit(1)
                     }
-                    HStack(spacing: 8) {
+                    HStack(spacing: BsSpacing.sm) {
                         DeliverableStatusChip(status: item.status)
                         if let urlStr = item.url ?? item.fileUrl,
                            !urlStr.isEmpty,
                            let platform = DeliverablePlatform.detect(urlStr) {
+                            // vendor color: platform.color 是外部品牌辨识色
                             Label(platform.label, systemImage: "link")
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, BsSpacing.xs + 2)
+                                .padding(.vertical, BsSpacing.xxs)
                                 .background(platform.color.opacity(0.12))
                                 .foregroundStyle(platform.color)
                                 .clipShape(Capsule())

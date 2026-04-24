@@ -341,14 +341,26 @@ public struct AttendanceHeroCard: View {
         hasHitOvertime ? BsColor.brandCoral : stateColor
     }
 
-    /// 今天 ISO 日期（对齐 Attendance 模型的 date 字段）
-    private static func todayISO() -> String {
+    /// 共享 ISO 日期 formatter（避免每次调用都 alloc）
+    private static let isoDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        return f
+    }()
+
+    /// HH:mm 时间 formatter（避免重复 alloc）
+    private static let hhmmFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    /// 今天 ISO 日期（对齐 Attendance 模型的 date 字段）
+    private static func todayISO() -> String {
+        isoDayFormatter.string(from: Date())
     }
 
     private var statusLabel: String {
@@ -411,9 +423,7 @@ public struct AttendanceHeroCard: View {
     // MARK: - Formatter
 
     private func formatTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f.string(from: date)
+        Self.hhmmFormatter.string(from: date)
     }
 
     // MARK: - v1.3 状态机 transition methods

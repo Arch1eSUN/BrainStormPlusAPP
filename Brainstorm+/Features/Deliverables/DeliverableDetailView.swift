@@ -26,7 +26,7 @@ public struct DeliverableDetailView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: BsSpacing.lg + BsSpacing.xs) { // 20pt section rhythm
                 header
                 statusSection
                 if let url = linkURL {
@@ -34,31 +34,39 @@ public struct DeliverableDetailView: View {
                 }
                 if let desc = viewModel.deliverable.description, !desc.isEmpty {
                     section(title: "描述") {
-                        Text(desc)
-                            .font(.body)
-                            .foregroundStyle(BsColor.ink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        BsContentCard(padding: .small) {
+                            Text(desc)
+                                .font(.body)
+                                .foregroundStyle(BsColor.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
                 if let project = viewModel.deliverable.project {
                     section(title: "关联项目") {
-                        HStack {
-                            Image(systemName: "folder.fill")
-                                .foregroundStyle(BsColor.brandAzure)
-                            Text(project.name ?? "未命名项目")
-                                .font(.subheadline.weight(.semibold))
+                        BsContentCard(padding: .small) {
+                            HStack(spacing: BsSpacing.sm) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundStyle(BsColor.brandAzure)
+                                Text(project.name ?? "未命名项目")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(BsColor.ink)
+                            }
                         }
                     }
                 }
                 if let assignee = viewModel.deliverable.assignee {
                     section(title: "负责人") {
-                        assigneeRow(assignee)
+                        BsContentCard(padding: .small) {
+                            assigneeRow(assignee)
+                        }
                     }
                 }
                 timestampsCard
             }
-            .padding()
+            .padding(BsSpacing.lg)
         }
+        .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("交付物详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -73,13 +81,15 @@ public struct DeliverableDetailView: View {
                     .disabled(viewModel.listViewModel == nil)
 
                     Button(role: .destructive) {
-                        Haptic.light()
+                        Haptic.warning()
                         showDeleteConfirm = true
                     } label: {
                         Label("删除交付物", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
+                        .foregroundColor(BsColor.brandAzure)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel("更多操作")
             }
@@ -121,20 +131,23 @@ public struct DeliverableDetailView: View {
 
     @ViewBuilder
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(viewModel.deliverable.title)
-                .font(.title3.weight(.bold))
-            HStack(spacing: 8) {
-                DeliverableStatusChip(status: viewModel.deliverable.status)
-                if let submitted = viewModel.deliverable.submittedAt {
-                    Label {
-                        Text(submitted, style: .date)
-                    } icon: {
-                        Image(systemName: "paperplane.fill")
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                Text(viewModel.deliverable.title)
+                    .font(BsTypography.sectionTitle)
+                    .foregroundStyle(BsColor.ink)
+                HStack(spacing: BsSpacing.sm) {
+                    DeliverableStatusChip(status: viewModel.deliverable.status)
+                    if let submitted = viewModel.deliverable.submittedAt {
+                        Label {
+                            Text(submitted, style: .date)
+                        } icon: {
+                            Image(systemName: "paperplane.fill")
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(BsColor.inkMuted)
                     }
-                    .labelStyle(.titleAndIcon)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -164,6 +177,7 @@ public struct DeliverableDetailView: View {
                 HStack {
                     Text(viewModel.deliverable.status.displayName)
                         .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(BsColor.ink)
                     Spacer()
                     if viewModel.isMutating {
                         ProgressView().controlSize(.small)
@@ -173,10 +187,15 @@ public struct DeliverableDetailView: View {
                             .foregroundStyle(BsColor.inkMuted)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .padding(.horizontal, BsSpacing.md)
+                .padding(.vertical, BsSpacing.smd)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(BsColor.surfacePrimary)
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                        .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+                )
             }
             .disabled(viewModel.isMutating)
         }
@@ -196,13 +215,15 @@ public struct DeliverableDetailView: View {
     private func linkCard(url: URL) -> some View {
         section(title: "交付链接") {
             // TODO(batch-3): vendor platform colors — define BsColor.platform namespace later
+            // Intentional: platform.color 是外部品牌色（Google Drive / 百度网盘 /
+            // Figma / GitHub / ...），保留不走 token —— vendor color 是辨识关键。
             let platform = DeliverablePlatform.detect(url.absoluteString)
                 ?? DeliverablePlatform(label: "链接", color: BsColor.inkMuted)
             Link(destination: url) {
-                HStack(spacing: 10) {
+                HStack(spacing: BsSpacing.smd) {
                     Image(systemName: "arrow.up.right.square.fill")
                         .foregroundStyle(platform.color)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                         Text(platform.label)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(BsColor.ink)
@@ -217,9 +238,9 @@ public struct DeliverableDetailView: View {
                         .font(.caption)
                         .foregroundStyle(BsColor.inkFaint)
                 }
-                .padding(12)
-                .background(platform.color.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(BsSpacing.md)
+                .background(platform.color.opacity(0.08))  // vendor tint
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             }
         }
     }
@@ -228,13 +249,13 @@ public struct DeliverableDetailView: View {
 
     @ViewBuilder
     private func assigneeRow(_ assignee: Deliverable.RelatedProfile) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             Group {
                 if let urlStr = assignee.avatarUrl, let url = URL(string: urlStr) {
                     AsyncImage(url: url) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
-                        Color.secondary.opacity(0.15)
+                        BsColor.inkMuted.opacity(0.15)
                     }
                 } else {
                     Circle().fill(BsColor.brandAzure.opacity(0.2))
@@ -251,6 +272,7 @@ public struct DeliverableDetailView: View {
 
             Text(assignee.fullName ?? "未命名")
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(BsColor.ink)
             Spacer()
         }
     }
@@ -260,7 +282,7 @@ public struct DeliverableDetailView: View {
     @ViewBuilder
     private var timestampsCard: some View {
         BsContentCard(padding: .small) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: BsSpacing.xs + 2) { // 6pt row gap
                 if let created = viewModel.deliverable.createdAt {
                     timestampRow(label: "创建时间", date: created)
                 }
@@ -292,9 +314,9 @@ public struct DeliverableDetailView: View {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             Text(title)
-                .font(.caption.weight(.bold))
+                .font(BsTypography.label)
                 .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
             content()

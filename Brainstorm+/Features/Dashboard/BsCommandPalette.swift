@@ -258,8 +258,19 @@ public struct BsCommandPalette: View {
                 spacing: BsSpacing.lg
             ) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    moduleTileButton(item: item)
-                        .bsAppearStagger(index: categoryIndex * 6 + idx, baseDelay: 0.03)
+                    // Batch 7 合并：palette 的 inline moduleTileButton 与 BsAppTile
+                    // 视觉/签名完全一致（50x50 tint 方块 + SF palette icon +
+                    // Inter-Medium 12pt 名）。复用 BsAppTile 后 palette 也顺带
+                    // 拿到 drag-driven press scale + Haptic.light（比原版 TapGesture
+                    // onEnded 更及时）。NavigationLink destination 由 BsAppTile
+                    // 内部 wrap，行为不变。
+                    BsAppTile(
+                        name: item.name,
+                        systemImage: item.systemImage,
+                        tint: item.tint,
+                        destination: item.destination
+                    )
+                    .bsAppearStagger(index: categoryIndex * 6 + idx, baseDelay: 0.03)
                 }
             }
         }
@@ -270,39 +281,6 @@ public struct BsCommandPalette: View {
             RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
                 .stroke(BsColor.borderSubtle, lineWidth: 0.5)
         )
-    }
-
-    /// Tile —— NavigationLink 原生 push 到 destination。
-    /// launcher 外层 NavStack 自动加 iOS 原生返回按钮。
-    @ViewBuilder
-    private func moduleTileButton(item: ModuleEntry) -> some View {
-        NavigationLink {
-            item.destination()
-        } label: {
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(item.tint.opacity(0.18))
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: item.systemImage)
-                        .font(.system(size: 22, weight: .semibold))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(item.tint, item.tint.opacity(0.55))
-                        .frame(width: 50, height: 50)
-                }
-                Text(item.name)
-                    .font(.custom("Inter-Medium", size: 12))
-                    .foregroundStyle(BsColor.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(TapGesture().onEnded { Haptic.light() })
     }
 
     /// Category → section accent mapping so each group has a distinct

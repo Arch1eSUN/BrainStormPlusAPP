@@ -174,22 +174,22 @@ public final class ScheduleViewModel {
 
     // MARK: - Helpers
 
-    static func isoDateString(for date: Date) -> String {
+    /// 共享 ISO 日期 formatter（避免每次 call 都 alloc）
+    private static let isoDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        return f
+    }()
+
+    static func isoDateString(for date: Date) -> String {
+        isoDayFormatter.string(from: date)
     }
 
     private static func dateFrom(iso: String) -> Date? {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: iso)
+        isoDayFormatter.date(from: iso)
     }
 
     static func dateStrip(startingAt start: Date, count: Int) -> [(date: Date, iso: String)] {

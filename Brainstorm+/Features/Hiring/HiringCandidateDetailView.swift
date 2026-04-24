@@ -9,6 +9,9 @@ public struct HiringCandidateDetailView: View {
 
     private let onChanged: () -> Void
 
+    // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+    private static let toastDuration: TimeInterval = 2.2
+
     public init(candidateId: UUID, onChanged: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: HiringCandidateDetailViewModel(candidateId: candidateId))
         self.onChanged = onChanged
@@ -28,10 +31,10 @@ public struct HiringCandidateDetailView: View {
             } else if viewModel.isLoading {
                 ProgressView().padding(.top, 40)
             } else {
-                ContentUnavailableView(
-                    "候选人不存在",
+                BsEmptyState(
+                    title: "候选人不存在",
                     systemImage: "person.crop.circle.badge.questionmark",
-                    description: Text("该候选人可能已被删除。")
+                    description: "该候选人可能已被删除。"
                 )
             }
         }
@@ -77,7 +80,8 @@ public struct HiringCandidateDetailView: View {
                     .padding(.top, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task {
-                        try? await Task.sleep(nanoseconds: 2_200_000_000)
+                        // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+                        try? await Task.sleep(for: .seconds(Self.toastDuration))
                         await MainActor.run { viewModel.toastMessage = nil }
                     }
             }

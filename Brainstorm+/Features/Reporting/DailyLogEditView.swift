@@ -70,6 +70,7 @@ public struct DailyLogEditView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: mood) { _, _ in Haptic.selection() }
                 }
 
                 Section("内容") {
@@ -150,6 +151,7 @@ public struct DailyLogEditView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        Haptic.medium()
                         Task { await save() }
                     } label: {
                         Text(existingLog == nil ? "保存" : "更新")

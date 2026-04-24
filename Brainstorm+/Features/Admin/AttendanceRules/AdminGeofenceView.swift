@@ -49,15 +49,18 @@ public struct AdminGeofenceView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     showingAdd = true
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("新建围栏点")
             }
             ToolbarItem(placement: .bottomBar) {
                 HStack {
                     Spacer()
                     Button {
+                        Haptic.medium()
                         Task { _ = await vm.save() }
                     } label: {
                         if vm.isSaving {

@@ -45,12 +45,12 @@ public struct TeamAttendanceView: View {
             // 员工列表
             if viewModel.filteredRows.isEmpty && !viewModel.isLoading {
                 Section {
-                    ContentUnavailableView(
-                        viewModel.searchQuery.isEmpty ? "暂无数据" : "没有匹配的员工",
+                    BsEmptyState(
+                        title: viewModel.searchQuery.isEmpty ? "暂无数据" : "没有匹配的员工",
                         systemImage: viewModel.searchQuery.isEmpty ? "person.2.slash" : "magnifyingglass",
-                        description: Text(viewModel.searchQuery.isEmpty ?
+                        description: viewModel.searchQuery.isEmpty ?
                             "当前日期或部门下没有员工打卡记录" :
-                            "换个关键词再试")
+                            "换个关键词再试"
                     )
                     .listRowBackground(Color.clear)
                 }

@@ -91,8 +91,11 @@ struct AdminAttendanceExemptionEditSheet: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("保存") { commit() }
-                        .disabled(!canSave)
+                    Button("保存") {
+                        Haptic.medium()
+                        commit()
+                    }
+                    .disabled(!canSave)
                 }
             }
             .onAppear(perform: prefill)

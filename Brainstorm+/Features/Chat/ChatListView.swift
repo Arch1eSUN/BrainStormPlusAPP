@@ -222,6 +222,7 @@ public struct ChatListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.searchResults.isEmpty {
+            // BsEmptyState signature mismatch: iOS 原生 .search(text:) 自带本地化文案，保留
             ContentUnavailableView.search(text: viewModel.searchQuery)
         } else {
             List(viewModel.searchResults) { result in

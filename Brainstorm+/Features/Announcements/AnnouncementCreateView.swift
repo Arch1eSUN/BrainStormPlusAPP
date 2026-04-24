@@ -75,6 +75,7 @@ public struct AnnouncementCreateView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: priority) { _, _ in Haptic.selection() }
                 }
             }
             .navigationTitle("发布公告")

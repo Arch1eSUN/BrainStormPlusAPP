@@ -99,14 +99,18 @@ public struct BsWeeklyCadenceStrip: View {
                 .fill(BsColor.brandCoral)
                 .frame(width: 12, height: 12)
                 .scaleEffect(1.5)
-                .shadow(color: BsColor.brandCoral.opacity(0.7), radius: 5)
-                .shadow(color: BsColor.brandCoral.opacity(0.35), radius: 10)
+                // Batch 7: migrate 2-layer glow shadow → BsShadow.glow(color:) helper
+                // 近光（radius 5, opacity 0.7）+ 远光（radius 10, opacity 0.35）双层
+                // 组合营造今日 dot 的 pulse halo。
+                .bsShadow(BsShadow.glow(BsColor.brandCoral, opacity: 0.7, radius: 5))
+                .bsShadow(BsShadow.glow(BsColor.brandCoral, opacity: 0.35, radius: 10))
                 .modifier(TodayPulse(isToday: true))
         } else if day.isCompleted {
             Circle()
                 .fill(BsColor.brandMint)
                 .frame(width: 10, height: 10)
-                .shadow(color: BsColor.brandMint.opacity(0.35), radius: 2)
+                // Batch 7: migrate raw mint glow → BsShadow.glow helper
+                .bsShadow(BsShadow.glow(BsColor.brandMint, opacity: 0.35, radius: 2))
         } else {
             Circle()
                 .stroke(BsColor.inkFaint.opacity(0.35), lineWidth: 1.5)

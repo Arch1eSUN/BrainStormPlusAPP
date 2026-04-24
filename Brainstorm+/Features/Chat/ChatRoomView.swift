@@ -118,6 +118,7 @@ public struct ChatRoomView: View {
                     Label("图片", systemImage: "photo")
                 }
                 Button {
+                    Haptic.light()
                     showFileImporter = true
                 } label: {
                     Label("文件", systemImage: "doc")
@@ -127,6 +128,7 @@ public struct ChatRoomView: View {
                     .font(.system(size: 20))
                     .foregroundStyle(BsColor.inkMuted)
             }
+            .accessibilityLabel("附件")
 
             TextField("输入消息…", text: $messageText)
                 .font(BsTypography.body)
@@ -161,8 +163,11 @@ public struct ChatRoomView: View {
                         .interactive(),
                     in: Circle()
                 )
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .disabled(isSendDisabled)
+            .accessibilityLabel("发送")
         }
         .padding(.horizontal, BsSpacing.lg)
         .padding(.vertical, BsSpacing.md)
@@ -252,6 +257,7 @@ public struct ChatRoomView: View {
         let uploads = pendingUploads
         let replyToId = replyingTo?.id
         guard !text.isEmpty || !uploads.isEmpty else { return }
+        Haptic.medium()
 
         // 乐观清 UI —— 如果上传/发送失败，errorMessage 会弹出 banner，
         // 用户可以重新选文件再发。Web 行为一致（page.tsx:301-306）。

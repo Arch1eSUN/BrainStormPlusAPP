@@ -190,10 +190,10 @@ public struct LeavesView: View {
                     }
                 }
             } else if viewModel.history.isEmpty {
-                ContentUnavailableView(
-                    "无记录",
+                BsEmptyState(
+                    title: "无记录",
                     systemImage: "clock",
-                    description: Text("您近期还没有关于请假审批的记录")
+                    description: "您近期还没有关于请假审批的记录"
                 )
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 160)

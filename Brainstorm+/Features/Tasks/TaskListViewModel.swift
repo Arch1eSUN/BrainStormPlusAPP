@@ -25,6 +25,15 @@ public class TaskListViewModel: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
 
+    /// 共享 yyyy-MM-dd formatter + ISO8601 formatter（避免每次调用都 alloc）
+    private static let dueDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+    private static let iso8601Formatter = ISO8601DateFormatter()
+
     /// Search text — filters the local `tasks` array (title + description).
     /// Per iOS conventions, we use a client-side filter rather than Web's
     /// server-side `ilike` to keep the round-trip cheap.
@@ -142,10 +151,7 @@ public class TaskListViewModel: ObservableObject {
         dueDate: Date?,
         participantIds: [UUID] = []
     ) async throws {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let dueDateString = dueDate.map { formatter.string(from: $0) }
+        let dueDateString = dueDate.map { Self.dueDateFormatter.string(from: $0) }
 
         let user = try await client.auth.session.user
 
@@ -387,7 +393,7 @@ public class TaskListViewModel: ObservableObject {
             // Pre-format to ISO-8601 for Supabase (matches the pattern
             // used elsewhere in the app, e.g. ProjectEditViewModel:259).
             let completedAtString: String? = completedAtDate.map {
-                ISO8601DateFormatter().string(from: $0)
+                Self.iso8601Formatter.string(from: $0)
             }
 
             struct CompletedAtUpdate: Encodable {

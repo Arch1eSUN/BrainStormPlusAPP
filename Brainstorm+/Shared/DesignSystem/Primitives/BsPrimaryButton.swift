@@ -141,46 +141,57 @@ public extension BsPrimaryButton where Label == Text {
     }
 }
 
-// 带 SF Symbol icon 前缀的便捷构造器
-public struct BsPrimaryButtonWithIcon: View {
-    let title: String
-    let systemImage: String
-    let size: BsPrimaryButton<AnyView>.Size
-    let isLoading: Bool
-    let isDisabled: Bool
-    let action: () -> Void
+// 带 SF Symbol icon 前缀的便捷构造器（v1.1 Batch 7 合并到 BsPrimaryButton 本体）
+//
+// 过去 BsPrimaryButtonWithIcon 是独立 struct（内部包 AnyView + 再度 wrap 一次
+// BsPrimaryButton）。Batch 7 清理把"icon + title"直接下放到 BsPrimaryButton
+// 的 @ViewBuilder label —— 调用方可以写：
+//
+//     BsPrimaryButton(size: .large, action: { ... }) {
+//         HStack(spacing: 8) {
+//             Image(systemName: "plus.circle.fill")
+//                 .font(.system(size: 14, weight: .semibold))
+//             Text("创建")
+//         }
+//     }
+//
+// 或者用下面的 `systemImage:` 便捷构造器（内部走 BsPrimaryIconLabel，
+// 固定 8pt 间距 + 14pt semibold icon，对齐 Web primary button 节奏）。
 
-    public init(
+/// 内部使用：BsPrimaryButton `systemImage:` 便捷构造器的 label 容器。
+/// 命名显式成独立 View 避免 generic `Label` 泛型签名引入内部 SwiftUI 类型。
+public struct BsPrimaryIconLabel: View {
+    let systemImage: String
+    let title: String
+
+    public var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+            Text(title)
+        }
+    }
+}
+
+public extension BsPrimaryButton where Label == BsPrimaryIconLabel {
+    /// 带前置 SF Symbol 的便捷构造器。
+    ///
+    /// 替代旧的 `BsPrimaryButtonWithIcon(...)`（已移除）。
+    init(
         _ title: String,
         systemImage: String,
-        size: BsPrimaryButton<AnyView>.Size = .regular,
+        size: Size = .regular,
         isLoading: Bool = false,
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) {
-        self.title = title
-        self.systemImage = systemImage
-        self.size = size
-        self.isLoading = isLoading
-        self.isDisabled = isDisabled
-        self.action = action
-    }
-
-    public var body: some View {
-        BsPrimaryButton(
+        self.init(
             size: size,
             isLoading: isLoading,
             isDisabled: isDisabled,
             action: action
         ) {
-            AnyView(
-                HStack(spacing: 8) {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(title)
-                }
-                .foregroundStyle(.white)
-            )
+            BsPrimaryIconLabel(systemImage: systemImage, title: title)
         }
     }
 }
@@ -191,7 +202,7 @@ public struct BsPrimaryButtonWithIcon: View {
         BsPrimaryButton("提交打卡", size: .large) {}
         BsPrimaryButton("发送中", size: .regular, isLoading: true) {}
         BsPrimaryButton("不可用", size: .regular, isDisabled: true) {}
-        BsPrimaryButtonWithIcon("创建", systemImage: "plus.circle.fill", size: .large) {}
+        BsPrimaryButton("创建", systemImage: "plus.circle.fill", size: .large) {}
     }
     .padding()
 }

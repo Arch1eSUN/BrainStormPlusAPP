@@ -26,6 +26,12 @@ public struct TaskListView: View {
     @State private var isShowingCreateTask = false
     @State private var viewMode: ViewMode = .list
 
+    /// Phase 3 isEmbedded：当父容器（例如 MainTabView tab / ActionItemHelper
+    /// NavigationLink destination / Dashboard quick-action tile）已经持有
+    /// NavigationStack 时，本 view 借用父 stack，避免双层嵌套导致 push 行为
+    /// 异常 / nav-bar 双叠。
+    public let isEmbedded: Bool
+
     // ── Status segment filter ───────────────────────────────────────
     // 4-state filter matches Web's `STATUS_COLUMNS` plus an "All" head.
     enum TaskFilter: String, CaseIterable {
@@ -70,63 +76,71 @@ public struct TaskListView: View {
         return base.filter { $0.status == status }
     }
 
-    public init(viewModel: TaskListViewModel) {
+    public init(viewModel: TaskListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.tasks.isEmpty {
-                    loadingView
-                } else if visibleTasks.isEmpty && viewMode == .list {
-                    emptyWrapper
-                } else {
-                    switch viewMode {
-                    case .list:
-                        listBody
-                    case .kanban:
-                        kanbanBody
-                    }
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    @ViewBuilder
+    private var coreContent: some View {
+        Group {
+            if viewModel.isLoading && viewModel.tasks.isEmpty {
+                loadingView
+            } else if visibleTasks.isEmpty && viewMode == .list {
+                emptyWrapper
+            } else {
+                switch viewMode {
+                case .list:
+                    listBody
+                case .kanban:
+                    kanbanBody
                 }
             }
-            .background(BsColor.pageBackground.ignoresSafeArea())
-            .navigationTitle("任务管理")
-            .navigationBarTitleDisplayMode(.large)
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索任务..."
-            )
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    projectFilterMenu
+        }
+        .background(BsColor.pageBackground.ignoresSafeArea())
+        .navigationTitle("任务管理")
+        .navigationBarTitleDisplayMode(.large)
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索任务..."
+        )
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                projectFilterMenu
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                viewModeToggleButton
+                Button {
+                    Haptic.light()
+                    isShowingCreateTask = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(.headline, weight: .semibold))
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    viewModeToggleButton
-                    Button {
-                        Haptic.light()
-                        isShowingCreateTask = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(.headline, weight: .semibold))
-                    }
-                    .accessibilityLabel("新建任务")
-                }
+                .accessibilityLabel("新建任务")
             }
-            .refreshable {
-                Haptic.soft()
-                await viewModel.fetchTasks()
-                await viewModel.fetchProjects()
-            }
-            .task {
-                await viewModel.fetchTasks()
-                await viewModel.fetchProjects()
-                await viewModel.fetchMembers()
-            }
-            .sheet(isPresented: $isShowingCreateTask) {
-                CreateTaskView(viewModel: viewModel)
-            }
+        }
+        .refreshable {
+            Haptic.soft()
+            await viewModel.fetchTasks()
+            await viewModel.fetchProjects()
+        }
+        .task {
+            await viewModel.fetchTasks()
+            await viewModel.fetchProjects()
+            await viewModel.fetchMembers()
+        }
+        .sheet(isPresented: $isShowingCreateTask) {
+            CreateTaskView(viewModel: viewModel)
         }
     }
 

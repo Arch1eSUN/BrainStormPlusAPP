@@ -19,6 +19,9 @@ public struct AdminAISettingsView: View {
     @State private var editingProvider: AdminAISettingsViewModel.ProviderRow?
     @State private var pendingDelete: AdminAISettingsViewModel.ProviderRow?
 
+    // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+    private static let toastDuration: TimeInterval = 2.2
+
     public init() {}
 
     public var body: some View {
@@ -37,7 +40,8 @@ public struct AdminAISettingsView: View {
             if let info = vm.infoMessage {
                 infoBanner(info)
                     .task(id: info) {
-                        try? await Task.sleep(nanoseconds: 1_800_000_000)
+                        // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+                        try? await Task.sleep(for: .seconds(Self.toastDuration))
                         if vm.infoMessage == info { vm.infoMessage = nil }
                     }
             }

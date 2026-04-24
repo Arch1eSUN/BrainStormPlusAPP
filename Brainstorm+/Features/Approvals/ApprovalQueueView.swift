@@ -58,10 +58,10 @@ public struct ApprovalQueueView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.rows.isEmpty {
-                ContentUnavailableView(
-                    "暂无审批",
+                BsEmptyState(
+                    title: "暂无审批",
                     systemImage: "checkmark.seal",
-                    description: Text(emptyDescription)
+                    description: emptyDescription
                 )
             } else {
                 queueList

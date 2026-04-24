@@ -55,6 +55,7 @@ public struct ProjectEditSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
+                        Haptic.medium()
                         Task { await submit() }
                     }
                     .font(.system(.callout, weight: .semibold))

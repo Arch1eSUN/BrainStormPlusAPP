@@ -17,6 +17,13 @@ public class TeamAttendanceViewModel: ObservableObject {
         public let profile: Profile
         public let attendance: Attendance?   // nil = 未打卡
 
+        /// 共享 HH:mm formatter（避免每次 getter 都 alloc）
+        fileprivate static let hhmmFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm"
+            return f
+        }()
+
         public var fullName: String { profile.fullName ?? "未命名" }
         public var department: String { profile.department ?? "" }
 
@@ -37,11 +44,11 @@ public class TeamAttendanceViewModel: ObservableObject {
 
         public var clockInText: String {
             guard let date = attendance?.clockIn else { return "--:--" }
-            let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: date)
+            return Row.hhmmFormatter.string(from: date)
         }
         public var clockOutText: String {
             guard let date = attendance?.clockOut else { return "--:--" }
-            let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: date)
+            return Row.hhmmFormatter.string(from: date)
         }
     }
 
@@ -128,11 +135,15 @@ public class TeamAttendanceViewModel: ObservableObject {
         }
     }
 
-    private static func isoDate(_ date: Date) -> String {
+    private static let isoDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        return f
+    }()
+
+    private static func isoDate(_ date: Date) -> String {
+        isoDayFormatter.string(from: date)
     }
 }

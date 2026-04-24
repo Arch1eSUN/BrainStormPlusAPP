@@ -16,6 +16,9 @@ import SwiftUI
 public struct SettingsNotificationsView: View {
     @StateObject private var viewModel = SettingsNotificationsViewModel()
 
+    // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+    private static let toastDuration: TimeInterval = 2.2
+
     public init() {}
 
     public var body: some View {
@@ -258,7 +261,8 @@ public struct SettingsNotificationsView: View {
         )
         .transition(.move(edge: .top).combined(with: .opacity))
         .task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            // TODO: promote to BsMotion.bannerDuration when Shared editing allowed
+            try? await Task.sleep(for: .seconds(Self.toastDuration))
             viewModel.savedSuccessfully = false
         }
     }

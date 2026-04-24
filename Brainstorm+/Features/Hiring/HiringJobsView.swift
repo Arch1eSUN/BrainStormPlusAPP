@@ -11,10 +11,10 @@ public struct HiringJobsView: View {
             if viewModel.isLoading && viewModel.positions.isEmpty {
                 ProgressView().padding(.top, 40)
             } else if viewModel.positions.isEmpty {
-                ContentUnavailableView(
-                    "暂无岗位",
+                BsEmptyState(
+                    title: "暂无岗位",
                     systemImage: "briefcase",
-                    description: Text("点击右上角「新建岗位」发布第一个招聘岗位。")
+                    description: "点击右上角「新建岗位」发布第一个招聘岗位。"
                 )
             } else {
                 List {

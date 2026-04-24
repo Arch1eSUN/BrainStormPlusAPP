@@ -103,10 +103,10 @@ public struct AdminAuditView: View {
             if vm.isLoading && vm.rows.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if vm.rows.isEmpty {
-                ContentUnavailableView(
-                    "暂无审计记录",
+                BsEmptyState(
+                    title: "暂无审计记录",
                     systemImage: "list.bullet.clipboard",
-                    description: Text("管理操作（角色变更、用户创建、配置修改等）将自动记录在此")
+                    description: "管理操作（角色变更、用户创建、配置修改等）将自动记录在此"
                 )
             } else {
                 List {

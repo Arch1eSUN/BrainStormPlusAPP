@@ -107,10 +107,10 @@ public struct AdminLeaveQuotaEditView: View {
                     }
                 }
             } else {
-                ContentUnavailableView(
-                    "员工不存在",
+                BsEmptyState(
+                    title: "员工不存在",
                     systemImage: "person.slash",
-                    description: Text("该员工可能已被移除，请返回列表刷新。")
+                    description: "该员工可能已被移除，请返回列表刷新。"
                 )
             }
         }

@@ -25,10 +25,10 @@ public struct AdminEvaluationsView: View {
             if vm.canAccess {
                 content
             } else {
-                ContentUnavailableView(
-                    "无权访问",
+                BsEmptyState(
+                    title: "无权访问",
                     systemImage: "lock.shield",
-                    description: Text("需要 AI 月度评估能力包或超级管理员权限")
+                    description: "需要 AI 月度评估能力包或超级管理员权限"
                 )
             }
         }
@@ -74,12 +74,12 @@ public struct AdminEvaluationsView: View {
                     .listRowBackground(Color.clear)
             } else if vm.filteredRows.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        vm.rows.isEmpty ? "本月暂无员工数据" : "没有匹配的记录",
+                    BsEmptyState(
+                        title: vm.rows.isEmpty ? "本月暂无员工数据" : "没有匹配的记录",
                         systemImage: "person.fill.questionmark",
-                        description: Text(vm.rows.isEmpty
+                        description: vm.rows.isEmpty
                             ? "请切换月份或确认该月份已有在职员工"
-                            : "尝试调整筛选条件")
+                            : "尝试调整筛选条件"
                     )
                     .padding(.vertical, 20)
                 }

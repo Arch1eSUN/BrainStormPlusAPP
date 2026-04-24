@@ -302,7 +302,7 @@ public final class KnowledgeListViewModel: ObservableObject {
                 fileUrl: fileUrl,
                 fileType: fileType,
                 fileSize: fileSize,
-                updatedAt: ISO8601DateFormatter().string(from: Date())
+                updatedAt: Self.iso8601Writer.string(from: Date())
             )
 
             let saved: KnowledgeArticle = try await client
@@ -487,14 +487,26 @@ public final class KnowledgeListViewModel: ObservableObject {
         }
     }
 
+    /// 共享 ISO8601 formatter（write-path 用：`updatedAt` 序列化）
+    private static let iso8601Writer = ISO8601DateFormatter()
+
+    /// 共享 ISO8601 parser（with fractional seconds）——bridge route 返回格式
+    private static let iso8601ParserWithFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let iso8601ParserPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     /// Shared parser for the ISO8601-with-fractional-seconds timestamps the
     /// bridge route returns (`new Date().toISOString()`).
     private static func iso8601Date(from raw: String) -> Date? {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: raw) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: raw)
+        if let d = iso8601ParserWithFraction.date(from: raw) { return d }
+        return iso8601ParserPlain.date(from: raw)
     }
 
     /// Lookup helper for views that only have an article id (used by
