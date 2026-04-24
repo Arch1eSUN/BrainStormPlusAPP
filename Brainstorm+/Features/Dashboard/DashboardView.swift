@@ -111,11 +111,13 @@ struct DashboardView: View {
                     await viewModel.loadData()
                     await widgets.fetchAll(isManager: isManagerTier)
                     await attendance.loadToday()
+                    await attendance.loadThisWeek()
                 }
         }
         .task {
             await viewModel.loadData()
             await widgets.fetchAll(isManager: isManagerTier)
+            await attendance.loadThisWeek()
         }
     }
 
@@ -180,9 +182,9 @@ struct DashboardView: View {
 
     // MARK: - Weekly cadence data (stub v1)
 
-    /// v1 占位实现：周内过去日用 attendance.today 是否有 clockOut 粗略推断（仅今日准确），
-    /// 其他过去日暂无数据，一律显示为"未完成环"。
-    /// TODO(phase-4c): 新增 AttendanceViewModel.loadThisWeek() 拉 7 天实际打卡记录填充。
+    /// Phase 4c: 从 AttendanceViewModel.thisWeek 拉真实一周打卡记录（Supabase 共享表）。
+    /// 完成判定：该日有 clockOut → 完整完成（绿点）；仅 clockIn 无 clockOut → 不算完成；
+    /// 今日可以只 clockIn 未 clockOut 的情况显示为"进行中"（也算本日 cadence 上有一点）。
     private var weekDays: [WeekDayCadence] {
         let cal = Calendar(identifier: .gregorian)
         let today = Date()
@@ -192,21 +194,36 @@ struct DashboardView: View {
 
         return (0..<7).map { idx in
             let isToday = idx == mondayOffset
-            let isPast  = idx < mondayOffset
-            // 仅今日可由 attendance.today 推断；过去日暂无数据
+            let dayDiff = idx - mondayOffset
+            let date = cal.date(byAdding: .day, value: dayDiff, to: today) ?? today
+            let iso = Self.isoDate(date)
+            let record = attendance.thisWeek[iso]
+
+            // 完成语义：过去日 clockOut 存在 = 完成；今日 clockIn 存在 = 算"标记"
             let completed: Bool = {
-                if isToday { return attendance.today?.clockOut != nil }
-                return false
+                if isToday {
+                    return record?.clockIn != nil
+                }
+                return record?.clockOut != nil
             }()
+
             return WeekDayCadence(
-                id: "day-\(idx)",
+                id: iso,
                 shortLabel: labels[idx],
                 isCompleted: completed,
                 isToday: isToday,
                 isInFuture: idx > mondayOffset
             )
-            .ignoringPast(isPast)
         }
+    }
+
+    private static func isoDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
     }
 
     // MARK: - NavBar items
@@ -380,14 +397,6 @@ struct DashboardView: View {
         case .employee: return false
         }
     }
-}
-
-// MARK: - WeekDayCadence helper —— 过去无数据的日子仍保持 isInFuture=false 但 isCompleted=false（空环）
-
-private extension WeekDayCadence {
-    /// 语义 no-op helper：标记过去无打卡数据 fallback。直接返回自身。
-    /// 保留此扩展是为了以后换真实数据 pipeline 时有个锚点改写。
-    func ignoringPast(_ isPast: Bool) -> WeekDayCadence { self }
 }
 
 #Preview {

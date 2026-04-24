@@ -22,6 +22,9 @@ public class AttendanceViewModel: NSObject, ObservableObject, CLLocationManagerD
     @Published public var errorMessage: String? = nil
     @Published public var successMessage: String? = nil
     @Published public var today: Attendance? = nil
+    /// Phase 4c：本周（周一→今天）打卡记录，供 Dashboard Weekly Cadence strip 消费。
+    /// key = ISO date string "YYYY-MM-DD"；未打卡的日子 map 里没条目。
+    @Published public var thisWeek: [String: Attendance] = [:]
     /// Brief flag that flips true right after a successful clock-in/out.
     /// Drives the success ripple animation in `AttendanceView`. Auto
     /// resets after ~1.2s.
@@ -151,6 +154,45 @@ public class AttendanceViewModel: NSObject, ObservableObject, CLLocationManagerD
         } catch {
             self.fenceState = .error
             self.errorMessage = "网络异常: \(ErrorLocalizer.localize(error))"
+        }
+    }
+
+    // MARK: - Week cadence
+
+    /// Phase 4c：拉本周（周一 → 今天）所有打卡记录，供 Dashboard Weekly Cadence strip 消费。
+    /// Supabase `attendance` 表由 Web 端和 iOS 共享 —— 只读同一张表即可。
+    public func loadThisWeek() async {
+        do {
+            let session = try await supabase.auth.session
+            let uid = session.user.id
+
+            let cal = Calendar(identifier: .gregorian)
+            let today = Date()
+            // 本周周一
+            let weekday = cal.component(.weekday, from: today) // Sun=1 … Sat=7
+            let daysFromMonday = (weekday + 5) % 7
+            guard let monday = cal.date(byAdding: .day, value: -daysFromMonday, to: today) else { return }
+
+            let fromStr = Self.isoDateString(for: monday)
+            let toStr = Self.isoDateString(for: today)
+
+            let rows: [Attendance] = try await supabase
+                .from("attendance")
+                .select("*")
+                .eq("user_id", value: uid.uuidString)
+                .gte("date", value: fromStr)
+                .lte("date", value: toStr)
+                .execute()
+                .value
+
+            // 按 date string key 入 map，方便 Dashboard 用 iso 字符串索引
+            var next: [String: Attendance] = [:]
+            for row in rows { next[row.date] = row }
+            self.thisWeek = next
+        } catch {
+            #if DEBUG
+            print("[AttendanceVM] loadThisWeek failed:", error)
+            #endif
         }
     }
 
