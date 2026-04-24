@@ -75,9 +75,8 @@ struct DashboardView: View {
     @StateObject private var attendance = AttendanceViewModel()
     @Environment(\.colorScheme) private var colorScheme
     @State private var showProfileSheet = false
-    /// Phase 4 临时：wordmark / "所有应用" tile 点击打开 launcher sheet。
-    /// Phase 5 替换为 BsCommandPalette 完整命令面板。
-    @State private var showLauncher = false
+    /// Phase 5：wordmark / "所有应用" tile 点击打开命令面板（.fullScreenCover）。
+    @State private var showCommandPalette = false
 
     var body: some View {
         NavigationStack {
@@ -98,10 +97,8 @@ struct DashboardView: View {
                     NavigationStack { SettingsView() }
                         .presentationDetents([.large])
                 }
-                .sheet(isPresented: $showLauncher) {
-                    BsAppLauncherSheet()
-                        .presentationDetents([.large])
-                        .presentationDragIndicator(.visible)
+                .fullScreenCover(isPresented: $showCommandPalette) {
+                    BsCommandPalette()
                 }
                 .refreshable {
                     Haptic.soft()
@@ -145,7 +142,7 @@ struct DashboardView: View {
             Section {
                 BsAllAppsTile(previewIcons: BsAllAppsTile.sampleIcons) {
                     Haptic.light()
-                    showLauncher = true
+                    showCommandPalette = true
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: BsSpacing.xs, leading: BsSpacing.lg, bottom: BsSpacing.md, trailing: BsSpacing.lg))
@@ -213,7 +210,7 @@ struct DashboardView: View {
     private var wordmarkButton: some View {
         Button {
             Haptic.light()
-            showLauncher = true
+            showCommandPalette = true
         } label: {
             HStack(spacing: 6) {
                 Image("BrandLogo")

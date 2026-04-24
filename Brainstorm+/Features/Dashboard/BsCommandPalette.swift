@@ -2,18 +2,29 @@ import SwiftUI
 import Supabase
 
 // ══════════════════════════════════════════════════════════════════
-// BsAppLauncherSheet —— 「面板」功能启动台
+// BsCommandPalette —— v1.1「所有应用」命令面板
 //
-// 架构修正（Bug 1 修复）：Dashboard sheet (NavStack) → Launcher 内再 NavStack
-// push destination 会嵌套两层 NavStack，内层吞外层 back 按钮。
+// 设计来源：docs/plans/2026-04-24-ios-full-redesign-plan.md §2.6 Signature B + §五 Phase 5
 //
-// 新架构：Launcher 是 sheet，tile 点击不 push —— 用 `.fullScreenCover(item:)`
-// **覆盖呈现** destination。每个 destination View 自己带 NavStack 正常显示；
-// 返回键由 destination 自己的 NavStack 负责；关闭时回到 launcher 保持打开，
-// 用户可继续选下一个模块。
+// 2 触发通道（v1.1 评审采纳，取消了下拉 70pt 通道）：
+//   1. Dashboard NavBar wordmark 点击（主入口）
+//   2. Dashboard "所有应用" 启动卡点击（辅入口，通过 BsAllAppsTile）
+//
+// 呈现方式：`.fullScreenCover(isPresented:)` + 内部 NavigationStack
+//   • macOS Launchpad 式全屏覆盖，取代原 .sheet + .large detent
+//   • Destination push 用 NavigationLink，借 palette 自己的 NavStack，
+//     destination 全部以 isEmbedded: true 渲染（Phase 3 已参数化）
+//   • iOS 原生左上 "< 面板" 返回按钮（NavigationStack 自动提供）
+//   • 关闭 palette 用 toolbar 右上 × glass 圆按钮（.fullScreenCover 无 swipe-down）
+//
+// 功能特性：
+//   • 4 分类 grid：常用 / 协作 / 业务 / 管理
+//   • `.searchable` 原生搜索（模块名匹配）
+//   • RBAC 过滤：adminOnly 门 + requires[Capability] 门 + superadmin 豁免
+//   • Tile 为 4 列 LazyVGrid + 入场 stagger 动画（bsAppearStagger）
 // ══════════════════════════════════════════════════════════════════
 
-public struct BsAppLauncherSheet: View {
+public struct BsCommandPalette: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.dismiss) private var dismiss
 
@@ -188,7 +199,7 @@ public struct BsAppLauncherSheet: View {
             }
             .background(BsColor.pageBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
-            .navigationTitle("面板")
+            .navigationTitle("所有应用")
             .navigationBarTitleDisplayMode(.large)
             .searchable(
                 text: $searchQuery,
