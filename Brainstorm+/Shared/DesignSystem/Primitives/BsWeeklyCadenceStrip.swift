@@ -90,22 +90,27 @@ public struct BsWeeklyCadenceStrip: View {
 
     @ViewBuilder
     private func dotView(for day: WeekDayCadence) -> some View {
-        if day.isCompleted {
+        // v1.2 · 3 色语义分布
+        //   • 过去日已完成 → Mint filled（完成 = 绿灯）
+        //   • 今日 → Coral filled + 1.5x scale + glow + pulse（当前注意焦点）
+        //   • 未来日 / 过去日未完成 → Ink faint ring（中性）
+        if day.isToday {
             Circle()
-                .fill(BsColor.brandAzure)
+                .fill(BsColor.brandCoral)
+                .frame(width: 12, height: 12)
+                .scaleEffect(1.5)
+                .shadow(color: BsColor.brandCoral.opacity(0.7), radius: 5)
+                .shadow(color: BsColor.brandCoral.opacity(0.35), radius: 10)
+                .modifier(TodayPulse(isToday: true))
+        } else if day.isCompleted {
+            Circle()
+                .fill(BsColor.brandMint)
                 .frame(width: 10, height: 10)
-                .scaleEffect(day.isToday ? 1.3 : 1.0)
-                .shadow(
-                    color: day.isToday ? BsColor.brandAzure.opacity(0.6) : .clear,
-                    radius: 4
-                )
-                .modifier(TodayPulse(isToday: day.isToday))
+                .shadow(color: BsColor.brandMint.opacity(0.35), radius: 2)
         } else {
             Circle()
-                .stroke(BsColor.brandAzure.opacity(0.25), lineWidth: 1.5)
+                .stroke(BsColor.inkFaint.opacity(0.35), lineWidth: 1.5)
                 .frame(width: 10, height: 10)
-                .scaleEffect(day.isToday ? 1.3 : 1.0)
-                .modifier(TodayPulse(isToday: day.isToday))
         }
     }
 }

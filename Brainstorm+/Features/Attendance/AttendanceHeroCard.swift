@@ -83,6 +83,24 @@ public struct AttendanceHeroCard: View {
                             .stroke(Color.white.opacity(0.82), lineWidth: 1.4)
                             .shadow(color: stateColor.opacity(0.95), radius: 3)
                             .shadow(color: stateColor.opacity(0.55), radius: 9)
+
+                        // Layer 3: v1.2 · Coral 暖色反射层（像火光落在水面）
+                        // 整个液面叠加一层 Coral 横向渐变 opacity 0.18 → 0 → 0.14，
+                        // 两端亮中间透 —— 液体两侧产生暖色反射带。工作中不抢 hero 主色，
+                        // 但肉眼总能在液体大面积内捕捉到 Coral 存在（~30% 液体面积权重）。
+                        LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        BsColor.brandCoral.opacity(0.28),
+                                        BsColor.brandCoral.opacity(0.04),
+                                        BsColor.brandCoral.opacity(0.22),
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .blendMode(.plusLighter)
                     }
                 }
                 // 注入/打卡 瞬间：interpolatingSpring underdamped 有 overshoot
