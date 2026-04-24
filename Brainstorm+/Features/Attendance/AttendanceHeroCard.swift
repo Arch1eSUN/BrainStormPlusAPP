@@ -47,21 +47,64 @@ public struct AttendanceHeroCard: View {
         BsHeroCard(padding: 0) {
             ZStack(alignment: .bottomLeading) {
                 // ─── Liquid fill layer ────────────────────────────────────
-                // LiquidFillShape 内部已做 3 波叠加（不同波长/相位/速度，频率比非整数），
-                // 单层渲染即有真流体表面感，不需要在这里再堆 ZStack 模拟。
-                TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
-                    // 主相位速度 0.5 rad/s —— 太快成振荡，太慢不够生动
-                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 0.5
-                    LiquidFillShape(
-                        progress: progress,
-                        phase: phase,
-                        tiltX: reduceMotion ? 0 : motion.tiltX,
-                        amplitude: reduceMotion ? 0 : 9,
-                        frequency: 1.6     // 1.6 主频在 400pt 宽度上约 2.5 个主周期，密度舒适
-                    )
-                    .fill(stateColor.opacity(0.42))
-                    .animation(.smooth(duration: 0.8), value: progress)
+                // ─── 3 层液体栈 ──────────────────────────────────────────
+                // Layer 1 body —— 线性渐变填充（底深 0.55 → 顶浅 0.22），
+                //                  微 0.4pt blur 软化像素级硬边，出液态表面张力
+                // Layer 2 glow  —— 液面下方 3pt 柔光晕（折射/subsurface scattering）
+                // Layer 3 specular —— 液面高光细线（水面反光），gradient white
+                TimelineView(.animation) { ctx in
+                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 2.2
+                    let amp: CGFloat = reduceMotion ? 0 : 12
+                    let freq: CGFloat = 1.6
+                    let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
+
+                    ZStack {
+                        // Layer 1: body with gradient（深度感）
+                        LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        stateColor.opacity(0.55),
+                                        stateColor.opacity(0.40),
+                                        stateColor.opacity(0.22),
+                                    ],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .blur(radius: 0.4)
+
+                        // Layer 2: underside glow（折射 subsurface 感）
+                        LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            .stroke(stateColor.opacity(0.5), lineWidth: 3)
+                            .blur(radius: 3)
+                            .offset(y: 2)
+                            .mask(
+                                // 只保留液面内部的晕光（不透出水面外）
+                                LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            )
+
+                        // Layer 3: specular surface highlight（水面反射细线）
+                        LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.0),
+                                        Color.white.opacity(0.55),
+                                        Color.white.opacity(0.35),
+                                        Color.white.opacity(0.55),
+                                        Color.white.opacity(0.0),
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1.1
+                            )
+                            .blur(radius: 0.3)
+                    }
                 }
+                .animation(.smooth(duration: 0.9), value: progress)
+                .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.55), value: motion.tiltX)
 
                 // ─── Content overlay ──────────────────────────────────────
                 VStack(alignment: .leading, spacing: 14) {

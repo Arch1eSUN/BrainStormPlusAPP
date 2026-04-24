@@ -19,6 +19,32 @@
 
 import SwiftUI
 
+// ─── Liquid surface math (shared) ─────────────────────────────────────
+// Extracted so both LiquidFillShape（body）和 LiquidSurfaceLineShape（高光线）
+// 走同一套数学，两个 Shape 完全同步。
+//
+// 3-wave 叠加：频率比 1 : 2.3 : 4.7（非整数）
+//            速度比 1.0 : 1.45 : 2.1
+//            相位偏置 0 / 1.1 / 0.7 rad
+//            振幅权重 0.7 / 0.4 / 0.2
+@inline(__always)
+internal func _liquidSurfaceY(
+    atNormalizedX x: CGFloat,
+    baseY: CGFloat,
+    tiltMag: CGFloat,
+    phase: CGFloat,
+    amplitude: CGFloat,
+    frequency: CGFloat
+) -> CGFloat {
+    let twoPi = CGFloat.pi * 2
+    let xRad = x * twoPi
+    let w1 = sin(phase * 1.0 + xRad * frequency * 1.0) * (amplitude * 0.7)
+    let w2 = sin(phase * 1.45 + xRad * frequency * 2.3 + 1.1) * (amplitude * 0.4)
+    let w3 = sin(phase * 2.1 + xRad * frequency * 4.7 + 0.7) * (amplitude * 0.2)
+    let tiltDelta = (x - 0.5) * 2 * tiltMag
+    return baseY + w1 + w2 + w3 + tiltDelta
+}
+
 public struct LiquidFillShape: Shape {
 
     // MARK: - Inputs
@@ -87,53 +113,26 @@ public struct LiquidFillShape: Shape {
         let progressClamped = max(0, min(1, progress))
         guard rect.width > 0 else { return path }
 
-        // y 向下为正（SwiftUI 坐标系）；progress 1 = 顶
         let baseY = rect.maxY - (rect.height * progressClamped)
-
-        // 倾斜幅度：左 -tiltMag 到右 +tiltMag，线性插值
         let tiltMag = tiltX * amplitude * 3
-
-        // 采样密度：80 点足够平滑，iPad landscape 也不会出现折线感
         let sampleCount: CGFloat = 80
         let step = rect.width / sampleCount
-        let twoPi = CGFloat.pi * 2
-
-        // 3 个波成分的参数组（频率比、速度比、相位偏置、振幅权重）
-        let wave1K: CGFloat = frequency * 1.0
-        let wave2K: CGFloat = frequency * 2.3
-        let wave3K: CGFloat = frequency * 4.7
-        let wave1Speed: CGFloat = 1.0
-        let wave2Speed: CGFloat = 1.45
-        let wave3Speed: CGFloat = 2.1
-        let wave2PhaseShift: CGFloat = 1.1
-        let wave3PhaseShift: CGFloat = 0.7
-        let wave1Amp: CGFloat = amplitude * 0.7
-        let wave2Amp: CGFloat = amplitude * 0.4
-        let wave3Amp: CGFloat = amplitude * 0.2
-
-        @inline(__always)
-        func surfaceY(at normalizedX: CGFloat) -> CGFloat {
-            let x = normalizedX * twoPi
-            let w1 = sin(phase * wave1Speed + x * wave1K) * wave1Amp
-            let w2 = sin(phase * wave2Speed + x * wave2K + wave2PhaseShift) * wave2Amp
-            let w3 = sin(phase * wave3Speed + x * wave3K + wave3PhaseShift) * wave3Amp
-            let tiltDelta = (normalizedX - 0.5) * 2 * tiltMag
-            return baseY + w1 + w2 + w3 + tiltDelta
-        }
 
         var surfacePoints: [CGPoint] = []
         surfacePoints.reserveCapacity(Int(sampleCount) + 2)
 
         for x in stride(from: CGFloat(0), through: rect.width, by: step) {
             let normalizedX = x / rect.width
-            surfacePoints.append(CGPoint(x: rect.minX + x, y: surfaceY(at: normalizedX)))
+            let y = _liquidSurfaceY(atNormalizedX: normalizedX, baseY: baseY, tiltMag: tiltMag,
+                                    phase: phase, amplitude: amplitude, frequency: frequency)
+            surfacePoints.append(CGPoint(x: rect.minX + x, y: y))
         }
-        // 确保最右端贴齐（stride 浮点可能差半个像素）
         if let last = surfacePoints.last, last.x < rect.maxX {
-            surfacePoints.append(CGPoint(x: rect.maxX, y: surfaceY(at: 1.0)))
+            let y = _liquidSurfaceY(atNormalizedX: 1.0, baseY: baseY, tiltMag: tiltMag,
+                                    phase: phase, amplitude: amplitude, frequency: frequency)
+            surfacePoints.append(CGPoint(x: rect.maxX, y: y))
         }
 
-        // 闭合路径：波面 → 右下角 → 左下角 → 回起点
         guard let first = surfacePoints.first else { return path }
         path.move(to: first)
         for point in surfacePoints.dropFirst() {
@@ -142,6 +141,76 @@ public struct LiquidFillShape: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.closeSubpath()
+
+        return path
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LiquidSurfaceLineShape —— 只绘制液面顶部曲线（不闭合），供 stroke 高光用。
+// 和 LiquidFillShape 共用 _liquidSurfaceY 保证形状完全同步。
+// ═══════════════════════════════════════════════════════════════════════════
+
+public struct LiquidSurfaceLineShape: Shape {
+    public var progress: CGFloat
+    public var phase: CGFloat
+    public var tiltX: CGFloat
+    public var amplitude: CGFloat
+    public var frequency: CGFloat
+
+    public init(
+        progress: CGFloat,
+        phase: CGFloat = 0,
+        tiltX: CGFloat = 0,
+        amplitude: CGFloat = 12,
+        frequency: CGFloat = 1.6
+    ) {
+        self.progress = progress
+        self.phase = phase
+        self.tiltX = tiltX
+        self.amplitude = amplitude
+        self.frequency = frequency
+    }
+
+    public var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+        get { AnimatablePair(progress, AnimatablePair(phase, tiltX)) }
+        set {
+            progress = newValue.first
+            phase = newValue.second.first
+            tiltX = newValue.second.second
+        }
+    }
+
+    public func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let progressClamped = max(0, min(1, progress))
+        guard rect.width > 0 else { return path }
+
+        let baseY = rect.maxY - (rect.height * progressClamped)
+        let tiltMag = tiltX * amplitude * 3
+        let sampleCount: CGFloat = 80
+        let step = rect.width / sampleCount
+
+        var first: CGPoint?
+        for x in stride(from: CGFloat(0), through: rect.width, by: step) {
+            let normalizedX = x / rect.width
+            let y = _liquidSurfaceY(atNormalizedX: normalizedX, baseY: baseY, tiltMag: tiltMag,
+                                    phase: phase, amplitude: amplitude, frequency: frequency)
+            let point = CGPoint(x: rect.minX + x, y: y)
+            if first == nil {
+                path.move(to: point)
+                first = point
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        // right-edge flush
+        let lastX = (first != nil) ? (rect.minX + rect.width) : rect.maxX
+        if lastX < rect.maxX {
+            let y = _liquidSurfaceY(atNormalizedX: 1.0, baseY: baseY, tiltMag: tiltMag,
+                                    phase: phase, amplitude: amplitude, frequency: frequency)
+            path.addLine(to: CGPoint(x: rect.maxX, y: y))
+        }
 
         return path
     }
