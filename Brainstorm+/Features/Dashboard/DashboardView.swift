@@ -128,7 +128,13 @@ struct DashboardView: View {
         List {
             // —— 1. Attendance Hero（签名：液体 fill + 陀螺仪 tilt）——
             Section {
-                AttendanceHeroCard(viewModel: attendance, isEmbedded: true)
+                // v1.3: todayState 决定 overtime 阈值 —— 弹性按 8h 算，
+                // 部门固定班次按 expectedStart/End 差值
+                AttendanceHeroCard(
+                    viewModel: attendance,
+                    isEmbedded: true,
+                    todayState: viewModel.todayState
+                )
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: BsSpacing.sm, leading: BsSpacing.lg, bottom: BsSpacing.xs, trailing: BsSpacing.lg))
                     .listRowSeparator(.hidden)

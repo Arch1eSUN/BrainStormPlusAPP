@@ -29,10 +29,19 @@ public struct AttendanceHeroCard: View {
     /// Passed from Dashboard. Placeholder for future layout branching — card
     /// always renders identically regardless of this flag today.
     let isEmbedded: Bool
+    /// 今日排班（v1.3）：决定 overtime 阈值。
+    /// - 无值 / flexibleHours == true → 按 8h 算（弹性工时默认）
+    /// - 有 expectedStart + expectedEnd → 两者时差作为目标工时（部门固定班次）
+    let todayState: DailyWorkState?
 
-    public init(viewModel: AttendanceViewModel, isEmbedded: Bool = true) {
+    public init(
+        viewModel: AttendanceViewModel,
+        isEmbedded: Bool = true,
+        todayState: DailyWorkState? = nil
+    ) {
         self.viewModel = viewModel
         self.isEmbedded = isEmbedded
+        self.todayState = todayState
     }
 
     // MARK: - Environment / Motion
@@ -259,21 +268,53 @@ public struct AttendanceHeroCard: View {
 
     // MARK: - Derived state
 
-    /// Worked fraction of an 8h day, clamped to [0, 1].
-    private var progress: CGFloat {
+    /// 今日工时阈值（秒）—— v1.3 状态机的 progress 基准 + overtime 触发线
+    /// 规则：
+    ///   • 弹性工时 (flexibleHours == true) → 8h 默认
+    ///   • 有固定班次 expectedStart + expectedEnd → 两者时差（自动支持跨天）
+    ///   • 缺失数据 → 8h fallback
+    private var todayWorkTargetSeconds: TimeInterval {
+        guard let state = todayState,
+              state.flexibleHours != true,
+              let startStr = state.expectedStart,
+              let endStr = state.expectedEnd,
+              let startSec = Self.parseTimeToSeconds(startStr),
+              let endSec = Self.parseTimeToSeconds(endStr)
+        else {
+            return 28_800  // 8h 弹性默认
+        }
+        // 支持跨夜班（end 比 start 小）
+        let diff = endSec >= startSec ? (endSec - startSec) : (endSec + 86_400 - startSec)
+        return max(3_600, diff)  // 安全下限 1h
+    }
+
+    /// "HH:MM:SS" 或 "HH:MM" → 秒数
+    private static func parseTimeToSeconds(_ hms: String) -> TimeInterval? {
+        let parts = hms.split(separator: ":").compactMap { Double($0) }
+        guard parts.count >= 2 else { return nil }
+        let h = parts[0], m = parts[1]
+        let s = parts.count >= 3 ? parts[2] : 0
+        return h * 3600 + m * 60 + s
+    }
+
+    /// 实际工作经过的秒数（不 clamp），用于 hero 数字显示 + overtime 余分钟计算
+    private var elapsedSeconds: TimeInterval {
         switch viewModel.clockState {
         case .ready:
             return 0
         case .clockedIn:
             guard let clockIn = viewModel.today?.clockIn else { return 0 }
-            let elapsed = Date().timeIntervalSince(clockIn)
-            return CGFloat(max(0, min(1, elapsed / 28_800)))
+            return Date().timeIntervalSince(clockIn)
         case .done:
             guard let clockIn = viewModel.today?.clockIn,
                   let clockOut = viewModel.today?.clockOut else { return 0 }
-            let elapsed = clockOut.timeIntervalSince(clockIn)
-            return CGFloat(max(0, min(1, elapsed / 28_800)))
+            return clockOut.timeIntervalSince(clockIn)
         }
+    }
+
+    /// 工时进度 [0, 1]，基于今日阈值
+    private var progress: CGFloat {
+        CGFloat(max(0, min(1, elapsedSeconds / todayWorkTargetSeconds)))
     }
 
     /// v1.3 · 进度驱动液体底色（Azure 打卡 → Mint 完成 的同色系自然过渡）
@@ -326,23 +367,34 @@ public struct AttendanceHeroCard: View {
         }
     }
 
-    private var hoursText: String { String(Int(progress * 8)) }
-
-    private var minutesText: String {
-        let totalMinutes = Int(progress * 8 * 60)
-        return String(totalMinutes % 60)
+    /// 已工作小时数（整数部分），基于实际 elapsed 秒数
+    private var hoursText: String {
+        String(Int(elapsedSeconds / 3600))
     }
 
+    /// 已工作分钟数（小时余数），基于实际 elapsed 秒数
+    private var minutesText: String {
+        String(Int(elapsedSeconds / 60) % 60)
+    }
+
+    /// Hero subtitle 按状态 + 阈值动态生成
     private var heroSubtitle: String {
+        let targetHrs = Int(todayWorkTargetSeconds / 3600)
+        let overMinutes = max(0, Int((elapsedSeconds - todayWorkTargetSeconds) / 60))
+
         switch viewModel.clockState {
         case .ready:
             return "点击开始新的一天"
         case .clockedIn:
-            return "持续工作中 · 目标 8 小时"
+            if hasHitOvertime {
+                return "加班中 · 已超 \(overMinutes) 分钟"
+            }
+            return "持续工作中 · 目标 \(targetHrs) 小时"
         case .done:
-            return progress >= 1.0
-                ? "超出目标 \(Int((progress - 1) * 100))%"
-                : "今日已结束"
+            if hasHitOvertime {
+                return "含加班 +\(overMinutes) 分钟"
+            }
+            return "今日已结束"
         }
     }
 
