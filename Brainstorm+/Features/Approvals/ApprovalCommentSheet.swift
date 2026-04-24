@@ -105,7 +105,7 @@ public struct ApprovalCommentSheet: View {
                     .disabled(isBusy)
 
                     // Phase 20 集中爆发点 —— sheet 的唯一主 CTA。
-                    // BsBrandButton 内部已包 Haptic.medium() + 按压反馈。
+                    // BsPrimaryButton 内部已包 Haptic.medium() + 按压反馈。
                     // 注意：rejectBlocked 时 confirmDisabled=true,按钮本身
                     // 被 .disabled 挡掉,原来的 warning haptic 分支已无触达路径,
                     // 所以此处只需处理正常 submit。

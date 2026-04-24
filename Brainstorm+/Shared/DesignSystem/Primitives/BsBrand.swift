@@ -78,7 +78,7 @@ public struct BsBrandText: View {
 // 替代 v1 的"左侧 4pt 硬条"—— 那个方案贴上去不融。
 // 新方案：卡内部两道柔焦品牌色斑 —— Azure 从 topLeading 渗、
 // Mint 从 bottomTrailing 渗，都走 opacity ≤ 0.16 + 大 blur。
-// 放在玻璃下层，`.glassEffect` 的 backdrop-blur 再把它揉一次 ——
+// 放在卡壳下层，matte surface 再把它压一层 ——
 // 品牌色"从卡底里渗出来"，而不是"贴在卡表面上"。
 
 public struct BsBrandWashModifier: ViewModifier {
@@ -134,12 +134,11 @@ public struct BsBrandWashModifier: ViewModifier {
 
 public extension View {
     /// 卡内品牌弥散氛围 —— 柔焦 Azure 左上 + Mint 右下渗色，
-    /// 放在 `.bsGlassCard()` 之前（玻璃会再把它揉一层），没有硬边。
+    /// 放在卡壳 (`BsContentCard` / matte fill) 之前作为背景层，没有硬边。
     ///
-    ///     VStack { ... }
-    ///         .padding(...)
-    ///         .bsBrandWash()       // 先铺品牌色
-    ///         .bsGlassCard()       // 再盖玻璃（backdrop-blur 把色揉柔）
+    ///     BsContentCard {
+    ///         VStack { ... }.bsBrandWash()
+    ///     }
     ///
     /// intensity 参数可调浓度：1.0 标准，0.6 弱化（次要卡），1.4 强化（hero）。
     func bsBrandWash(enabled: Bool = true, intensity: CGFloat = 1.0) -> some View {

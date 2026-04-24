@@ -19,7 +19,7 @@ import SwiftUI
 // (4-zone envelope: UPPERCASE label / optional hero number / custom body /
 // optional Azure CTA link) so iOS matches Web `role-dashboard-cards.tsx`
 // micro-vocabulary harmony. Inline SectionHeader + zyCardStyle are retired
-// from these widgets; BsWidgetCard owns the material (bsGlassCard) + header.
+// from these widgets; BsWidgetCard owns the material (BsContentCard) + header.
 // ══════════════════════════════════════════════════
 
 // MARK: - Employee Dashboard Body

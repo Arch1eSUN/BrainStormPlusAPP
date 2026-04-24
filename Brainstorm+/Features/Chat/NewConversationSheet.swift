@@ -30,7 +30,7 @@ public struct NewConversationSheet: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 VStack(spacing: 0) {
                     if selectedUserIds.count >= 2 {
                         groupDetailsSection

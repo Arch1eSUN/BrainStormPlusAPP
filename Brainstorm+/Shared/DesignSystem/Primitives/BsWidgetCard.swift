@@ -16,7 +16,7 @@ import SwiftUI
 //   │                      查看全部 →       │  ← 可选 Azure CTA
 //   └─────────────────────────────────────┘
 //
-// 整壳走 bsGlassCard 材质 —— 和 Dashboard 其他卡统一玻璃。
+// 整壳走 BsContentCard 材质 —— 和 Dashboard 其他卡统一 matte 内容卡。
 //
 // 用法：
 //   BsWidgetCard(
@@ -61,33 +61,34 @@ public struct BsWidgetCard<Accessory: View, Body: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.md) {
-            // 1. Header — uppercase tracking label + optional accessory
-            HStack(alignment: .center) {
-                Text(label)
-                    .font(BsTypography.label)
-                    .textCase(.uppercase)
-                    .tracking(0.8)
-                    .foregroundStyle(BsColor.inkMuted)
-                Spacer()
-                accessory()
+        BsContentCard(padding: .none) {
+            VStack(alignment: .leading, spacing: BsSpacing.md) {
+                // 1. Header — uppercase tracking label + optional accessory
+                HStack(alignment: .center) {
+                    Text(label)
+                        .font(BsTypography.label)
+                        .textCase(.uppercase)
+                        .tracking(0.8)
+                        .foregroundStyle(BsColor.inkMuted)
+                    Spacer()
+                    accessory()
+                }
+
+                // 2. Optional hero number block (giant Outfit number centered)
+                heroBlock
+
+                // 3. Custom body content
+                content()
+
+                // 4. Optional CTA link at bottom (Azure + chevron)
+                ctaBlock
             }
-
-            // 2. Optional hero number block (giant Outfit number centered)
-            heroBlock
-
-            // 3. Custom body content
-            content()
-
-            // 4. Optional CTA link at bottom (Azure + chevron)
-            ctaBlock
+            // Phase 20 subtraction: 卡内部不再渗品牌色。克制 = 高级。
+            // 品牌只活在 chrome (NavBar wordmark / TabBar tint) + primary CTA，
+            // content 是 Ink 黑为主、一个 semantic tone 点缀。
+            .padding(BsSpacing.lg + 4)  // 留白 30% 提升：16 → 20
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Phase 20 subtraction: 卡内部不再渗品牌色。克制 = 高级。
-        // 品牌只活在 chrome (NavBar wordmark / TabBar tint) + primary CTA，
-        // content 是 Ink 黑为主、一个 semantic tone 点缀。
-        .padding(BsSpacing.lg + 4)  // 留白 30% 提升：16 → 20
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .bsGlassCard()
     }
 
     @ViewBuilder

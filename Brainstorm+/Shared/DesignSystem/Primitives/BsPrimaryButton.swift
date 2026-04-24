@@ -13,10 +13,10 @@ import SwiftUI
 //   • 用在 "保存 / 提交 / 创建 / 打卡 / 发送" 等主 CTA。
 //   • 次要动作用系统 Button / .bordered / .plain，不要都 Azure 实色。
 //
-// 与 BsBrandButton 的差异：
+// 视觉规格：
 //   • 填充：实色 BsColor.brandAzure（不是 .glassEffect(.tint:)）
 //   • Dark mode 不投影，Azure 在深色背景上自带"发光"感
-//   • 其余（尺寸、按压反馈、loading、API）与 BsBrandButton 对齐，方便迁移
+//   • 尺寸 / 按压反馈 / loading / API 与其他一级按钮一致，便于 muscle memory
 // ══════════════════════════════════════════════════════════════════
 
 public struct BsPrimaryButton<Label: View>: View {

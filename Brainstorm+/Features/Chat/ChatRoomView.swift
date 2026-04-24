@@ -28,9 +28,8 @@ public struct ChatRoomView: View {
 
     public var body: some View {
         ZStack {
-            // Ambient 弥散底：暖米 paper + Azure/Mint blobs，
-            // 气泡 glass tint 漂在上方。
-            BsAmbientBackground()
+            // 纯净 pageBackground —— 气泡 glass tint 漂在上方。
+            BsColor.pageBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 content

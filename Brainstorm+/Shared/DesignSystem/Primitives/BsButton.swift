@@ -33,9 +33,9 @@ public struct BsButton<Label: View>: View {
 
         public var font: Font {
             switch self {
-            case .small:  return Font.custom("Inter-SemiBold", size: 13)
-            case .medium: return Font.custom("Inter-SemiBold", size: 15)
-            case .large:  return Font.custom("Inter-SemiBold", size: 16)
+            case .small:  return Font.custom("Inter-SemiBold", size: 13, relativeTo: .footnote)
+            case .medium: return Font.custom("Inter-SemiBold", size: 15, relativeTo: .subheadline)
+            case .large:  return Font.custom("Inter-SemiBold", size: 16, relativeTo: .callout)
             }
         }
 

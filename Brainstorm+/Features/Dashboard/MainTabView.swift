@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import Supabase
 
 // ══════════════════════════════════════════════════════════════════
@@ -41,6 +42,10 @@ struct MainTabView: View {
     //     MessagesView 合并了通知,语义仍然闭合)
     // 初次拉取在 .task {},切 tab 时再刷新一次,无需 realtime 订阅。
     @StateObject private var badgeCoordinator = TabBadgeCoordinator(client: supabase)
+
+    // Monitor scene phase —— app 回到前台时刷新 badge，让 background 期间
+    // realtime 累积的未读数立即反映到 tab bar / home icon。
+    @Environment(\.scenePhase) private var scenePhase
 
     enum Tab: Hashable {
         case dashboard, tasks, approvals, chat, me
@@ -104,6 +109,12 @@ struct MainTabView: View {
         }
         .task {
             await badgeCoordinator.refreshAll()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // app 从 background / inactive 回到 active 时刷新一次 ——
+            // 让用户在 home screen 看到的未读数在重新进入时立即对齐 DB
+            guard newPhase == .active else { return }
+            Task { await badgeCoordinator.refreshAll() }
         }
     }
 }
@@ -202,6 +213,21 @@ final class TabBadgeCoordinator: ObservableObject {
         } catch {
             // 悄悄失败 —— badge 是辅助信息,不值得弹 banner。
             self.messagesUnread = 0
+        }
+        // 同步 home screen app icon badge —— 用 notifications 未读作为总计数
+        // （审批 pending 不计入 system badge,因为审批需要用户主动进入 tab
+        // 才能看到,而 notifications 是"被推到"的信息更匹配 icon badge 语义）
+        await syncAppIconBadge(to: self.messagesUnread)
+    }
+
+    /// iOS 16+ 首选 UNUserNotificationCenter.setBadgeCount；老 API
+    /// `UIApplication.applicationIconBadgeNumber` 在 iOS 17 弃用。
+    private func syncAppIconBadge(to count: Int) async {
+        do {
+            try await UNUserNotificationCenter.current().setBadgeCount(max(0, count))
+        } catch {
+            // 未授权 .badge 时会抛异常 —— 对辅助指示是可接受的降级（tab bar
+            // badge 已经显示了数字,icon badge 只是锦上添花）
         }
     }
 }

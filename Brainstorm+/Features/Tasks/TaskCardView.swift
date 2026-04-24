@@ -18,6 +18,15 @@ public struct TaskCardView: View {
     }
 
     public var body: some View {
+        BsContentCard(padding: .none) {
+            cardBody
+        }
+        .opacity(isDone ? 0.6 : 1.0)
+        .animation(BsMotion.Anim.overshoot, value: isDone)
+    }
+
+    @ViewBuilder
+    private var cardBody: some View {
         HStack(alignment: .top, spacing: BsSpacing.lg) {
             // Checkbox / quick-complete button.
             Button(action: {
@@ -131,9 +140,6 @@ public struct TaskCardView: View {
             }
         }
         .padding(BsSpacing.lg + 4)
-        .bsGlassCard(cornerRadius: BsRadius.xl)
-        .opacity(isDone ? 0.6 : 1.0)
-        .animation(BsMotion.Anim.overshoot, value: isDone)
     }
 
     @ViewBuilder

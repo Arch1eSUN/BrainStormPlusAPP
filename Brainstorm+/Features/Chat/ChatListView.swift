@@ -156,7 +156,7 @@ public struct ChatListView: View {
             }
         }
         .listStyle(.plain)
-        // Fusion: kill the list's opaque backdrop so BsAmbientBackground shows
+        // Fusion: kill the list's opaque backdrop so the page background shows
         // through behind each row.
         .scrollContentBackground(.hidden)
     }

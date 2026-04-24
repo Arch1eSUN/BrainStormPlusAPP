@@ -8,6 +8,13 @@ public struct NotificationCardView: View {
     }
 
     public var body: some View {
+        BsContentCard(padding: .none) {
+            cardBody
+        }
+    }
+
+    @ViewBuilder
+    private var cardBody: some View {
         HStack(alignment: .top, spacing: BsSpacing.lg) {
             // Icon
             ZStack {
@@ -57,8 +64,6 @@ public struct NotificationCardView: View {
             }
         }
         .padding(BsSpacing.lg)
-        // Fusion glass envelope —— 替换 solid surfacePrimary + hairline border
-        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
 
     private func typeColor(_ type: AppNotification.NotificationType) -> Color {

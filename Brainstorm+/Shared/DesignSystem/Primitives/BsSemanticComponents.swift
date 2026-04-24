@@ -204,8 +204,8 @@ public struct BsBadge: View {
         case small, medium
         var font: Font {
             switch self {
-            case .small:  return Font.custom("Inter-Bold", size: 9)
-            case .medium: return Font.custom("Inter-Bold", size: 11)
+            case .small:  return Font.custom("Inter-Bold", size: 9, relativeTo: .caption2)
+            case .medium: return Font.custom("Inter-Bold", size: 11, relativeTo: .caption2)
             }
         }
         var padding: (h: CGFloat, v: CGFloat) {

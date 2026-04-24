@@ -21,7 +21,7 @@ public struct SettingsProfileView: View {
 
     public var body: some View {
         ZStack {
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             Form {
                 permissionNotice

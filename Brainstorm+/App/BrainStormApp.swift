@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import Supabase
+import UserNotifications
 
 @main
 struct BrainStormApp: App {
@@ -11,6 +12,12 @@ struct BrainStormApp: App {
     init() {
         // v1.2: TabBar badge 全局走 Coral（unreadBadge = brandCoral）
         UITabBarItem.appearance().badgeColor = UIColor(BsColor.unreadBadge)
+
+        // 请求 iOS home screen app icon badge 权限 —— 仅 .badge scope，
+        // 会弹"允许通知"prompt（iOS 把 badge 归为 notification 子集）。
+        // 拒绝时 setBadgeCount silent fail，降级到 tab bar badge 继续工作，
+        // 不阻塞任何业务流程。
+        UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
     }
 
     var body: some Scene {

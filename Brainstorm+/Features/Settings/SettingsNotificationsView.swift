@@ -20,7 +20,7 @@ public struct SettingsNotificationsView: View {
 
     public var body: some View {
         ZStack {
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             Form {
                 channelsSection

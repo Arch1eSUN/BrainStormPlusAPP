@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// Legacy card style — 代理到 BsGlassCard，从"实心白卡 + hairline"升级为
-/// Web DNA 招牌玻璃卡（.glassEffect + inset 1px 顶高光 + 软 drop shadow）。
+/// Legacy card style —— v1.1 redesign 之后对齐 `BsContentCard` 的 matte 材质
+/// (surfacePrimary fill + hairline stroke + light shadow)。
 ///
-/// 所有现存 `.modifier(ZYCardStyleModifier())` 调用自动升级到 glass 材质，
-/// 不用改业务代码。cornerRadius 参数保留以兼容调用签名。
+/// 所有现存 `.modifier(ZYCardStyleModifier())` 和 `.zyCardStyle()` 调用保持
+/// 不变；内部不再依赖已废弃的旧玻璃 modifier，改为直接渲染 matte 卡壳。
+/// cornerRadius / shadowRadius / shadowY 参数保留以兼容调用签名（shadow 参数
+/// 现在走 BsShadow.contentCard 统一值，仅 light mode 生效）。
 public struct ZYCardStyleModifier: ViewModifier {
     var cornerRadius: CGFloat
     var shadowRadius: CGFloat
     var shadowY: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(cornerRadius: CGFloat = BsRadius.xl, shadowRadius: CGFloat = 32, shadowY: CGFloat = 8) {
         self.cornerRadius = cornerRadius
@@ -17,7 +21,12 @@ public struct ZYCardStyleModifier: ViewModifier {
     }
 
     public func body(content: Content) -> some View {
-        content.bsGlassCard(cornerRadius: cornerRadius)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return content
+            .background(BsColor.surfacePrimary)
+            .clipShape(shape)
+            .overlay(shape.stroke(BsColor.borderSubtle, lineWidth: 0.5))
+            .bsShadow(colorScheme == .dark ? BsShadow.none : BsShadow.contentCard)
     }
 }
 

@@ -295,11 +295,13 @@ public enum BsTypography {
     public static let pageTitle     = largeTitle
 
     // ── 逃生舱 —— 必要时手指定 size + weight ────────────────────
-    public static func outfit(_ size: CGFloat, weight: String = "Bold") -> Font {
-        Font.custom("Outfit-\(weight)", size: size)
+    // Phase 7 Dynamic Type：factory 默认 `.body` anchor，调用方可按 size
+    // 显式传入更精确的 TextStyle（见文件顶部 size→TextStyle 映射表）。
+    public static func outfit(_ size: CGFloat, weight: String = "Bold", relativeTo: Font.TextStyle = .body) -> Font {
+        Font.custom("Outfit-\(weight)", size: size, relativeTo: relativeTo)
     }
-    public static func inter(_ size: CGFloat, weight: String = "Regular") -> Font {
-        Font.custom("Inter-\(weight)", size: size)
+    public static func inter(_ size: CGFloat, weight: String = "Regular", relativeTo: Font.TextStyle = .body) -> Font {
+        Font.custom("Inter-\(weight)", size: size, relativeTo: relativeTo)
     }
 }
 

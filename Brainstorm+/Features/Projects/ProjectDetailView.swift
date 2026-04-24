@@ -84,6 +84,7 @@ public struct ProjectDetailView: View {
             if viewModel.accessOutcome != .denied, let _ = viewModel.project {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptic.light()
                         isShowingEditSheet = true
                     } label: {
                         Image(systemName: "pencil")
@@ -97,10 +98,11 @@ public struct ProjectDetailView: View {
                 // must never see a destructive affordance for a project they can't read.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptic.warning()
                         isShowingDeleteConfirm = true
                     } label: {
                         Image(systemName: "trash")
-                            .foregroundColor(BsColor.warning)
+                            .foregroundColor(BsColor.danger)
                             .frame(minWidth: 44, minHeight: 44)
                     }
                     .accessibilityLabel("删除项目")
@@ -119,10 +121,12 @@ public struct ProjectDetailView: View {
         // prevent accidental taps on child content. Matches the edit-sheet overlay pattern.
         .overlay {
             if viewModel.isDeleting {
+                // Full-screen scrim — raw Color.black is intentional: this is a system-standard
+                // modal scrim behind a blocking ProgressView, not a surface that would take a token.
                 Color.black.opacity(0.15).ignoresSafeArea()
                 ProgressView("正在删除…")
                     .tint(BsColor.brandAzure)
-                    .padding()
+                    .padding(BsSpacing.lg)
                     .background(BsColor.surfacePrimary)
                     .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
             }
@@ -234,7 +238,7 @@ public struct ProjectDetailView: View {
 
     private func detailScroll(project: Project) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: BsSpacing.lg + BsSpacing.xs) { // 20pt — section rhythm
                 headerSection(project: project)
                 metadataSection(project: project)
                 progressSection(project: project)
@@ -280,9 +284,9 @@ public struct ProjectDetailView: View {
 
                 foundationScopeNote
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, BsSpacing.lg + BsSpacing.xs) // 20pt — scroll edge gutter
             .padding(.top, BsSpacing.sm)
-            .padding(.bottom, 40)
+            .padding(.bottom, BsSpacing.xxl + BsSpacing.sm) // 40pt — scroll bottom inset
         }
     }
 
@@ -303,32 +307,30 @@ public struct ProjectDetailView: View {
         return Text(label)
             .font(BsTypography.caption)
             .padding(.horizontal, BsSpacing.md)
-            .padding(.vertical, 6)
+            .padding(.vertical, BsSpacing.xs + 2) // 6pt — keeps capsule visual height; non-standard intentional
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
     }
 
     private func metadataSection(project: Project) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            if let start = project.startDate {
-                metaRow(icon: "calendar", label: "开始", value: Self.dateFormatter.string(from: start))
-            }
-            if let end = project.endDate {
-                metaRow(icon: "calendar.badge.clock", label: "截止", value: Self.dateFormatter.string(from: end))
-            }
-            // 1.7: owner row now prefers the joined profile's full_name. If owner fetch failed
-            // (recorded in `enrichmentErrors[.owner]`) we fall back to the raw UUID rather than
-            // hiding the row, so the detail still shows *something* for the owner field.
-            ownerMetaRow(project: project)
-            if let createdAt = project.createdAt {
-                metaRow(icon: "clock", label: "创建", value: Self.dateFormatter.string(from: createdAt))
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                if let start = project.startDate {
+                    metaRow(icon: "calendar", label: "开始", value: Self.dateFormatter.string(from: start))
+                }
+                if let end = project.endDate {
+                    metaRow(icon: "calendar.badge.clock", label: "截止", value: Self.dateFormatter.string(from: end))
+                }
+                // 1.7: owner row now prefers the joined profile's full_name. If owner fetch failed
+                // (recorded in `enrichmentErrors[.owner]`) we fall back to the raw UUID rather than
+                // hiding the row, so the detail still shows *something* for the owner field.
+                ownerMetaRow(project: project)
+                if let createdAt = project.createdAt {
+                    metaRow(icon: "clock", label: "创建", value: Self.dateFormatter.string(from: createdAt))
+                }
             }
         }
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     @ViewBuilder
@@ -415,41 +417,36 @@ public struct ProjectDetailView: View {
     }
 
     private func progressSection(project: Project) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack {
-                Text("进度")
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                Text("\(project.progress)%")
-                    .font(BsTypography.bodySmall)
-                    .foregroundColor(BsColor.brandAzure)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack {
+                    Text("进度")
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    Text("\(project.progress)%")
+                        .font(BsTypography.bodySmall)
+                        .foregroundColor(BsColor.brandAzure)
+                }
+                ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
+                    .progressViewStyle(.linear)
+                    .tint(BsColor.brandAzure)
             }
-            ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
-                .progressViewStyle(.linear)
-                .tint(BsColor.brandAzure)
         }
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     private func descriptionSection(description: String) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            Text("项目描述")
-                .font(BsTypography.sectionTitle)
-                .foregroundColor(BsColor.ink)
-            Text(description)
-                .font(BsTypography.bodySmall)
-                .foregroundColor(BsColor.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                Text("项目描述")
+                    .font(BsTypography.sectionTitle)
+                    .foregroundColor(BsColor.ink)
+                Text(description)
+                    .font(BsTypography.bodySmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     // MARK: - 1.7 read-only enrichment sections
@@ -516,7 +513,7 @@ public struct ProjectDetailView: View {
                 VStack(alignment: .leading, spacing: BsSpacing.smd) {
                     ForEach(viewModel.dailyLogs.prefix(5)) { log in
                         VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: BsSpacing.xs + 2) { // 6pt chip inner gap
                                 Text(log.date)
                                     .font(BsTypography.caption)
                                     .foregroundColor(BsColor.brandAzure)
@@ -572,7 +569,7 @@ public struct ProjectDetailView: View {
                 VStack(alignment: .leading, spacing: BsSpacing.smd) {
                     ForEach(viewModel.weeklySummaries.prefix(3)) { week in
                         VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: BsSpacing.xs + 2) { // 6pt chip inner gap
                                 Text("\(week.weekStart) 当周")
                                     .font(BsTypography.caption)
                                     .foregroundColor(BsColor.brandAzure)
@@ -621,36 +618,33 @@ public struct ProjectDetailView: View {
         errorMessage: String?,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                if let subtitle {
-                    Text(subtitle)
-                        .font(BsTypography.captionSmall)
-                        .foregroundColor(BsColor.inkMuted)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(BsTypography.captionSmall)
+                            .foregroundColor(BsColor.inkMuted)
+                    }
                 }
-            }
-            if let errorMessage {
-                HStack(spacing: BsSpacing.sm) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(BsColor.warning)
-                    Text("加载失败：\(errorMessage)")
-                        .font(BsTypography.caption)
-                        .foregroundColor(BsColor.warning)
-                        .lineLimit(3)
+                if let errorMessage {
+                    HStack(spacing: BsSpacing.sm) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(BsColor.warning)
+                        Text("加载失败：\(errorMessage)")
+                            .font(BsTypography.caption)
+                            .foregroundColor(BsColor.warning)
+                            .lineLimit(3)
+                    }
+                } else {
+                    content()
                 }
-            } else {
-                content()
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     private func emptyLine(_ text: String) -> some View {
@@ -724,37 +718,34 @@ public struct ProjectDetailView: View {
     /// - success: structured sections rendered below + "重新生成" button.
     /// - error: isolated warning row + "重试" button.
     private var aiSummarySection: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("AI 项目摘要")
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                if let caption = summaryProvenanceCaption(for: viewModel.projectSummary) {
-                    Text(caption)
-                        .font(BsTypography.captionSmall)
-                        .foregroundColor(BsColor.inkMuted)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("AI 项目摘要")
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    if let caption = summaryProvenanceCaption(for: viewModel.projectSummary) {
+                        Text(caption)
+                            .font(BsTypography.captionSmall)
+                            .foregroundColor(BsColor.inkMuted)
+                    }
                 }
+
+                Text("由 Web 端 AI 服务生成 · 涵盖进度简述、已完成亮点、进行中事项、下一步与风险提示。")
+                    .font(BsTypography.captionSmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let errorMessage = viewModel.summaryErrorMessage {
+                    summaryErrorRow(message: errorMessage)
+                } else if let summary = viewModel.projectSummary {
+                    projectSummaryContent(summary: summary)
+                }
+
+                summaryActionButton
             }
-
-            Text("由 Web 端 AI 服务生成 · 涵盖进度简述、已完成亮点、进行中事项、下一步与风险提示。")
-                .font(BsTypography.captionSmall)
-                .foregroundColor(BsColor.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let errorMessage = viewModel.summaryErrorMessage {
-                summaryErrorRow(message: errorMessage)
-            } else if let summary = viewModel.projectSummary {
-                projectSummaryContent(summary: summary)
-            }
-
-            summaryActionButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     @ViewBuilder
@@ -798,7 +789,7 @@ public struct ProjectDetailView: View {
                 .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: BsSpacing.xs + 2) { // 6pt bullet gap
                     Text("•")
                         .font(BsTypography.bodySmall)
                         .foregroundColor(BsColor.inkMuted)
@@ -846,6 +837,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
+                Haptic.medium()
                 Task { await viewModel.generateSummary() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -867,6 +859,7 @@ public struct ProjectDetailView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(label)
             // Prevent double-tap while generating AND lock out while a delete is in flight
             // so the two mutating-ish actions can't race. Summary doesn't mutate the row but
             // it issues three parallel reads — sharing the `isDeleting` guard is a safe
@@ -917,47 +910,44 @@ public struct ProjectDetailView: View {
     /// Supabase Edge Function proxying `askAI`) can drop in a generate action alongside
     /// `refreshRiskAnalysis()` without changing the UI binding.
     private var riskAnalysisSection: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("AI 风险分析")
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                if let analysis = viewModel.riskAnalysis {
-                    riskLevelBadge(level: analysis.riskLevel)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("AI 风险分析")
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    if let analysis = viewModel.riskAnalysis {
+                        riskLevelBadge(level: analysis.riskLevel)
+                    }
+                }
+
+                Text("由 Web 端 AI 服务生成 · 包含整体风险等级、摘要说明、逐条风险项与处置建议。")
+                    .font(BsTypography.captionSmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let errorMessage = viewModel.riskAnalysisErrorMessage {
+                    summaryErrorRow(message: errorMessage)
+                } else if let analysis = viewModel.riskAnalysis {
+                    riskAnalysisContent(analysis: analysis)
+                } else if viewModel.riskAnalysisNotYetGenerated {
+                    Text("Web 端尚未为该项目生成风险分析。")
+                        .font(BsTypography.caption)
+                        .foregroundColor(BsColor.inkMuted)
+                }
+
+                riskAnalysisActionButton
+
+                // 2.6: risk-action sync affordance. Sits inside the risk analysis card so the
+                // write path is visually anchored to the analysis it converts (mirrors Web's
+                // "转为风险动作" button placement at projects/page.tsx:685). Rendered only when
+                // a risk analysis is resolved — otherwise there is nothing to convert.
+                if viewModel.riskAnalysis != nil {
+                    riskActionSyncAffordance
                 }
             }
-
-            Text("由 Web 端 AI 服务生成 · 包含整体风险等级、摘要说明、逐条风险项与处置建议。")
-                .font(BsTypography.captionSmall)
-                .foregroundColor(BsColor.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let errorMessage = viewModel.riskAnalysisErrorMessage {
-                summaryErrorRow(message: errorMessage)
-            } else if let analysis = viewModel.riskAnalysis {
-                riskAnalysisContent(analysis: analysis)
-            } else if viewModel.riskAnalysisNotYetGenerated {
-                Text("Web 端尚未为该项目生成风险分析。")
-                    .font(BsTypography.caption)
-                    .foregroundColor(BsColor.inkMuted)
-            }
-
-            riskAnalysisActionButton
-
-            // 2.6: risk-action sync affordance. Sits inside the risk analysis card so the
-            // write path is visually anchored to the analysis it converts (mirrors Web's
-            // "转为风险动作" button placement at projects/page.tsx:685). Rendered only when
-            // a risk analysis is resolved — otherwise there is nothing to convert.
-            if viewModel.riskAnalysis != nil {
-                riskActionSyncAffordance
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
         .confirmationDialog(
             "将当前风险分析转为风险动作？",
             isPresented: $isShowingRiskActionSyncConfirm,
@@ -1008,6 +998,7 @@ public struct ProjectDetailView: View {
             HStack {
                 Spacer()
                 Button {
+                    Haptic.warning()
                     // Snapshot the draft at tap-time so a concurrent `fetchDetail()` can't
                     // mutate the preview between the tap and the confirmation.
                     guard let draft = viewModel.riskActionSyncDraft() else { return }
@@ -1033,6 +1024,7 @@ public struct ProjectDetailView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isSyncing ? "转换中" : "转为风险动作")
                 // Disabled while: no privilege, mid-insert, a delete is in flight (to keep
                 // destructive + write from racing), or the view model hasn't resolved a
                 // draft yet (no analysis → no button rendered at all, guarded above).
@@ -1059,7 +1051,7 @@ public struct ProjectDetailView: View {
                 // Success hint. Auto-clears after 3s via `scheduleRiskActionSyncSuccessClear`.
                 // Mirrors Web's `✅ 已转为风险动作（已建立 AI 链路）` copy at
                 // `projects/page.tsx:216` in spirit — iOS ships English-only copy this round.
-                HStack(spacing: 6) {
+                HStack(spacing: BsSpacing.xs + 2) { // 6pt icon+text gap
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(BsColor.brandAzure)
                     Text("已转为风险动作，并关联到本次分析。")
@@ -1129,8 +1121,8 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func riskItemRow(item: ProjectRiskAnalysis.RiskItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs + 2) { // 6pt chip/text stack
+            HStack(spacing: BsSpacing.xs + 2) { // 6pt chip inner gap
                 riskCategoryChip(category: item.category)
                 riskSeverityChip(severity: item.severity)
                 Spacer()
@@ -1178,7 +1170,7 @@ public struct ProjectDetailView: View {
         return Text(label)
             .font(BsTypography.meta)
             .padding(.horizontal, BsSpacing.sm)
-            .padding(.vertical, 3)
+            .padding(.vertical, 3) // non-standard intentional — tight meta-chip baseline
             .background(BsColor.brandAzure.opacity(0.15))
             .foregroundColor(BsColor.brandAzure)
             .clipShape(Capsule())
@@ -1198,7 +1190,7 @@ public struct ProjectDetailView: View {
         return Text(label)
             .font(BsTypography.meta)
             .padding(.horizontal, BsSpacing.sm)
-            .padding(.vertical, 3)
+            .padding(.vertical, 3) // non-standard intentional — tight meta-chip baseline
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
@@ -1218,6 +1210,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
+                Haptic.medium()
                 Task { await viewModel.refreshRiskAnalysis() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -1239,6 +1232,7 @@ public struct ProjectDetailView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(label)
             // Prevent double-tap while fetching and lock out while a delete is in flight so
             // destructive + read can't race. Mirrors the 2.2 summary button disable rule.
             .disabled(viewModel.isLoadingRiskAnalysis || viewModel.isDeleting)
@@ -1299,7 +1293,7 @@ public struct ProjectDetailView: View {
             ZStack {
                 Circle()
                     .fill(BsColor.warning.opacity(0.12))
-                    .frame(width: 96, height: 96)
+                    .frame(width: 96, height: 96) // non-standard intentional — empty-state icon medallion
                 Image(systemName: "lock.shield")
                     .font(.title)
                     .foregroundColor(BsColor.warning)
@@ -1313,11 +1307,11 @@ public struct ProjectDetailView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xxl)
         }
-        .padding(.vertical, 40)
+        .padding(.vertical, BsSpacing.xxxl - BsSpacing.sm) // 40pt vertical breathing room for empty state
         .padding(.horizontal, BsSpacing.xl)
         .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl + 2, style: .continuous)) // 24pt: empty-state is slightly larger than content card
+        .bsShadow(BsShadow.md)
         .padding(.horizontal, BsSpacing.xl)
     }
 
@@ -1335,21 +1329,23 @@ public struct ProjectDetailView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xxl)
             Button {
+                Haptic.medium()
                 Task { await reload() }
             } label: {
                 Text("重试")
                     .font(BsTypography.bodySmall)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, BsSpacing.lg + BsSpacing.xs) // 20pt pill padding
                     .padding(.vertical, BsSpacing.smd)
                     .background(BsColor.brandAzure)
                     .foregroundColor(.white)
                     .clipShape(Capsule())
             }
+            .accessibilityLabel("重试加载项目")
         }
         .padding(.vertical, BsSpacing.xxl)
         .padding(.horizontal, BsSpacing.xl)
         .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl + 2, style: .continuous)) // 24pt: empty-state is slightly larger than content card
         .padding(.horizontal, BsSpacing.xl)
     }
 
@@ -1419,38 +1415,35 @@ public struct ProjectDetailView: View {
     /// select) the server action runs. Writing new risk actions ("转为风险动作") remains
     /// Web-only and is explicitly out of scope.
     private var linkedRiskActionsSection: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("已关联风险动作")
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                if viewModel.linkedRiskActionsPhase == .loaded,
-                   !viewModel.linkedRiskActions.isEmpty {
-                    Text("\(viewModel.linkedRiskActions.count) 条已关联")
-                        .font(BsTypography.captionSmall)
-                        .foregroundColor(BsColor.inkMuted)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("已关联风险动作")
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    if viewModel.linkedRiskActionsPhase == .loaded,
+                       !viewModel.linkedRiskActions.isEmpty {
+                        Text("\(viewModel.linkedRiskActions.count) 条已关联")
+                            .font(BsTypography.captionSmall)
+                            .foregroundColor(BsColor.inkMuted)
+                    }
                 }
+
+                Text("与当前风险分析关联的动作列表。关闭 / 重开 / 有效性等处理结果写回暂仅支持 Web 端。")
+                    .font(BsTypography.captionSmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let errorMessage = viewModel.linkedRiskActionsErrorMessage {
+                    summaryErrorRow(message: errorMessage)
+                }
+
+                linkedRiskActionsBody
+
+                linkedRiskActionsActionButton
             }
-
-            Text("与当前风险分析关联的动作列表。关闭 / 重开 / 有效性等处理结果写回暂仅支持 Web 端。")
-                .font(BsTypography.captionSmall)
-                .foregroundColor(BsColor.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let errorMessage = viewModel.linkedRiskActionsErrorMessage {
-                summaryErrorRow(message: errorMessage)
-            }
-
-            linkedRiskActionsBody
-
-            linkedRiskActionsActionButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     @ViewBuilder
@@ -1507,7 +1500,7 @@ public struct ProjectDetailView: View {
         return Text(label)
             .font(BsTypography.meta)
             .padding(.horizontal, BsSpacing.sm)
-            .padding(.vertical, 3)
+            .padding(.vertical, 3) // non-standard intentional — tight meta-chip baseline
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
@@ -1530,6 +1523,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
+                Haptic.medium()
                 Task { await viewModel.refreshLinkedRiskActions() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -1551,6 +1545,7 @@ public struct ProjectDetailView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(label)
             // Prevent double-tap while fetching; lock out while a delete is in flight so
             // read + destructive actions can't race. Mirrors the 2.2 / 2.3 button rules.
             .disabled(isLoading || viewModel.isDeleting)
@@ -1619,38 +1614,35 @@ public struct ProjectDetailView: View {
     /// directly under the same org-scoped RLS that gates other risk reads. No source-of-
     /// truth discrepancy this round.
     private var resolutionFeedbackSection: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.smd) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("处理结果回流")
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-                Spacer()
-                if viewModel.resolutionFeedbackPhase == .loaded,
-                   let feedback = viewModel.resolutionFeedback {
-                    Text("共 \(feedback.total) 条")
-                        .font(BsTypography.captionSmall)
-                        .foregroundColor(BsColor.inkMuted)
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.smd) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("处理结果回流")
+                        .font(BsTypography.sectionTitle)
+                        .foregroundColor(BsColor.ink)
+                    Spacer()
+                    if viewModel.resolutionFeedbackPhase == .loaded,
+                       let feedback = viewModel.resolutionFeedback {
+                        Text("共 \(feedback.total) 条")
+                            .font(BsTypography.captionSmall)
+                            .foregroundColor(BsColor.inkMuted)
+                    }
                 }
+
+                Text("只读 · 处理结果写回与治理干预暂仅支持 Web 端。")
+                    .font(BsTypography.captionSmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let errorMessage = viewModel.resolutionFeedbackErrorMessage {
+                    summaryErrorRow(message: errorMessage)
+                }
+
+                resolutionFeedbackBody
+
+                resolutionFeedbackActionButton
             }
-
-            Text("只读 · 处理结果写回与治理干预暂仅支持 Web 端。")
-                .font(BsTypography.captionSmall)
-                .foregroundColor(BsColor.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let errorMessage = viewModel.resolutionFeedbackErrorMessage {
-                summaryErrorRow(message: errorMessage)
-            }
-
-            resolutionFeedbackBody
-
-            resolutionFeedbackActionButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.lg)
-        .background(BsColor.surfacePrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     @ViewBuilder
@@ -1710,14 +1702,14 @@ public struct ProjectDetailView: View {
     }
 
     private func resolutionStatBadge(label: String, count: Int, fg: Color, bg: Color) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: BsSpacing.xs + 2) { // 6pt count+label gap
             Text("\(count)")
                 .font(BsTypography.bodySmall)
             Text(label)
                 .font(BsTypography.captionSmall)
         }
         .padding(.horizontal, BsSpacing.smd)
-        .padding(.vertical, 6)
+        .padding(.vertical, BsSpacing.xs + 2) // 6pt — stat-pill baseline, non-standard intentional
         .background(bg)
         .foregroundColor(fg)
         .clipShape(Capsule())
@@ -1757,7 +1749,7 @@ public struct ProjectDetailView: View {
     }
 
     private func dominantCategoryRow(category: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: BsSpacing.xs + 2) { // 6pt icon+label gap
             Image(systemName: "tag")
                 .font(.caption2)
                 .foregroundColor(BsColor.inkMuted)
@@ -1786,14 +1778,14 @@ public struct ProjectDetailView: View {
         HStack(alignment: .top, spacing: BsSpacing.smd) {
             Circle()
                 .fill(Self.resolutionStatusColor(resolution.status))
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
+                .frame(width: BsSpacing.sm, height: BsSpacing.sm)
+                .padding(.top, BsSpacing.xs + 2) // 6pt — status-dot baseline align
             VStack(alignment: .leading, spacing: BsSpacing.xs) {
                 Text(resolution.title)
                     .font(BsTypography.caption)
                     .foregroundColor(BsColor.ink)
                     .lineLimit(2)
-                HStack(spacing: 6) {
+                HStack(spacing: BsSpacing.xs + 2) { // 6pt chip+date gap
                     if let effectiveness = resolution.effectiveness, !effectiveness.isEmpty {
                         effectivenessCapsule(effectiveness: effectiveness)
                     }
@@ -1814,7 +1806,7 @@ public struct ProjectDetailView: View {
         return Text(label)
             .font(BsTypography.meta)
             .padding(.horizontal, BsSpacing.sm)
-            .padding(.vertical, 3)
+            .padding(.vertical, 3) // non-standard intentional — tight meta-chip baseline
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
@@ -1863,6 +1855,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
+                Haptic.medium()
                 Task { await viewModel.refreshResolutionFeedback() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -1884,6 +1877,7 @@ public struct ProjectDetailView: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(label)
             // Mirrors the 2.2 / 2.3 / 2.4 button rules: prevent double-tap while in flight
             // and lock out while a delete is running so read + destructive don't race.
             .disabled(isLoading || viewModel.isDeleting)
