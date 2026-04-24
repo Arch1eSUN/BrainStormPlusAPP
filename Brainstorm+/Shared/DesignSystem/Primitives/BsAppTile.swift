@@ -60,13 +60,14 @@ public struct BsAppTile: View {
                         .frame(width: 50, height: 50)
 
                     // badge —— 有数字显数字，否则小红点
+                    // v1.1: 未读/紧急走 iOS 系统 .red（Coral 留给 admin 身份色）
                     if let badge, badge > 0 {
                         Text(badge > 99 ? "99+" : "\(badge)")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .frame(minWidth: 16, minHeight: 16)
-                            .background(BsColor.brandCoral, in: Capsule())
+                            .background(Color.red, in: Capsule())
                             .overlay(Capsule().stroke(BsColor.surfacePrimary, lineWidth: 1.5))
                             .offset(x: 4, y: -4)
                     }
