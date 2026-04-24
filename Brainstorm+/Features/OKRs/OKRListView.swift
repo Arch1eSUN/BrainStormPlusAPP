@@ -49,7 +49,7 @@ public struct OKRListView: View {
                     showingCreate = true
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(.headline, weight: .semibold))
                 }
                 .tint(BsColor.brandAzure)
                 .accessibilityLabel("新建 OKR")
@@ -116,9 +116,9 @@ public struct OKRListView: View {
                 } label: {
                     HStack(spacing: BsSpacing.xs) {
                         Text(String(parsed.year))
-                            .font(BsTypography.inter(13, weight: "SemiBold"))
+                            .font(BsTypography.bodySmall.weight(.semibold))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(.caption2, weight: .bold))
                     }
                     .foregroundColor(BsColor.brandAzure)
                     .padding(.horizontal, BsSpacing.md - 2)
@@ -138,7 +138,7 @@ public struct OKRListView: View {
                         )
                     } label: {
                         Text("Q\(q)")
-                            .font(BsTypography.inter(12, weight: "Bold"))
+                            .font(BsTypography.caption.weight(.bold))
                             .padding(.horizontal, BsSpacing.lg - 2)
                             .padding(.vertical, BsSpacing.sm)
                             .frame(maxWidth: .infinity)
@@ -189,15 +189,15 @@ public struct OKRListView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: iconName)
-                    .font(.system(size: 11))
+                    .font(.system(.caption2))
                     .foregroundColor(iconColor)
                 Text(label)
-                    .font(BsTypography.inter(10, weight: "Bold"))
+                    .font(BsTypography.meta)
                     .foregroundColor(BsColor.inkMuted)
                     .textCase(.uppercase)
             }
             Text(value)
-                .font(BsTypography.outfit(22, weight: "Bold"))
+                .font(BsTypography.brandTitle)
                 .foregroundColor(valueColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -216,12 +216,12 @@ public struct OKRListView: View {
         VStack(alignment: .leading, spacing: BsSpacing.sm) {
             HStack {
                 Text("\(viewModel.period) 总体进度")
-                    .font(BsTypography.inter(11, weight: "Bold"))
+                    .font(BsTypography.label)
                     .foregroundColor(BsColor.inkMuted)
                     .textCase(.uppercase)
                 Spacer()
                 Text("\(viewModel.overallProgress)%")
-                    .font(BsTypography.outfit(16, weight: "Bold"))
+                    .font(BsTypography.sectionTitle.weight(.bold))
                     .foregroundColor(BsColor.ink)
             }
             progressBar(progress: viewModel.overallProgress, height: 10)
@@ -259,7 +259,7 @@ public struct OKRListView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(.caption, weight: .bold))
                         .foregroundColor(BsColor.inkMuted.opacity(0.8))
                         .rotationEffect(.degrees(isOpen ? 90 : 0))
                         .frame(width: 20, height: 20)
@@ -274,14 +274,14 @@ public struct OKRListView: View {
                     VStack(alignment: .leading, spacing: BsSpacing.xs) {
                         HStack(spacing: 6) {
                             Text(obj.title)
-                                .font(BsTypography.inter(14, weight: "Bold"))
+                                .font(.system(.subheadline, weight: .bold))
                                 .foregroundColor(BsColor.ink)
                                 .lineLimit(1)
                             statusBadge(obj.status)
                         }
                         if let desc = obj.description, !desc.isEmpty {
                             Text(desc)
-                                .font(BsTypography.inter(11, weight: "Regular"))
+                                .font(BsTypography.captionSmall)
                                 .foregroundColor(BsColor.inkMuted)
                                 .lineLimit(1)
                         }
@@ -293,7 +293,7 @@ public struct OKRListView: View {
                 // Progress pct + mini bar.
                 VStack(alignment: .trailing, spacing: BsSpacing.xs) {
                     Text("\(pct)%")
-                        .font(BsTypography.outfit(14, weight: "Bold"))
+                        .font(.system(.subheadline, weight: .bold))
                         .foregroundColor(progressColor(pct))
                     progressBar(progress: pct, height: 4)
                         .frame(width: 72)
@@ -309,7 +309,7 @@ public struct OKRListView: View {
                     let krs = obj.keyResults ?? []
                     if krs.isEmpty {
                         Text("暂无关键结果")
-                            .font(BsTypography.inter(11, weight: "Regular"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
                     } else {
                         ForEach(krs) { kr in
@@ -339,7 +339,7 @@ public struct OKRListView: View {
             HStack(spacing: BsSpacing.sm) {
                 progressBar(progress: pct, height: 4)
                 Text(trailingFormatted(kr))
-                    .font(BsTypography.inter(10, weight: "Bold"))
+                    .font(BsTypography.meta)
                     .foregroundColor(BsColor.inkMuted)
                     .monospacedDigit()
             }
@@ -366,7 +366,7 @@ public struct OKRListView: View {
     private func statusBadge(_ status: Objective.ObjectiveStatus) -> some View {
         let (bg, fg) = statusColors(status)
         return Text(status.displayLabel)
-            .font(BsTypography.inter(9, weight: "Bold"))
+            .font(BsTypography.meta)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .foregroundColor(fg)
@@ -430,13 +430,13 @@ public struct OKRListView: View {
     private var emptyState: some View {
         VStack(spacing: BsSpacing.md) {
             Image(systemName: "target")
-                .font(.system(size: 32))
+                .font(.system(.largeTitle))
                 .foregroundColor(BsColor.brandAzure.opacity(0.5))
             Text("暂无目标")
-                .font(BsTypography.outfit(16, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text("该季度尚未录入 OKR，点击右上角 + 新建一个。")
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(.system(.caption))
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
         }
@@ -454,13 +454,13 @@ public struct OKRListView: View {
     private func errorState(message: String) -> some View {
         VStack(spacing: BsSpacing.md - 2) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28))
+                .font(.system(.largeTitle))
                 .foregroundColor(BsColor.warning)
             Text("加载失败")
-                .font(BsTypography.outfit(16, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text(message)
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(.system(.caption))
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xl)
@@ -468,7 +468,7 @@ public struct OKRListView: View {
                 Task { await viewModel.fetchObjectives() }
             } label: {
                 Text("重试")
-                    .font(BsTypography.inter(13, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall.weight(.semibold))
                     .padding(.horizontal, BsSpacing.xl - 2)
                     .padding(.vertical, BsSpacing.sm + 1)
                     .background(BsColor.brandAzure)

@@ -19,14 +19,14 @@ public struct AdminAttendanceExemptionView: View {
             Section {
                 Text("为特定部门或员工设置考勤豁免。员工级规则优先级高于部门级。未在此列表中的人员将遵守全局考勤规则。")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
 
             Section {
                 if vm.config.department_rules.isEmpty {
                     Text("暂无部门级豁免规则")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 6)
                 } else {
@@ -55,7 +55,7 @@ public struct AdminAttendanceExemptionView: View {
                 if vm.config.employee_rules.isEmpty {
                     Text("暂无员工级豁免规则")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 6)
                 } else {

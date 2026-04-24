@@ -43,11 +43,11 @@ public struct TaskMultiSelectView: View {
                     if viewModel.isLoadingTasks && viewModel.tasks.isEmpty {
                         HStack {
                             ProgressView()
-                            Text("加载中...").foregroundStyle(.secondary)
+                            Text("加载中...").foregroundStyle(BsColor.inkMuted)
                         }
                     } else if filteredTasks.isEmpty {
                         Text(projectId == nil ? "暂无可关联的任务" : "该项目下没有任务")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     } else {
                         ForEach(filteredTasks) { task in
                             row(for: task)
@@ -96,20 +96,20 @@ public struct TaskMultiSelectView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(BsColor.ink)
                         .lineLimit(2)
                     HStack(spacing: 6) {
                         statusBadge(task.status)
                         if let name = task.project?.name, projectId == nil {
                             Text(name)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                 }
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.inkMuted)
             }
         }
         .buttonStyle(.plain)
@@ -129,7 +129,7 @@ public struct TaskMultiSelectView: View {
             .font(.caption2)
             .padding(.vertical, 2)
             .padding(.horizontal, 6)
-            .background(Color.secondary.opacity(0.12), in: .capsule)
-            .foregroundStyle(.secondary)
+            .background(BsColor.inkMuted.opacity(0.12), in: .capsule)
+            .foregroundStyle(BsColor.inkMuted)
     }
 }

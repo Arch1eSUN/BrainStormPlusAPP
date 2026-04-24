@@ -58,7 +58,7 @@ public struct DailyLogEditView: View {
                             Text("日期")
                             Spacer()
                             Text(date, style: .date)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                 }
@@ -78,7 +78,7 @@ public struct DailyLogEditView: View {
                     if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("今天做了什么？遇到了什么？有什么想法？")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
 
@@ -88,11 +88,11 @@ public struct DailyLogEditView: View {
                     } label: {
                         HStack {
                             Text(projectLabel)
-                                .foregroundStyle(projectId == nil ? .secondary : .primary)
+                                .foregroundStyle(projectId == nil ? BsColor.inkMuted : BsColor.ink)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                     .buttonStyle(.plain)
@@ -104,11 +104,11 @@ public struct DailyLogEditView: View {
                     } label: {
                         HStack {
                             Text(taskLabel)
-                                .foregroundStyle(taskIds.isEmpty ? .secondary : .primary)
+                                .foregroundStyle(taskIds.isEmpty ? BsColor.inkMuted : BsColor.ink)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                     .buttonStyle(.plain)

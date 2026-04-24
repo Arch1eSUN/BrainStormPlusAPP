@@ -52,11 +52,11 @@ public struct ProjectPickerView: View {
                     if viewModel.isLoadingProjects && viewModel.projects.isEmpty {
                         HStack {
                             ProgressView()
-                            Text("加载中...").foregroundStyle(.secondary)
+                            Text("加载中...").foregroundStyle(BsColor.inkMuted)
                         }
                     } else if viewModel.projects.isEmpty {
                         Text("暂无可关联的项目")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     } else {
                         ForEach(viewModel.projects) { project in
                             Button {
@@ -66,11 +66,11 @@ public struct ProjectPickerView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(project.name)
-                                            .foregroundStyle(.primary)
+                                            .foregroundStyle(BsColor.ink)
                                         if let desc = project.description, !desc.isEmpty {
                                             Text(desc)
                                                 .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(BsColor.inkMuted)
                                                 .lineLimit(1)
                                         }
                                     }

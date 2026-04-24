@@ -38,7 +38,7 @@ public struct DeliverableDetailView: View {
                     section(title: "描述") {
                         Text(desc)
                             .font(.body)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(BsColor.ink)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
@@ -46,7 +46,7 @@ public struct DeliverableDetailView: View {
                     section(title: "关联项目") {
                         HStack {
                             Image(systemName: "folder.fill")
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(BsColor.brandAzure)
                             Text(project.name ?? "未命名项目")
                                 .font(.subheadline.weight(.semibold))
                         }
@@ -89,7 +89,7 @@ public struct DeliverableDetailView: View {
                     }
                     .labelStyle(.titleAndIcon)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -124,7 +124,7 @@ public struct DeliverableDetailView: View {
                     } else {
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -149,8 +149,9 @@ public struct DeliverableDetailView: View {
     @ViewBuilder
     private func linkCard(url: URL) -> some View {
         section(title: "交付链接") {
+            // TODO(batch-3): vendor platform colors — define BsColor.platform namespace later
             let platform = DeliverablePlatform.detect(url.absoluteString)
-                ?? DeliverablePlatform(label: "链接", color: .gray)
+                ?? DeliverablePlatform(label: "链接", color: BsColor.inkMuted)
             Link(destination: url) {
                 HStack(spacing: 10) {
                     Image(systemName: "arrow.up.right.square.fill")
@@ -158,17 +159,17 @@ public struct DeliverableDetailView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(platform.label)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(BsColor.ink)
                         Text(url.absoluteString)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                 }
                 .padding(12)
                 .background(platform.color.opacity(0.08))
@@ -190,11 +191,11 @@ public struct DeliverableDetailView: View {
                         Color.secondary.opacity(0.15)
                     }
                 } else {
-                    Circle().fill(Color.accentColor.opacity(0.2))
+                    Circle().fill(BsColor.brandAzure.opacity(0.2))
                         .overlay {
                             Text((assignee.fullName ?? "?").prefix(1))
                                 .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(BsColor.brandAzure)
                         }
                 }
             }
@@ -229,11 +230,11 @@ public struct DeliverableDetailView: View {
         HStack {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             Spacer()
             Text(date, style: .date)
                 .font(.caption)
-                .foregroundStyle(.primary)
+                .foregroundStyle(BsColor.ink)
         }
     }
 
@@ -247,7 +248,7 @@ public struct DeliverableDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
             content()
         }

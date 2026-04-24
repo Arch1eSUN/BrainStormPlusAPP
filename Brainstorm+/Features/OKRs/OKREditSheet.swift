@@ -121,7 +121,7 @@ public struct OKREditSheet: View {
             TextField("如：提升客户满意度", text: $title, axis: .horizontal)
                 .focused($focusedField, equals: .title)
                 .textFieldStyle(.plain)
-                .font(BsTypography.inter(15, weight: "Regular"))
+                .font(BsTypography.body)
                 .foregroundColor(BsColor.ink)
                 .padding(BsSpacing.md)
                 .background(BsColor.surfacePrimary)
@@ -144,7 +144,7 @@ public struct OKREditSheet: View {
             .focused($focusedField, equals: .description)
             .lineLimit(3...6)
             .textFieldStyle(.plain)
-            .font(BsTypography.inter(14, weight: "Regular"))
+            .font(.system(.subheadline))
             .foregroundColor(BsColor.ink)
             .padding(BsSpacing.md)
             .background(BsColor.surfacePrimary)
@@ -199,10 +199,10 @@ public struct OKREditSheet: View {
     private var ownerNote: some View {
         HStack(alignment: .top, spacing: BsSpacing.sm) {
             Image(systemName: "info.circle.fill")
-                .font(.system(size: 12))
+                .font(.system(.caption))
                 .foregroundColor(BsColor.brandAzure.opacity(0.7))
             Text("默认负责人为当前登录用户。如需改派他人，请到 Web 端调整。")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
         }
         .padding(BsSpacing.md - 2)
@@ -216,12 +216,12 @@ public struct OKREditSheet: View {
     private func fieldLabel(_ text: String, required: Bool) -> some View {
         HStack(spacing: 2) {
             Text(text)
-                .font(BsTypography.inter(11, weight: "Bold"))
+                .font(BsTypography.label)
                 .foregroundColor(BsColor.inkMuted)
                 .textCase(.uppercase)
             if required {
                 Text("*")
-                    .font(BsTypography.inter(11, weight: "Bold"))
+                    .font(BsTypography.label)
                     .foregroundColor(BsColor.danger)
             }
         }
@@ -230,10 +230,10 @@ public struct OKREditSheet: View {
     private func pickerPill(label: String) -> some View {
         HStack(spacing: BsSpacing.xs) {
             Text(label)
-                .font(BsTypography.inter(14, weight: "SemiBold"))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundColor(BsColor.brandAzure)
             Image(systemName: "chevron.down")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundColor(BsColor.brandAzure)
         }
         .padding(.horizontal, BsSpacing.md)

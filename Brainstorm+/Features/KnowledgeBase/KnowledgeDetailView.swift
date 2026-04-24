@@ -175,10 +175,10 @@ public struct KnowledgeDetailView: View {
                     if isGenerating {
                         ProgressView()
                             .scaleEffect(0.7)
-                            .tint(.purple)
+                            .tint(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                     }
                 }
-                .foregroundStyle(.purple)
+                .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
 
                 if let summary = current.aiSummary, !summary.isEmpty {
                     Text(summary)
@@ -210,7 +210,7 @@ public struct KnowledgeDetailView: View {
                                 .font(BsTypography.captionSmall)
                         }
                         .buttonStyle(.borderless)
-                        .tint(.purple)
+                        .tint(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                         .disabled(isGenerating)
                     }
                 } else {
@@ -240,7 +240,7 @@ public struct KnowledgeDetailView: View {
                         .font(BsTypography.cardSubtitle)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, BsSpacing.sm + 2)
-                        .background(Color.purple.opacity(isGenerating ? 0.5 : 1))
+                        .background(BsColor.brandAzure.opacity(isGenerating ? 0.5 : 1))  // TODO(batch-3): evaluate .purple → brandAzure
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous))
                     }

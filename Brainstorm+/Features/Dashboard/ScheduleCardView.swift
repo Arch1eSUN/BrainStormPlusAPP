@@ -40,7 +40,7 @@ public struct DayStateCardView: View {
                 if let window = shiftWindow {
                     HStack(spacing: BsSpacing.xs + 2) {
                         Image(systemName: "clock.fill")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(BsColor.inkMuted)
                         Text(window)
                             .font(BsTypography.caption)

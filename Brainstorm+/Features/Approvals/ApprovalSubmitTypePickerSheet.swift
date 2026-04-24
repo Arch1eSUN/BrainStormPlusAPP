@@ -85,22 +85,22 @@ public struct ApprovalSubmitTypePickerSheet: View {
                         Image(systemName: kind.systemImage)
                             .font(.title3)
                             .frame(width: 32, height: 32)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(BsColor.brandAzure)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(kind.displayLabel)
                                 .font(.body.weight(.medium))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(BsColor.ink)
                             Text(kind.subtitle)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
 
                         Spacer()
 
                         Image(systemName: "chevron.right")
                             .font(.footnote)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(BsColor.inkFaint)
                     }
                     .contentShape(Rectangle())
                 }

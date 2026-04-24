@@ -116,7 +116,7 @@ public struct TeamAttendanceView: View {
                         Text(viewModel.departmentFilter ?? "全部")
                             .lineLimit(1)
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(BsColor.brandAzure)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -136,11 +136,11 @@ public struct TeamAttendanceView: View {
     private func summaryChip(label: String, count: Int, tint: Color) -> some View {
         HStack(spacing: 6) {
             Text("\(count)")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(tint)
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(BsColor.inkMuted)
         }
         .padding(.horizontal, 10)
@@ -156,11 +156,11 @@ public struct TeamAttendanceView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.fullName)
-                    .font(.custom("Inter-SemiBold", size: 15))
+                    .font(BsTypography.body.weight(.semibold))
                     .foregroundStyle(BsColor.ink)
                 if !row.department.isEmpty {
                     Text(row.department)
-                        .font(.custom("Inter-Regular", size: 12))
+                        .font(BsTypography.caption)
                         .foregroundStyle(BsColor.inkMuted)
                 }
             }
@@ -175,7 +175,7 @@ public struct TeamAttendanceView: View {
                         .foregroundStyle(BsColor.inkFaint)
                     Text(row.clockOutText)
                 }
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(.caption, design: .rounded, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(BsColor.inkMuted)
             }
@@ -189,7 +189,7 @@ public struct TeamAttendanceView: View {
             Circle()
                 .fill(BsColor.brandAzure.opacity(0.12))
             Text(String(profile.fullName?.prefix(1) ?? "?"))
-                .font(.custom("Inter-SemiBold", size: 16))
+                .font(BsTypography.cardTitle.weight(.semibold))
                 .foregroundStyle(BsColor.brandAzure)
         }
         .frame(width: 40, height: 40)
@@ -210,9 +210,9 @@ public struct TeamAttendanceView: View {
 
         HStack(spacing: 4) {
             Image(systemName: iconName)
-                .font(.system(size: 10))
+                .font(.system(.caption2))
             Text(row.statusLabel)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 8)

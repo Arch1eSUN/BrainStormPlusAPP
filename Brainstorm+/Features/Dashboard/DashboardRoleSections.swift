@@ -199,7 +199,7 @@ private struct QuickActionTile: View {
                         .frame(width: 44, height: 44)
 
                     Image(systemName: tile.module.iconName)
-                        .font(.system(size: 19, weight: .medium))
+                        .font(.system(.body, weight: .medium))
                         .foregroundStyle(tile.color)
                 }
 
@@ -283,7 +283,7 @@ private struct EmptyStateCard: View {
                     .fill(BsColor.brandAzure.opacity(0.06))
                     .frame(width: 56, height: 56)
                 Image(systemName: iconName)
-                    .font(.system(size: 22, weight: .light))
+                    .font(.system(.title3, weight: .light))
                     .foregroundStyle(BsColor.brandAzure.opacity(0.55))
             }
             Text(title)
@@ -325,7 +325,7 @@ private struct MyTasksSection: View {
             ) {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 28))
+                        .font(.system(.title2))
                         .foregroundStyle(BsColor.brandMint)
                     Text("今日无待办")
                         .font(BsTypography.cardTitle)
@@ -399,7 +399,7 @@ private struct MonthlySnapshotSection: View {
                                 .fill(items[idx].bg)
                                 .frame(width: 36, height: 36)
                             Image(systemName: items[idx].icon)
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.system(.callout, weight: .medium))
                                 .foregroundStyle(items[idx].fg)
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -429,7 +429,7 @@ private struct ActiveProjectsSection: View {
     private func statusColor(_ status: String) -> Color {
         switch status {
         case "active": return BsColor.success
-        case "planning": return .purple
+        case "planning": return BsColor.brandAzure  // TODO(batch-3): evaluate .purple → brandAzure
         case "on_hold": return BsColor.brandCoral
         case "completed": return BsColor.inkMuted
         default: return BsColor.inkMuted
@@ -469,7 +469,7 @@ private struct ProjectRowCard: View {
                             .fill(accent.opacity(0.15))
                             .frame(width: 32, height: 32)
                         Image(systemName: "folder")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(.subheadline, weight: .medium))
                             .foregroundStyle(accent)
                     }
                     Text(project.name)
@@ -591,7 +591,7 @@ private struct ProgressRing: View {
                 .stroke(accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(progress)%")
-                .font(Font.custom("Outfit-Bold", size: 9))
+                .font(Font.custom("Outfit-Bold", size: 9, relativeTo: .caption2))
                 .foregroundStyle(BsColor.ink)
         }
         .frame(width: size, height: size)
@@ -757,7 +757,7 @@ private struct RiskOverviewCard: View {
 
                     HStack(spacing: BsSpacing.xs) {
                         Image(systemName: "shield.lefthalf.filled")
-                            .font(.system(size: 10))
+                            .font(.system(.caption2))
                             .foregroundStyle(BsColor.success)
                         Text(risk.activeRisks > 0 ? "优先处理高优风险和阻塞任务。" : "当前没有活跃风险，保持观察。")
                             .font(BsTypography.meta)
@@ -833,7 +833,7 @@ private struct TeamMonitorCard: View {
         VStack(alignment: .leading, spacing: BsSpacing.sm) {
             HStack(spacing: BsSpacing.xs + 2) {
                 Image(systemName: "list.bullet.clipboard")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(BsColor.warning)
                 Text("待处理事项")
                     .font(BsTypography.label)
@@ -916,7 +916,7 @@ private struct TeamTodoAlertRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 1.5))
 
                 Image(systemName: iconName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(.footnote, weight: .medium))
                     .foregroundStyle(severityColor)
                     .frame(width: 18)
 
@@ -934,7 +934,7 @@ private struct TeamTodoAlertRow: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(.caption2, weight: .semibold))
                     .foregroundStyle(BsColor.inkFaint)
             }
             .padding(.horizontal, BsSpacing.sm + 2)
@@ -961,7 +961,7 @@ private struct TeamStatTile: View {
                     .fill(color.opacity(0.12))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(color)
             }
             VStack(alignment: .leading, spacing: 2) {

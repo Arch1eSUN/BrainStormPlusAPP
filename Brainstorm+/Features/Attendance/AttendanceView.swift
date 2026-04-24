@@ -57,7 +57,7 @@ public struct AttendanceView: View {
         HStack {
             VStack(alignment: .leading, spacing: BsSpacing.xs) {
                 Text("每日打卡")
-                    .font(BsTypography.outfit(20, weight: "Bold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundStyle(BsColor.ink)
 
                 Text(Date().formatted(date: .complete, time: .omitted))
@@ -119,7 +119,7 @@ public struct AttendanceView: View {
 
                 Image(systemName: "location.fill")
                     .foregroundStyle(BsColor.brandAzure)
-                    .font(.system(size: 20))
+                    .font(.system(.title3))
             }
             .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isPulsing)
 
@@ -196,10 +196,10 @@ public struct AttendanceView: View {
                             .tint(buttonTone)
                     } else {
                         Image(systemName: buttonIcon)
-                            .font(.system(size: 18))
+                            .font(.system(.body))
                     }
                     Text(buttonLabel)
-                        .font(BsTypography.outfit(16, weight: "Bold"))
+                        .font(Font.custom("Outfit-Bold", size: 16, relativeTo: .body))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, BsSpacing.lg)
@@ -295,7 +295,7 @@ public struct AttendanceView: View {
     private var statusSummaryCell: some View {
         VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text("状态")
-                .font(BsTypography.inter(11, weight: "Medium"))
+                .font(BsTypography.captionSmall)
                 .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
             StatusChip.attendance(status: viewModel.today?.status)
@@ -312,11 +312,11 @@ public struct AttendanceView: View {
     private func summaryCell(label: String, value: String, tone: Color = BsColor.ink) -> some View {
         VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text(label)
-                .font(BsTypography.inter(11, weight: "Medium"))
+                .font(BsTypography.captionSmall)
                 .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
             Text(value)
-                .font(BsTypography.outfit(14, weight: "Bold"))
+                .font(Font.custom("Outfit-Bold", size: 14, relativeTo: .subheadline))
                 .foregroundStyle(tone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

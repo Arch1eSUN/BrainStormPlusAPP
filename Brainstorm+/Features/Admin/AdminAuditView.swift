@@ -123,11 +123,11 @@ public struct AdminAuditView: View {
                                     let actor = row.userId.flatMap { vm.actorNames[$0] } ?? "系统"
                                     Label(actor.isEmpty ? "系统" : actor, systemImage: "person.crop.circle")
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(BsColor.inkMuted)
                                     if let ts = row.createdAt {
                                         Label(dateLabel(ts), systemImage: "clock")
                                             .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(BsColor.inkMuted)
                                     }
                                 }
                             }
@@ -151,12 +151,12 @@ public struct AdminAuditView: View {
     private func actionTag(_ action: String) -> some View {
         let (label, color): (String, Color) = {
             switch action {
-            case "role_change": return ("角色变更", .purple)
-            case "user_create": return ("创建用户", .green)
-            case "user_deactivate": return ("禁用账号", .red)
-            case "config_update": return ("配置变更", .orange)
-            case "broadcast": return ("广播通知", .blue)
-            default: return (action, .gray)
+            case "role_change": return ("角色变更", BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
+            case "user_create": return ("创建用户", BsColor.success)
+            case "user_deactivate": return ("禁用账号", BsColor.danger)
+            case "config_update": return ("配置变更", BsColor.warning)
+            case "broadcast": return ("广播通知", BsColor.brandAzure)
+            default: return (action, BsColor.inkMuted)
             }
         }()
         Text(label)

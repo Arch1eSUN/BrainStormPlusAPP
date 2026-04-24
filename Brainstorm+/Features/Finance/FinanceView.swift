@@ -148,7 +148,7 @@ public struct FinanceView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("任务类型")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             HStack(spacing: 10) {
                 ForEach(FinanceChain.allCases) { chain in
                     Button {
@@ -164,7 +164,7 @@ public struct FinanceView: View {
                                 .font(.footnote.weight(.bold))
                             Text(chain.description)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                                 .lineLimit(2)
                                 .multilineTextAlignment(.leading)
                         }
@@ -173,13 +173,13 @@ public struct FinanceView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(viewModel.selectedChain == chain
-                                      ? Color.accentColor.opacity(0.12)
+                                      ? BsColor.brandAzure.opacity(0.12)
                                       : Color(.secondarySystemBackground))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(viewModel.selectedChain == chain
-                                        ? Color.accentColor
+                                        ? BsColor.brandAzure
                                         : Color.clear, lineWidth: 1.5)
                         )
                     }
@@ -199,7 +199,7 @@ public struct FinanceView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                 Text("AI 处理")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -241,7 +241,7 @@ public struct FinanceView: View {
                 if viewModel.inputText.isEmpty {
                     Text(placeholderText)
                         .font(.footnote)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
                         .allowsHitTesting(false)
@@ -309,7 +309,7 @@ public struct FinanceView: View {
                     .annotation(position: .top) {
                         Text("\(bucket.count)")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
                 .frame(height: 180)
@@ -398,10 +398,10 @@ public struct FinanceView: View {
             VStack(spacing: 6) {
                 Image(systemName: "chart.bar.doc.horizontal")
                     .font(.title3)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(BsColor.inkFaint)
                 Text(text)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             .padding(.vertical, 16)
             Spacer()
@@ -424,7 +424,7 @@ public struct FinanceView: View {
             } else if viewModel.filteredRecords.isEmpty {
                 Text("暂无 \(viewModel.selectedChain.displayName) 记录")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
             } else {
@@ -512,13 +512,13 @@ private struct FinanceRecordRow: View {
                     .lineLimit(2)
                 Text(record.createdAt, format: .dateTime.month().day().hour().minute())
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             Spacer()
             if !compact {
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(BsColor.inkFaint)
             }
         }
         .padding(compact ? 0 : 12)

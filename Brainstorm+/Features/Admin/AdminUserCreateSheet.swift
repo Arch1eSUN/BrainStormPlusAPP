@@ -54,7 +54,7 @@ public struct AdminUserCreateSheet: View {
                 Section {
                     Text("iOS 端受 Supabase service_role 限制，无法直接在设备上创建 auth 账号。请在 Web 端 /dashboard/admin 完成创建；iOS 端负责后续的角色、能力包、部门、职位配置。")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 } header: {
                     Text("创建流程说明")
                 }
@@ -76,7 +76,7 @@ public struct AdminUserCreateSheet: View {
                             showPassword.toggle()
                         } label: {
                             Image(systemName: showPassword ? "eye.slash" : "eye")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                 }
@@ -104,7 +104,7 @@ public struct AdminUserCreateSheet: View {
                                     Text(pkg.label).font(.subheadline.weight(.semibold))
                                     Text(pkg.description)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(BsColor.inkMuted)
                                 }
                             }
                         }
@@ -130,12 +130,12 @@ public struct AdminUserCreateSheet: View {
 
                 if let info = infoText {
                     Section {
-                        Text(info).font(.footnote).foregroundStyle(.orange)
+                        Text(info).font(.footnote).foregroundStyle(BsColor.warning)
                     }
                 }
                 if let err = errorText {
                     Section {
-                        Text(err).font(.footnote).foregroundStyle(.red)
+                        Text(err).font(.footnote).foregroundStyle(BsColor.danger)
                     }
                 }
             }

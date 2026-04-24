@@ -128,9 +128,9 @@ public struct WeeklyReportCardView: View {
             if let feedback = report.feedback, !feedback.isEmpty {
                 Text("反馈：\(feedback)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                     .padding(8)
-                    .background(Color.secondary.opacity(0.08))
+                    .background(BsColor.inkMuted.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous))
             }
         }

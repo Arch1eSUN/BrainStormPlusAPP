@@ -16,7 +16,7 @@ public struct AdminGeofenceView: View {
                         .foregroundStyle(BsColor.brandAzure)
                     Text("您可以配置多个打卡中心点。员工在任意一个允许的半径内均可打卡成功。若未配置任何围栏，则完全不限制打卡位置。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
 
@@ -24,7 +24,7 @@ public struct AdminGeofenceView: View {
                 Section {
                     Text("暂无指定的考勤围栏，目前允许异地打卡")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
@@ -92,7 +92,7 @@ public struct AdminGeofenceView: View {
             HStack {
                 Text("打卡点 #\(index + 1)")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Button(role: .destructive) {
                     vm.remove(id: fence.id)
@@ -108,22 +108,22 @@ public struct AdminGeofenceView: View {
             if !fence.address.isEmpty {
                 Label(fence.address, systemImage: "mappin.and.ellipse")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(2)
             }
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("半径").font(.caption2).foregroundStyle(.tertiary)
+                    Text("半径").font(.caption2).foregroundStyle(BsColor.inkFaint)
                     Text("\(fence.radius) 米").font(.footnote.weight(.semibold))
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("经度").font(.caption2).foregroundStyle(.tertiary)
+                    Text("经度").font(.caption2).foregroundStyle(BsColor.inkFaint)
                     Text(fence.lng.map { String(format: "%.6f", $0) } ?? "未设置")
                         .font(.footnote.monospaced())
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("纬度").font(.caption2).foregroundStyle(.tertiary)
+                    Text("纬度").font(.caption2).foregroundStyle(BsColor.inkFaint)
                     Text(fence.lat.map { String(format: "%.6f", $0) } ?? "未设置")
                         .font(.footnote.monospaced())
                 }
@@ -148,16 +148,16 @@ public struct AdminGeofenceView: View {
             } else {
                 HStack {
                     Image(systemName: "mappin.slash")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                     Text("尚未设置坐标")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 18)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.secondary.opacity(0.08))
+                        .fill(BsColor.inkMuted.opacity(0.08))
                 )
             }
 

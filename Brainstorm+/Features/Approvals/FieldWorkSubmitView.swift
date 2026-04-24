@@ -73,7 +73,7 @@ public struct FieldWorkSubmitView: View {
                 } footer: {
                     Text("外勤申请需至少提前一天提交。")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 }
                 .scrollContentBackground(.hidden)

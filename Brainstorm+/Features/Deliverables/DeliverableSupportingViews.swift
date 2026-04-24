@@ -26,11 +26,11 @@ public struct DeliverableStatusChip: View {
 
     private func tone(for status: Deliverable.DeliverableStatus) -> Color {
         switch status {
-        case .notStarted, .pending:  return .gray
-        case .inProgress:            return .blue
-        case .submitted:             return .orange
-        case .accepted, .approved:   return .green
-        case .revision, .rejected:   return .red
+        case .notStarted, .pending:  return BsColor.inkMuted
+        case .inProgress:            return BsColor.brandAzure
+        case .submitted:             return BsColor.warning
+        case .accepted, .approved:   return BsColor.success
+        case .revision, .rejected:   return BsColor.danger
         }
     }
 }
@@ -44,6 +44,7 @@ public struct DeliverablePlatform {
     public let color: Color
 
     private static let table: [(NSRegularExpression, DeliverablePlatform)] = {
+        // TODO(batch-3): vendor platform colors — define BsColor.platform namespace later
         let entries: [(String, String, Color)] = [
             (#"drive\.google\.com"#,      "Google Drive", Color(red: 66/255,  green: 133/255, blue: 244/255)),
             (#"docs\.google\.com"#,       "Google Docs",  Color(red: 66/255,  green: 133/255, blue: 244/255)),

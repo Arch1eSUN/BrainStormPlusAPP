@@ -32,8 +32,8 @@ public enum ChatContentHighlighter {
     public static func attributed(
         _ raw: String,
         searchTerm: String? = nil,
-        mentionColor: Color = .blue,
-        matchBackground: Color = Color.yellow.opacity(0.45)
+        mentionColor: Color = BsColor.brandAzure,
+        matchBackground: Color = BsColor.warning.opacity(0.45)
     ) -> AttributedString {
         var attributed = AttributedString(raw)
 

@@ -25,13 +25,13 @@ public struct ProjectCardView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(project.name)
-                        .font(BsTypography.outfit(18, weight: "SemiBold"))
+                        .font(BsTypography.sectionTitle)
                         .foregroundColor(BsColor.ink)
                         .lineLimit(2)
 
                     if let description = project.description, !description.isEmpty {
                         Text(description)
-                            .font(BsTypography.inter(13, weight: "Regular"))
+                            .font(BsTypography.bodySmall)
                             .foregroundColor(BsColor.inkMuted)
                             .lineLimit(2)
                     }
@@ -42,7 +42,7 @@ public struct ProjectCardView: View {
                             // through to an SF-symbol placeholder for nil / invalid / load-failure.
                             avatarView(urlString: owner?.avatarUrl, diameter: 16)
                             Text(byline)
-                                .font(BsTypography.inter(11, weight: "Medium"))
+                                .font(BsTypography.captionSmall)
                                 .foregroundColor(BsColor.inkMuted)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -76,7 +76,7 @@ public struct ProjectCardView: View {
 
                 HStack(spacing: 6) {
                     Text("\(project.progress)%")
-                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .font(BsTypography.caption.weight(.semibold))
                         .foregroundColor(BsColor.brandAzure)
 
                     ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
@@ -108,7 +108,7 @@ public struct ProjectCardView: View {
     private var statusBadge: some View {
         let (label, fg, bg) = Self.statusStyle(for: project.status)
         return Text(label)
-            .font(BsTypography.inter(11, weight: "SemiBold"))
+            .font(BsTypography.label)
             .padding(.horizontal, BsSpacing.md - 2)
             .padding(.vertical, 5)
             .background(bg)

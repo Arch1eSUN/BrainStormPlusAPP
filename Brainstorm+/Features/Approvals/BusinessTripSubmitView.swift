@@ -106,7 +106,7 @@ public struct BusinessTripSubmitView: View {
                 } footer: {
                     Text("费用以元为单位，最多保留 2 位小数。选填。")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 }
                 .scrollContentBackground(.hidden)

@@ -140,8 +140,8 @@ public struct AttendanceHeroCard: View {
 
     private var statusPill: some View {
         HStack(spacing: 4) {
-            Image(systemName: statusIcon).font(.system(size: 11, weight: .semibold))
-            Text(statusLabel).font(.custom("Inter-SemiBold", size: 11))
+            Image(systemName: statusIcon).font(.system(.caption2, weight: .semibold))
+            Text(statusLabel).font(BsTypography.label)
         }
         .foregroundStyle(stateColor)
         .padding(.horizontal, 10)
@@ -186,14 +186,14 @@ public struct AttendanceHeroCard: View {
             if let clockIn = viewModel.today?.clockIn {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formatTime(clockIn) + (viewModel.today?.clockOut.map { " – \(formatTime($0))" } ?? ""))
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.system(.caption, design: .rounded, weight: .medium))
                         .foregroundStyle(BsColor.inkMuted)
                         .monospacedDigit()
                     if viewModel.hasLocation,
                        let loc = viewModel.currentLocationName,
                        !loc.isEmpty {
                         Text(loc)
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                             .foregroundStyle(BsColor.inkFaint)
                             .lineLimit(1)
                     }

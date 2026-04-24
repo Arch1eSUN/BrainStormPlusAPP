@@ -79,7 +79,7 @@ struct ForgotPasswordView: View {
         VStack(spacing: 16) {
             HStack(spacing: 16) {
                 Image(systemName: "envelope.fill")
-                    .foregroundStyle(emailFocused ? Color.Brand.primary : Color.gray.opacity(0.5))
+                    .foregroundStyle(emailFocused ? Color.Brand.primary : BsColor.inkMuted.opacity(0.5))
                     .font(.system(size: 18))
                     .frame(width: 24)
 

@@ -96,7 +96,7 @@ public struct AdminEvaluationsView: View {
                 } header: {
                     Text("员工列表 · \(vm.filteredRows.count) 人")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -132,7 +132,7 @@ public struct AdminEvaluationsView: View {
                     .foregroundStyle(BsColor.ink)
                 Text("月度评估队列")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
 
             Spacer()
@@ -215,9 +215,9 @@ public struct AdminEvaluationsView: View {
         let c = vm.counts
         return HStack(spacing: 8) {
             statChip(label: "总计", value: c.total, tint: BsColor.brandAzure)
-            statChip(label: "待评", value: c.pending, tint: .gray)
+            statChip(label: "待评", value: c.pending, tint: BsColor.inkMuted)
             statChip(label: "已评", value: c.evaluated, tint: BsColor.success)
-            statChip(label: "需复核", value: c.needsReview, tint: .orange)
+            statChip(label: "需复核", value: c.needsReview, tint: BsColor.warning)
         }
         .padding(.vertical, 2)
     }
@@ -229,7 +229,7 @@ public struct AdminEvaluationsView: View {
                 .foregroundStyle(tint)
             Text(label)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -253,8 +253,8 @@ public struct AdminEvaluationsView: View {
                             .font(.caption2.weight(.bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.purple.opacity(0.15)))
-                            .foregroundStyle(Color.purple)
+                            .background(Capsule().fill(BsColor.brandAzure.opacity(0.15)))  // TODO(batch-3): evaluate .purple → brandAzure
+                            .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                     } else if row.primaryRole == "admin" {
                         Text("管理")
                             .font(.caption2.weight(.bold))
@@ -267,9 +267,9 @@ public struct AdminEvaluationsView: View {
                 HStack(spacing: 6) {
                     Text(row.department ?? "未分部门")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     Text("·")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                     statusBadge(row: row)
                 }
             }
@@ -295,9 +295,9 @@ public struct AdminEvaluationsView: View {
 
     private func statusBadge(row: MonthlyMatrixRow) -> some View {
         let (label, color): (String, Color) = {
-            guard let ev = row.evaluation else { return ("待评", .gray) }
-            if ev.requiresManualReview { return ("需复核", .orange) }
-            if ev.triggeredBy == "cron" && ev.overallScore == nil { return ("自动失败", .red) }
+            guard let ev = row.evaluation else { return ("待评", BsColor.inkMuted) }
+            if ev.requiresManualReview { return ("需复核", BsColor.warning) }
+            if ev.triggeredBy == "cron" && ev.overallScore == nil { return ("自动失败", BsColor.danger) }
             return ("已评", BsColor.success)
         }()
         return Text(label)
@@ -312,12 +312,12 @@ public struct AdminEvaluationsView: View {
         let score = row.evaluation?.overallScore
         let text = score.map(String.init) ?? "—"
         let color: Color = {
-            guard let s = score else { return .gray }
+            guard let s = score else { return BsColor.inkMuted }
             if s >= 90 { return BsColor.success }
             if s >= 80 { return BsColor.brandAzure }
-            if s >= 60 { return .orange }
-            if s >= 40 { return Color.orange.opacity(0.85) }
-            return .red
+            if s >= 60 { return BsColor.warning }
+            if s >= 40 { return BsColor.warning.opacity(0.85) }
+            return BsColor.danger
         }()
         return VStack(spacing: 0) {
             Text(text)
@@ -325,7 +325,7 @@ public struct AdminEvaluationsView: View {
                 .foregroundStyle(color)
             Text("总分")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(BsColor.inkFaint)
         }
         .frame(width: 56, height: 52)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(color.opacity(0.1)))

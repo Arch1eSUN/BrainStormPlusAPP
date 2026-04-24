@@ -31,7 +31,7 @@ struct AdminAttendanceExemptionEditSheet: View {
                 case .newDepartment(let options):
                     Section("选择部门") {
                         if options.isEmpty {
-                            Text("无可选部门").foregroundStyle(.secondary)
+                            Text("无可选部门").foregroundStyle(BsColor.inkMuted)
                         } else {
                             Picker("部门", selection: $selectedDepartment) {
                                 Text("请选择").tag("")
@@ -45,7 +45,7 @@ struct AdminAttendanceExemptionEditSheet: View {
                 case .newEmployee(let options):
                     Section("选择员工") {
                         if options.isEmpty {
-                            Text("无可选员工").foregroundStyle(.secondary)
+                            Text("无可选员工").foregroundStyle(BsColor.inkMuted)
                         } else {
                             Picker("员工", selection: $selectedEmployeeId) {
                                 Text("请选择").tag("")
@@ -81,7 +81,7 @@ struct AdminAttendanceExemptionEditSheet: View {
                 Section {
                     Text("豁免规则说明：开启「免围栏」后员工可在任意位置打卡；开启「弹性工时」后不限制打卡时间段。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             .navigationTitle(title)

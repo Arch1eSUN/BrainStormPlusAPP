@@ -209,7 +209,7 @@ public struct SettingsRowContent: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(.body))
                     .foregroundStyle(iconColor)
             }
 
@@ -221,7 +221,7 @@ public struct SettingsRowContent: View {
 
             if showChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.subheadline, weight: .bold))
                     .foregroundStyle(BsColor.inkFaint)
             }
         }

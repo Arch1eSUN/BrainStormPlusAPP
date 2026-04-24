@@ -107,22 +107,22 @@ public struct HiringDataView: View {
                         if let name = employeeName(from: c.profiles) {
                             Label(name, systemImage: "person.crop.circle")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                         HStack(spacing: 8) {
                             Label(periodText(start: c.startDate, end: c.endDate), systemImage: "calendar")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                             if let salary = c.salary {
                                 Label("¥\(formatMoney(salary))", systemImage: "yensign.circle")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         }
                         if let notes = c.notes, !notes.isEmpty {
                             Text(notes)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                                 .lineLimit(2)
                         }
                     }
@@ -150,24 +150,24 @@ public struct HiringDataView: View {
                                 .font(.headline)
                             Spacer()
                             if let level = s.level, !level.isEmpty {
-                                badge(level, tint: .blue)
+                                badge(level, tint: BsColor.brandAzure)
                             }
                         }
                         if let name = employeeName(from: s.profiles) {
                             Label("\(name) · 工龄 \(daysSince(s.hireDate)) 天", systemImage: "person.crop.circle")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                         HStack(spacing: 8) {
                             if let dept = s.department, !dept.isEmpty {
                                 Label(dept, systemImage: "building.2")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                             if let pos = s.position, !pos.isEmpty {
                                 Label(pos, systemImage: "briefcase")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         }
                     }
@@ -213,10 +213,10 @@ public struct HiringDataView: View {
 
     private func color(for status: HiringContract.ContractStatus) -> Color {
         switch status {
-        case .active:     return .green
-        case .pending:    return .orange
-        case .expired:    return .secondary
-        case .terminated: return .red
+        case .active:     return BsColor.success
+        case .pending:    return BsColor.warning
+        case .expired:    return BsColor.inkMuted
+        case .terminated: return BsColor.danger
         }
     }
 

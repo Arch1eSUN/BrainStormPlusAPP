@@ -54,14 +54,14 @@ public struct WeeklyReportEditView: View {
                             Text("周一日期")
                             Spacer()
                             Text(weekStart, style: .date)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                     HStack {
                         Text("本周范围")
                         Spacer()
                         Text(formattedWeekRange(from: weekStart))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
 
@@ -84,7 +84,7 @@ public struct WeeklyReportEditView: View {
                 } footer: {
                     Text("基于本周任务和日报自动生成总结，可覆盖后再编辑。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
 
                 longTextSection(title: "本周总结", text: $summary, placeholder: "简要概括本周工作...")
@@ -98,11 +98,11 @@ public struct WeeklyReportEditView: View {
                     if pickerVM.isLoadingProjects && pickerVM.projects.isEmpty {
                         HStack {
                             ProgressView()
-                            Text("加载中...").foregroundStyle(.secondary)
+                            Text("加载中...").foregroundStyle(BsColor.inkMuted)
                         }
                     } else if pickerVM.projects.isEmpty {
                         Text("暂无可选项目")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     } else {
                         ForEach(pickerVM.projects) { project in
                             let isOn = projectIds.contains(project.id)
@@ -115,10 +115,10 @@ public struct WeeklyReportEditView: View {
                             } label: {
                                 HStack {
                                     Text(project.name)
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(BsColor.ink)
                                     Spacer()
                                     Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                                        .foregroundStyle(isOn ? BsColor.brandAzure : BsColor.inkMuted)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -204,7 +204,7 @@ public struct WeeklyReportEditView: View {
             if text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(placeholder)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
     }

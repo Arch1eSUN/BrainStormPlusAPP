@@ -172,7 +172,7 @@ public struct AdminOrgConfigView: View {
                 Section {
                     Label(info, systemImage: "checkmark.circle")
                         .font(.footnote)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(BsColor.success)
                 }
             }
         }

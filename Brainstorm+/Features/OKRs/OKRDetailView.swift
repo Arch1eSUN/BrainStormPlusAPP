@@ -21,7 +21,7 @@ public struct OKRDetailView: View {
                 keyResultsCard
                 if let msg = viewModel.errorMessage {
                     Text(msg)
-                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .font(.system(.caption))
                         .foregroundColor(BsColor.danger)
                 }
                 Spacer(minLength: BsSpacing.xl)
@@ -47,7 +47,7 @@ public struct OKRDetailView: View {
         return VStack(alignment: .leading, spacing: BsSpacing.md - 2) {
             HStack(spacing: BsSpacing.sm) {
                 Image(systemName: "target")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(
@@ -60,13 +60,13 @@ public struct OKRDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(obj.title)
-                        .font(BsTypography.outfit(18, weight: "Bold"))
+                        .font(BsTypography.sectionTitle.weight(.bold))
                         .foregroundColor(BsColor.ink)
                     HStack(spacing: 6) {
                         statusBadge(obj.status)
                         if let period = obj.period {
                             Text(period)
-                                .font(BsTypography.inter(10, weight: "SemiBold"))
+                                .font(BsTypography.meta)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(BsColor.brandAzure.opacity(0.08))
@@ -80,7 +80,7 @@ public struct OKRDetailView: View {
             if let desc = obj.description, !desc.isEmpty {
                 Divider().background(BsColor.borderSubtle)
                 Text(desc)
-                    .font(BsTypography.inter(13, weight: "Regular"))
+                    .font(BsTypography.bodySmall)
                     .foregroundColor(BsColor.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -101,17 +101,17 @@ public struct OKRDetailView: View {
         return VStack(alignment: .leading, spacing: BsSpacing.md - 2) {
             HStack {
                 Text("进度")
-                    .font(BsTypography.inter(11, weight: "Bold"))
+                    .font(BsTypography.label)
                     .foregroundColor(BsColor.inkMuted)
                     .textCase(.uppercase)
                 Spacer()
                 Text("\(pct)%")
-                    .font(BsTypography.outfit(20, weight: "Bold"))
+                    .font(BsTypography.sectionTitle.weight(.bold))
                     .foregroundColor(progressColor(pct))
             }
             progressBar(progress: pct, height: 10)
             Text(progressNote(pct))
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
         }
         .padding(BsSpacing.lg)
@@ -135,13 +135,13 @@ public struct OKRDetailView: View {
     private var ownerCard: some View {
         VStack(alignment: .leading, spacing: BsSpacing.md - 2) {
             Text("负责人")
-                .font(BsTypography.inter(11, weight: "Bold"))
+                .font(BsTypography.label)
                 .foregroundColor(BsColor.inkMuted)
                 .textCase(.uppercase)
 
             if viewModel.owner == nil && viewModel.assignee == nil {
                 Text("未指定")
-                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .font(.system(.caption))
                     .foregroundColor(BsColor.inkMuted)
             } else {
                 VStack(alignment: .leading, spacing: 6) {
@@ -171,22 +171,22 @@ public struct OKRDetailView: View {
                 .fill(BsColor.brandAzure.opacity(0.15))
                 .overlay(
                     Text(String((profile.fullName ?? profile.displayName ?? "?").prefix(1)))
-                        .font(BsTypography.inter(12, weight: "Bold"))
+                        .font(BsTypography.caption.weight(.bold))
                         .foregroundColor(BsColor.brandAzure)
                 )
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.fullName ?? profile.displayName ?? "未命名")
-                    .font(BsTypography.inter(13, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall.weight(.semibold))
                     .foregroundColor(BsColor.ink)
                 Text(label)
-                    .font(BsTypography.inter(10, weight: "Regular"))
+                    .font(.system(.caption2))
                     .foregroundColor(BsColor.inkMuted)
             }
             Spacer()
             if let dept = profile.department, !dept.isEmpty {
                 Text(dept)
-                    .font(BsTypography.inter(10, weight: "Medium"))
+                    .font(BsTypography.meta.weight(.medium))
                     .padding(.horizontal, BsSpacing.sm)
                     .padding(.vertical, 3)
                     .background(BsColor.brandMint.opacity(0.15))
@@ -203,18 +203,18 @@ public struct OKRDetailView: View {
         return VStack(alignment: .leading, spacing: BsSpacing.md) {
             HStack {
                 Text("关键结果")
-                    .font(BsTypography.inter(11, weight: "Bold"))
+                    .font(BsTypography.label)
                     .foregroundColor(BsColor.inkMuted)
                     .textCase(.uppercase)
                 Spacer()
                 Text("共 \(krs.count) 项")
-                    .font(BsTypography.inter(11, weight: "SemiBold"))
+                    .font(BsTypography.label)
                     .foregroundColor(BsColor.inkMuted)
             }
 
             if krs.isEmpty {
                 Text("暂无关键结果")
-                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .font(.system(.caption))
                     .foregroundColor(BsColor.inkMuted)
             } else {
                 VStack(spacing: BsSpacing.md - 2) {
@@ -239,21 +239,21 @@ public struct OKRDetailView: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(kr.title)
-                    .font(BsTypography.inter(13, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall.weight(.semibold))
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 Text("\(pct)%")
-                    .font(BsTypography.outfit(13, weight: "Bold"))
+                    .font(BsTypography.bodySmall.weight(.bold))
                     .foregroundColor(progressColor(pct))
             }
             progressBar(progress: pct, height: 6)
             HStack {
                 Text("当前 \(formatNumeric(kr.currentValue))\(kr.unit.map { " \($0)" } ?? "")")
-                    .font(BsTypography.inter(10, weight: "Medium"))
+                    .font(BsTypography.meta.weight(.medium))
                     .foregroundColor(BsColor.inkMuted)
                 Spacer()
                 Text("目标 \(formatNumeric(kr.targetValue))\(kr.unit.map { " \($0)" } ?? "")")
-                    .font(BsTypography.inter(10, weight: "Medium"))
+                    .font(BsTypography.meta.weight(.medium))
                     .foregroundColor(BsColor.inkMuted)
             }
         }
@@ -276,7 +276,7 @@ public struct OKRDetailView: View {
     private func statusBadge(_ status: Objective.ObjectiveStatus) -> some View {
         let (bg, fg) = statusColors(status)
         return Text(status.displayLabel)
-            .font(BsTypography.inter(9, weight: "Bold"))
+            .font(BsTypography.meta)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .foregroundColor(fg)

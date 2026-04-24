@@ -297,7 +297,7 @@ struct DashboardView: View {
                 Circle()
                     .fill(BsColor.brandAzure.opacity(0.12))
                 Text(String(viewModel.profile?.fullName?.prefix(1) ?? "U"))
-                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .font(Font.custom("Inter-SemiBold", size: 14, relativeTo: .subheadline))
                     .foregroundStyle(BsColor.brandAzure)
             }
             .frame(width: 32, height: 32)
@@ -310,7 +310,7 @@ struct DashboardView: View {
         NavigationLink(destination: ActionItemHelper.destination(for: .notifications)) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(.headline, weight: .semibold))
                     .foregroundStyle(BsColor.ink)
                     .frame(width: 32, height: 32)
                 Circle()
@@ -336,7 +336,7 @@ struct DashboardView: View {
                 HStack(spacing: 2) {
                     Text("详情")
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                 }
                 .font(BsTypography.captionSmall)
                 .foregroundStyle(BsColor.brandAzure)
@@ -356,7 +356,7 @@ struct DashboardView: View {
     private var scheduleEmptyRow: some View {
         HStack(spacing: BsSpacing.md) {
             Image(systemName: "cup.and.saucer")
-                .font(.system(size: 22, weight: .light))
+                .font(.system(.title3, weight: .light))
                 .foregroundStyle(BsColor.brandAzure.opacity(0.6))
                 .frame(width: 44, height: 44)
                 .background(BsColor.brandAzure.opacity(0.06))

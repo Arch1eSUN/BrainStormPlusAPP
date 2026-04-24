@@ -304,7 +304,7 @@ public struct ProjectListView: View {
                     .fill(BsColor.brandMint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: "folder")
-                    .font(.system(size: 40))
+                    .font(.system(.largeTitle))
                     .foregroundColor(BsColor.brandAzure)
             }
             Text("暂无项目")
@@ -335,7 +335,7 @@ public struct ProjectListView: View {
                     .fill(BsColor.brandMint.opacity(0.08))
                     .frame(width: 100, height: 100)
                 Image(systemName: "person.2.slash")
-                    .font(.system(size: 36))
+                    .font(.system(.largeTitle))
                     .foregroundColor(BsColor.brandAzure)
             }
             Text("暂无可访问的项目")
@@ -360,13 +360,13 @@ public struct ProjectListView: View {
     private var filteredEmptyStateView: some View {
         VStack(spacing: BsSpacing.md) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 36))
+                .font(.system(.largeTitle))
                 .foregroundColor(BsColor.inkMuted)
             Text("未找到匹配的项目")
-                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text("尝试修改搜索关键词或清除状态筛选。")
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xxl)
@@ -386,13 +386,13 @@ public struct ProjectListView: View {
     private func errorStateView(message: String) -> some View {
         VStack(spacing: BsSpacing.md) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
+                .font(.system(.largeTitle))
                 .foregroundColor(BsColor.warning)
             Text("项目加载失败")
-                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text(message)
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xxl)
@@ -400,7 +400,7 @@ public struct ProjectListView: View {
                 Task { await reload() }
             } label: {
                 Text("重试")
-                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .font(.system(.subheadline, weight: .semibold))
                     .padding(.horizontal, BsSpacing.lg + 4)
                     .padding(.vertical, BsSpacing.md - 2)
                     .background(BsColor.brandAzure)

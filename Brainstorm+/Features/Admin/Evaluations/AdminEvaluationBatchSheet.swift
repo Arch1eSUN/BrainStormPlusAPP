@@ -79,7 +79,7 @@ public struct AdminEvaluationBatchSheet: View {
                     .font(.headline)
                 Text("\(month) · 当前筛选后 \(userIds.count) 位员工")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             Spacer()
         }
@@ -97,7 +97,7 @@ public struct AdminEvaluationBatchSheet: View {
             }
             Text("单位 = 员工 × 月份。每月每人只保留一条评估。默认仅补跑缺失月份；若选择覆盖，已有评分会被新结果替换。批量任务平均耗时每人约 30s，失败条目不会中断整批。")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
@@ -113,7 +113,7 @@ public struct AdminEvaluationBatchSheet: View {
                         .font(.subheadline.weight(.semibold))
                     Text("打开后即使已有 \(month) 评分也会重跑并替换。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             .tint(BsColor.brandAzure)
@@ -126,16 +126,16 @@ public struct AdminEvaluationBatchSheet: View {
     private func errorBanner(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(BsColor.danger)
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(.red)
+                .foregroundStyle(BsColor.danger)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.red.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BsColor.danger.opacity(0.08)))
     }
 
     private func successBanner(_ text: String) -> some View {

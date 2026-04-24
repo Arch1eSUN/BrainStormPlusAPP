@@ -1186,11 +1186,11 @@ public struct ProjectDetailView: View {
         let lower = severity.lowercased()
         let (label, fg, bg): (String, Color, Color) = {
             switch lower {
-            case "critical": return ("严重", .white, Color.red)
+            case "critical": return ("严重", .white, BsColor.danger)
             case "high":     return ("高", .white, BsColor.warning)
             case "medium":   return ("中", BsColor.warning, BsColor.warning.opacity(0.18))
             case "low":      return ("低", BsColor.brandAzure, BsColor.brandAzureLight)
-            default:         return (severity.capitalized, BsColor.inkMuted, Color.gray.opacity(0.15))
+            default:         return (severity.capitalized, BsColor.inkMuted, BsColor.inkMuted.opacity(0.15))
             }
         }()
         return Text(label)
@@ -1279,9 +1279,9 @@ public struct ProjectDetailView: View {
         case .high:
             return ("高风险", .white, BsColor.warning)
         case .critical:
-            return ("严重风险", .white, Color.red)
+            return ("严重风险", .white, BsColor.danger)
         case .unknown:
-            return ("未知", BsColor.inkMuted, Color.gray.opacity(0.15))
+            return ("未知", BsColor.inkMuted, BsColor.inkMuted.opacity(0.15))
         }
     }
 
@@ -1363,9 +1363,9 @@ public struct ProjectDetailView: View {
         case .onHold:
             return ("暂停", BsColor.warning, BsColor.warning.opacity(0.15))
         case .completed:
-            return ("已完成", BsColor.inkMuted, Color.gray.opacity(0.15))
+            return ("已完成", BsColor.inkMuted, BsColor.inkMuted.opacity(0.15))
         case .archived:
-            return ("归档", BsColor.inkMuted, Color.gray.opacity(0.10))
+            return ("归档", BsColor.inkMuted, BsColor.inkMuted.opacity(0.10))
         }
     }
 
@@ -1562,8 +1562,8 @@ public struct ProjectDetailView: View {
     /// still renders honestly.
     private static func linkedActionStatusColor(_ status: String) -> Color {
         switch status {
-        case "resolved": return Color.green
-        case "in_progress": return Color.blue
+        case "resolved": return BsColor.success
+        case "in_progress": return BsColor.brandAzure
         case "open": return BsColor.warning
         case "acknowledged": return BsColor.brandAzure
         case "dismissed": return BsColor.inkMuted
@@ -1578,7 +1578,7 @@ public struct ProjectDetailView: View {
     private static func linkedActionSeverityStyle(for severity: String) -> (String, Color, Color) {
         switch severity {
         case "high":
-            return ("高", .white, Color.red)
+            return ("高", .white, BsColor.danger)
         case "medium":
             return ("中", BsColor.warning, BsColor.warning.opacity(0.18))
         case "low":
@@ -1586,7 +1586,7 @@ public struct ProjectDetailView: View {
         default:
             return (severity.capitalized.isEmpty ? "未知" : severity.capitalized,
                     BsColor.inkMuted,
-                    Color.gray.opacity(0.15))
+                    BsColor.inkMuted.opacity(0.15))
         }
     }
 
@@ -1696,13 +1696,13 @@ public struct ProjectDetailView: View {
                 resolutionStatBadge(label: "已解决", count: feedback.resolved,
                                     fg: BsColor.brandAzure, bg: BsColor.brandAzureLight)
                 resolutionStatBadge(label: "已忽略", count: feedback.dismissed,
-                                    fg: BsColor.inkMuted, bg: Color.gray.opacity(0.15))
+                                    fg: BsColor.inkMuted, bg: BsColor.inkMuted.opacity(0.15))
                 resolutionStatBadge(label: "进行中", count: feedback.active,
                                     fg: BsColor.warning, bg: BsColor.warning.opacity(0.18))
                 resolutionStatBadge(label: "待跟进", count: feedback.followUpRequired,
                                     fg: BsColor.warning, bg: BsColor.warning.opacity(0.18))
                 resolutionStatBadge(label: "曾重开", count: feedback.reopenedCount,
-                                    fg: .white, bg: Color.red.opacity(0.85))
+                                    fg: .white, bg: BsColor.danger.opacity(0.85))
             }
         }
     }
@@ -1893,7 +1893,7 @@ public struct ProjectDetailView: View {
     /// other value falls through to neutral textSecondary rather than being reassigned.
     private static func resolutionStatusColor(_ status: String) -> Color {
         switch status {
-        case "resolved": return Color.green
+        case "resolved": return BsColor.success
         case "dismissed": return BsColor.inkMuted
         default: return BsColor.inkMuted
         }
@@ -1911,11 +1911,11 @@ public struct ProjectDetailView: View {
         case "partial":
             return ("部分", BsColor.warning, BsColor.warning.opacity(0.18))
         case "ineffective":
-            return ("无效", .white, Color.red.opacity(0.85))
+            return ("无效", .white, BsColor.danger.opacity(0.85))
         case "pending":
-            return ("待验证", BsColor.inkMuted, Color.gray.opacity(0.15))
+            return ("待验证", BsColor.inkMuted, BsColor.inkMuted.opacity(0.15))
         default:
-            return (humanize(raw), BsColor.inkMuted, Color.gray.opacity(0.15))
+            return (humanize(raw), BsColor.inkMuted, BsColor.inkMuted.opacity(0.15))
         }
     }
 
@@ -1938,7 +1938,7 @@ public struct ProjectDetailView: View {
         case .none:
             return ("—",
                     BsColor.inkMuted,
-                    Color.gray.opacity(0.10))
+                    BsColor.inkMuted.opacity(0.10))
         }
     }
 }

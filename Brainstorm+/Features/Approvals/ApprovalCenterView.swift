@@ -130,7 +130,7 @@ public struct ApprovalCenterView: View {
                         showTypePicker = true
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(.body, weight: .semibold))
                             .foregroundStyle(BsColor.brandAzure)
                             .frame(width: 32, height: 32)
                             .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(), in: Circle())

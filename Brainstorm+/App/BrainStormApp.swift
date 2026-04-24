@@ -25,9 +25,9 @@ struct BrainStormApp: App {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.35), value: sessionManager.isLoadingSession)
-            .animation(.easeOut(duration: 0.35), value: minSplashHeld)
-            .animation(.easeOut(duration: 0.35), value: sessionManager.isAuthenticated)
+            .animation(BsMotion.Anim.smooth, value: sessionManager.isLoadingSession)
+            .animation(BsMotion.Anim.smooth, value: minSplashHeld)
+            .animation(BsMotion.Anim.smooth, value: sessionManager.isAuthenticated)
             .task {
                 // 并行跑:session check + 最低展示时长(0.9s 让 logo 呼吸 + dots 至少转一圈)
                 async let sessionCheck: Void = sessionManager.checkSession()
@@ -62,7 +62,7 @@ private struct AuthenticatedRoot: View {
             .overlay {
                 if !hasSeenOnboarding {
                     BsOnboardingOverlay {
-                        withAnimation(.easeOut(duration: 0.45)) {
+                        withAnimation(BsMotion.Anim.smooth) {
                             hasSeenOnboarding = true
                         }
                     }

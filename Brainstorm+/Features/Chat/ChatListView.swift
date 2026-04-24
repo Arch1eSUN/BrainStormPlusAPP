@@ -66,7 +66,7 @@ public struct ChatListView: View {
                     showNewConversation = true
                 } label: {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .foregroundStyle(BsColor.brandAzure)
                         .frame(width: 32, height: 32)
                         .glassEffect(
@@ -142,7 +142,7 @@ public struct ChatListView: View {
                             .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
                     )
                 Image(systemName: channelIcon(channel.type))
-                    .font(.system(size: 20))
+                    .font(.system(.title3))
                     .foregroundStyle(channelColor(channel.type))
             }
 

@@ -55,7 +55,7 @@ public struct KnowledgeEditView: View {
                     if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("支持 Markdown 格式…")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 } header: {
                     Text("内容")
@@ -63,7 +63,7 @@ public struct KnowledgeEditView: View {
                     if existingArticle?.fileUrl != nil {
                         Text("此文档附带一个文件；编辑仅更新标题、分类与内容，附件保持不变。")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
 

@@ -69,7 +69,7 @@ public struct AdminAISettingsView: View {
     private var activeSection: some View {
         Section {
             if vm.isLoading {
-                HStack { ProgressView(); Text("加载中…").foregroundStyle(.secondary) }
+                HStack { ProgressView(); Text("加载中…").foregroundStyle(BsColor.inkMuted) }
             } else if let p = vm.activeProvider {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
@@ -87,7 +87,7 @@ public struct AdminAISettingsView: View {
                     if let model = p.defaultModel, !model.isEmpty {
                         Text("默认模型：\(model)")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     } else {
                         Text("未设默认模型")
                             .font(.footnote)
@@ -96,14 +96,14 @@ public struct AdminAISettingsView: View {
                     if !p.fallbackModels.isEmpty {
                         Text("降级链：\(p.fallbackModels.joined(separator: " → "))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .lineLimit(2)
                     }
                 }
                 .padding(.vertical, 4)
             } else {
                 Text("尚未启用任何 AI 供应商")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         } header: {
             Text("当前激活")
@@ -119,7 +119,7 @@ public struct AdminAISettingsView: View {
             if vm.providers.isEmpty, !vm.isLoading {
                 Text("尚未配置任何 AI 供应商。请在 Web 管理端新增。")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             ForEach(vm.providers) { p in
                 providerRow(p)
@@ -138,22 +138,22 @@ public struct AdminAISettingsView: View {
                     .foregroundStyle(BsColor.ink)
                 Spacer()
                 Circle()
-                    .fill(p.isActive ? BsColor.success : Color.secondary.opacity(0.4))
+                    .fill(p.isActive ? BsColor.success : BsColor.inkMuted.opacity(0.4))
                     .frame(width: 8, height: 8)
                 Text(p.isActive ? "已启用" : "已停用")
                     .font(.caption2)
-                    .foregroundStyle(p.isActive ? BsColor.success : .secondary)
+                    .foregroundStyle(p.isActive ? BsColor.success : BsColor.inkMuted)
             }
             Text(p.baseUrl)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .lineLimit(1)
                 .truncationMode(.middle)
             HStack(spacing: 6) {
                 Text("API KEY")
                     .font(.caption2.weight(.heavy))
                     .tracking(1)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Text(p.maskedApiKey)
                     .font(.caption.monospaced())
                     .foregroundStyle(BsColor.ink)
@@ -163,7 +163,7 @@ public struct AdminAISettingsView: View {
                     Image(systemName: "cpu").font(.caption2)
                     Text(model).font(.caption)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             }
             HStack(spacing: 12) {
                 Button {
@@ -217,7 +217,7 @@ public struct AdminAISettingsView: View {
                     Text("执行日期")
                     Spacer()
                     Text("每月 \(vm.evalConfig.day) 日")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             .disabled(vm.isSaving || !vm.evalConfig.enabled)
@@ -230,7 +230,7 @@ public struct AdminAISettingsView: View {
                     Text("执行时间")
                     Spacer()
                     Text(String(format: "%02d:00", vm.evalConfig.hour))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             .disabled(vm.isSaving || !vm.evalConfig.enabled)
@@ -248,11 +248,11 @@ public struct AdminAISettingsView: View {
             Label("API Key 始终加密存储，iOS 端仅显示打码。",
                   systemImage: "lock.shield")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             Label("新建供应商或替换 API Key 请在 Web 管理端操作。",
                   systemImage: "safari")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
         } header: {
             Text("安全说明")
         }

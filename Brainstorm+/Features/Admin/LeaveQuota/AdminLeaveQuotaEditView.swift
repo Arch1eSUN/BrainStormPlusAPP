@@ -76,7 +76,7 @@ public struct AdminLeaveQuotaEditView: View {
                     } footer: {
                         Text("剩余 = 总额度 − 已使用 + 已返还，最低 0。")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
 
                     Section {

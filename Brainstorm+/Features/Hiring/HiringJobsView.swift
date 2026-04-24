@@ -79,21 +79,21 @@ public struct HiringJobsView: View {
                 if let dept = pos.department, !dept.isEmpty {
                     Label(dept, systemImage: "building.2")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 Label(pos.employmentType.displayLabel, systemImage: "person.text.rectangle")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 if let sr = pos.salaryRange, !sr.isEmpty {
                     Label(sr, systemImage: "yensign.circle")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
             if let desc = pos.description, !desc.isEmpty {
                 Text(desc)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                     .lineLimit(2)
             }
         }
@@ -113,10 +113,10 @@ public struct HiringJobsView: View {
 
     private func color(for status: JobPosition.PositionStatus) -> Color {
         switch status {
-        case .open:    return .green
-        case .onHold:  return .orange
-        case .filled:  return .blue
-        case .closed:  return .secondary
+        case .open:    return BsColor.success
+        case .onHold:  return BsColor.warning
+        case .filled:  return BsColor.brandAzure
+        case .closed:  return BsColor.inkMuted
         }
     }
 }

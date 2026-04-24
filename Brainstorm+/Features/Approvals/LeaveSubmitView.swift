@@ -126,7 +126,7 @@ public struct LeaveSubmitView: View {
                     if viewModel.isHalfDay {
                         Text("按小时请假时，天数 = 小时 / 8。例如 4 小时 = 0.5 天。")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
 
@@ -179,18 +179,18 @@ public struct LeaveSubmitView: View {
                                     systemImage: "exclamationmark.triangle"
                                 )
                                 .font(.caption2)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(BsColor.warning)
                             } else {
                                 Label(
                                     "建议附上医疗证明以加快审批。",
                                     systemImage: "info.circle"
                                 )
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                             }
                             Text("支持 JPG / PNG / PDF。上传一个文件即可。")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(BsColor.inkFaint)
                         }
                     }
                 }
@@ -254,9 +254,9 @@ public struct LeaveSubmitView: View {
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.12))
+                                    .fill(BsColor.brandAzure.opacity(0.12))
                             )
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(BsColor.brandAzure)
                     }
                     .disabled(viewModel.isUploadingCert)
 
@@ -271,7 +271,7 @@ public struct LeaveSubmitView: View {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .fill(Color(.tertiarySystemFill))
                             )
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(BsColor.ink)
                     }
                     .buttonStyle(.plain)
                     .disabled(viewModel.isUploadingCert)
@@ -283,21 +283,21 @@ public struct LeaveSubmitView: View {
                             ProgressView().controlSize(.mini)
                             Text("上传中…")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                 }
             } else {
                 HStack(spacing: 10) {
                     Image(systemName: "paperclip")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(BsColor.success)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("已上传 1 个附件")
                             .font(.subheadline.weight(.medium))
                         if let name = viewModel.medicalCertFileName {
                             Text(name)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
@@ -311,7 +311,7 @@ public struct LeaveSubmitView: View {
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(BsColor.danger)
                 }
                 .padding(.vertical, 2)
             }

@@ -73,7 +73,7 @@ public struct ReimbursementSubmitView: View {
                         TextField("金额", value: $viewModel.amountYuan, format: .number)
                             .keyboardType(.decimalPad)
                         Text(viewModel.currency.isEmpty ? "CNY" : viewModel.currency)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                     TextField("币种 (默认 CNY)", text: $viewModel.currency)
                         .autocorrectionDisabled()
@@ -117,7 +117,7 @@ public struct ReimbursementSubmitView: View {
                 } footer: {
                     Text("支持 JPG / PNG / PDF。上传后可长按删除。")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
 
                 Section("优先级") {
@@ -186,9 +186,9 @@ public struct ReimbursementSubmitView: View {
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.12))
+                                .fill(BsColor.brandAzure.opacity(0.12))
                         )
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(BsColor.brandAzure)
                 }
 
                 Button {
@@ -202,7 +202,7 @@ public struct ReimbursementSubmitView: View {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(Color(.tertiarySystemFill))
                         )
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(BsColor.ink)
                 }
                 .buttonStyle(.plain)
 
@@ -213,7 +213,7 @@ public struct ReimbursementSubmitView: View {
                         ProgressView().controlSize(.mini)
                         Text("上传中…")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
             }
@@ -223,7 +223,7 @@ public struct ReimbursementSubmitView: View {
             } else {
                 Text("尚未上传任何票据")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
         .padding(.vertical, 4)
@@ -276,7 +276,7 @@ public struct ReimbursementSubmitView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.subheadline)
-                    .foregroundStyle(.white, Color.red)
+                    .foregroundStyle(.white, BsColor.danger)
                     .background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
@@ -290,10 +290,10 @@ public struct ReimbursementSubmitView: View {
         VStack(spacing: 4) {
             Image(systemName: "doc.text.fill")
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             Text(label)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
         }
         .frame(width: 80, height: 80)
         .background(

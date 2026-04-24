@@ -137,14 +137,14 @@ public struct ApprovalQueueView: View {
                         HStack(spacing: 6) {
                             Text(row.requesterProfile?.fullName ?? "未知用户")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(BsColor.ink)
 
                             typeChip(row.requestType)
                             priorityChip(row.priorityByRequester)
                         }
                         Text(Self.createdAtFormatter.string(from: row.createdAt))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                     Spacer(minLength: 8)
                     statusChip(row.status)
@@ -157,17 +157,17 @@ public struct ApprovalQueueView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "clock")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                         Text(leaveSpanText(row))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
 
                 if let reason = row.businessReason, !reason.isEmpty {
                     Text(reason)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .lineLimit(2)
                 }
 
@@ -180,7 +180,7 @@ public struct ApprovalQueueView: View {
                     } else {
                         Text("请假审批请在 Web 端完成(涉及请假额度与排班状态同步)")
                             .font(.caption2)
-                            .foregroundStyle(Color.orange)
+                            .foregroundStyle(BsColor.warning)
                             .padding(.top, 2)
                     }
                 }
@@ -240,11 +240,11 @@ public struct ApprovalQueueView: View {
     private func avatarCircle(_ profile: ApprovalActorProfile?) -> some View {
         ZStack {
             Circle()
-                .fill(Color.accentColor.opacity(0.15))
+                .fill(BsColor.brandAzure.opacity(0.15))
                 .frame(width: 36, height: 36)
             Text(profile?.initial ?? "?")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(BsColor.brandAzure)
         }
     }
 
@@ -282,11 +282,11 @@ public struct ApprovalQueueView: View {
 
     private func priorityTint(_ p: RequestPriority) -> Color {
         switch p {
-        case .low:     return .gray
-        case .medium:  return .blue
-        case .high:    return .orange
-        case .urgent:  return .red
-        case .unknown: return .gray
+        case .low:     return BsColor.inkMuted
+        case .medium:  return BsColor.brandAzure
+        case .high:    return BsColor.warning
+        case .urgent:  return BsColor.danger
+        case .unknown: return BsColor.inkMuted
         }
     }
 
@@ -302,21 +302,21 @@ public struct ApprovalQueueView: View {
 
     private func toneBackground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange.opacity(0.15)
-        case .success: return Color.green.opacity(0.15)
-        case .danger:  return Color.red.opacity(0.15)
-        case .info:    return Color.blue.opacity(0.15)
-        case .neutral: return Color.gray.opacity(0.18)
+        case .warning: return BsColor.warning.opacity(0.15)
+        case .success: return BsColor.success.opacity(0.15)
+        case .danger:  return BsColor.danger.opacity(0.15)
+        case .info:    return BsColor.brandAzure.opacity(0.15)
+        case .neutral: return BsColor.inkMuted.opacity(0.18)
         }
     }
 
     private func toneForeground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange
-        case .success: return Color.green
-        case .danger:  return Color.red
-        case .info:    return Color.blue
-        case .neutral: return Color.secondary
+        case .warning: return BsColor.warning
+        case .success: return BsColor.success
+        case .danger:  return BsColor.danger
+        case .info:    return BsColor.brandAzure
+        case .neutral: return BsColor.inkMuted
         }
     }
 

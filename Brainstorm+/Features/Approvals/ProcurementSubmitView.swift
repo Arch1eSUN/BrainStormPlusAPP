@@ -57,7 +57,7 @@ public struct ProcurementSubmitView: View {
                         TextField("单价", value: $viewModel.unitPriceYuan, format: .number)
                             .keyboardType(.decimalPad)
                         Text(viewModel.currency.isEmpty ? "CNY" : viewModel.currency)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
 
                     TextField("币种 (默认 CNY)", text: $viewModel.currency)

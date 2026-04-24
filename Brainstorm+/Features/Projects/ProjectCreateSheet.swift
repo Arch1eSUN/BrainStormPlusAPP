@@ -46,7 +46,7 @@ public struct ProjectCreateSheet: View {
                     Button("取消") {
                         dismiss()
                     }
-                    .font(BsTypography.inter(16, weight: "Medium"))
+                    .font(.system(.callout, weight: .medium))
                     .foregroundColor(BsColor.inkMuted)
                     .disabled(viewModel.isSaving)
                 }
@@ -54,7 +54,7 @@ public struct ProjectCreateSheet: View {
                     Button("创建") {
                         Task { await submit() }
                     }
-                    .font(BsTypography.inter(16, weight: "SemiBold"))
+                    .font(.system(.callout, weight: .semibold))
                     .foregroundColor(viewModel.isSaveEnabled ? BsColor.brandAzure : BsColor.inkMuted)
                     .disabled(!viewModel.isSaveEnabled)
                 }
@@ -82,7 +82,7 @@ public struct ProjectCreateSheet: View {
     private var detailsSection: some View {
         Section(header: sectionHeader("项目信息")) {
             TextField("项目名称", text: $viewModel.name)
-                .font(BsTypography.inter(16, weight: "Regular"))
+                .font(.system(.callout))
                 .disabled(viewModel.isSaving)
 
             TextField(
@@ -90,7 +90,7 @@ public struct ProjectCreateSheet: View {
                 text: $viewModel.descriptionText,
                 axis: .vertical
             )
-            .font(BsTypography.inter(16, weight: "Regular"))
+            .font(.system(.callout))
             .lineLimit(3...6)
             .disabled(viewModel.isSaving)
         }
@@ -125,7 +125,7 @@ public struct ProjectCreateSheet: View {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(BsColor.warning)
                     Text("成员加载失败：\(message)")
-                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .font(.system(.caption))
                         .foregroundColor(BsColor.warning)
                         .lineLimit(3)
                 }
@@ -133,12 +133,12 @@ public struct ProjectCreateSheet: View {
                 HStack(spacing: BsSpacing.sm) {
                     ProgressView()
                     Text("正在加载成员…")
-                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .font(BsTypography.bodySmall)
                         .foregroundColor(BsColor.inkMuted)
                 }
             } else if viewModel.candidates.isEmpty {
                 Text("暂无可选成员。")
-                    .font(BsTypography.inter(13, weight: "Regular"))
+                    .font(BsTypography.bodySmall)
                     .foregroundColor(BsColor.inkMuted)
             } else {
                 TextField("搜索成员", text: $viewModel.memberSearch)
@@ -158,7 +158,7 @@ public struct ProjectCreateSheet: View {
             sectionHeader("项目成员")
             Spacer()
             Text("已选 \(viewModel.selectedMemberIds.count) 人")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
                 .textCase(nil)
         }
@@ -175,12 +175,12 @@ public struct ProjectCreateSheet: View {
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(candidate.displayName)
-                        .font(BsTypography.inter(14, weight: "Medium"))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundColor(BsColor.ink)
                         .lineLimit(1)
                     if let secondary = secondaryLine(candidate: candidate) {
                         Text(secondary)
-                            .font(BsTypography.inter(11, weight: "Regular"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
                             .lineLimit(1)
                     }

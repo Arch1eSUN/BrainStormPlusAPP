@@ -191,7 +191,7 @@ public struct ApprovalDetailView: View {
                     Section(title: "申请事由", systemImage: "bubble.left.and.text.bubble.right") {
                         Text(reason)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .bsAppearStagger(index: 1)
@@ -211,7 +211,7 @@ public struct ApprovalDetailView: View {
                     Section(title: "AI 摘要", systemImage: "sparkles") {
                         Text(summary)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .bsAppearStagger(index: 4)
@@ -254,7 +254,7 @@ public struct ApprovalDetailView: View {
                         HStack(spacing: 6) {
                             Text(request.requesterProfile?.fullName ?? "未知用户")
                                 .font(.headline)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(BsColor.ink)
 
                             typeChip(request.requestType)
 
@@ -266,7 +266,7 @@ public struct ApprovalDetailView: View {
                         }
                         Text(submittedAtText(request))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -280,11 +280,11 @@ public struct ApprovalDetailView: View {
     private func avatarCircle(_ profile: ApprovalActorProfile?) -> some View {
         ZStack {
             Circle()
-                .fill(Color.accentColor.opacity(0.15))
+                .fill(BsColor.brandAzure.opacity(0.15))
                 .frame(width: 44, height: 44)
             Text(profile?.initial ?? "?")
                 .font(.headline)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(BsColor.brandAzure)
         }
     }
 
@@ -383,7 +383,7 @@ public struct ApprovalDetailView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("票据")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                         ForEach(Array(r.receiptUrls.enumerated()), id: \.offset) { idx, receipt in
                             receiptLink(idx: idx, receipt: receipt)
                         }
@@ -488,15 +488,15 @@ public struct ApprovalDetailView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     if let url = item.url, let parsed = URL(string: url) {
                         Link(item.displayName, destination: parsed)
                             .font(.subheadline)
-                            .foregroundStyle(Color.blue)
+                            .foregroundStyle(BsColor.brandAzure)
                     } else {
                         Text(item.displayName)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 }
             }
@@ -508,15 +508,15 @@ public struct ApprovalDetailView: View {
         HStack(spacing: 6) {
             Image(systemName: "doc.text")
                 .font(.caption)
-                .foregroundStyle(Color.blue.opacity(0.8))
+                .foregroundStyle(BsColor.brandAzure.opacity(0.8))
             if let url = URL(string: receipt.url) {
                 Link("票据 \(idx + 1)", destination: url)
                     .font(.caption)
-                    .foregroundStyle(Color.blue)
+                    .foregroundStyle(BsColor.brandAzure)
             } else {
                 Text("票据 \(idx + 1)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
     }
@@ -532,12 +532,12 @@ public struct ApprovalDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(note)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(BsColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let at = reviewedAt {
                     Text("于 \(Self.dtFormatter.string(from: at)) 审批")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -552,11 +552,11 @@ public struct ApprovalDetailView: View {
                 HStack(alignment: .top, spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.12))
+                            .fill(BsColor.brandAzure.opacity(0.12))
                             .frame(width: 30, height: 30)
                         Text(entry.actor?.initial ?? "?")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(BsColor.brandAzure)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
@@ -565,12 +565,12 @@ public struct ApprovalDetailView: View {
                             actionTypeChip(entry.actionType)
                             Text(Self.dtFormatter.string(from: entry.createdAt))
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                         if let comment = entry.comment, !comment.isEmpty {
                             Text(comment)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -640,20 +640,20 @@ public struct ApprovalDetailView: View {
 
     private func toneBackground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange.opacity(0.15)
-        case .success: return Color.green.opacity(0.15)
-        case .danger:  return Color.red.opacity(0.15)
-        case .info:    return Color.blue.opacity(0.15)
-        case .neutral: return Color.gray.opacity(0.18)
+        case .warning: return BsColor.warning.opacity(0.15)
+        case .success: return BsColor.success.opacity(0.15)
+        case .danger:  return BsColor.danger.opacity(0.15)
+        case .info:    return BsColor.brandAzure.opacity(0.15)
+        case .neutral: return BsColor.inkMuted.opacity(0.18)
         }
     }
 
     private func toneForeground(_ tone: ApprovalStatus.Tone) -> Color {
         switch tone {
-        case .warning: return Color.orange
-        case .success: return Color.green
-        case .danger:  return Color.red
-        case .info:    return Color.blue
+        case .warning: return BsColor.warning
+        case .success: return BsColor.success
+        case .danger:  return BsColor.danger
+        case .info:    return BsColor.brandAzure
         case .neutral: return Color.secondary
         }
     }
@@ -692,10 +692,10 @@ private struct Section<Content: View>: View {
                 HStack(spacing: 6) {
                     Image(systemName: systemImage)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     Text(title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .textCase(.uppercase)
                     Spacer(minLength: 0)
                 }
@@ -717,11 +717,11 @@ private struct KeyValue: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .frame(width: 82, alignment: .leading)
             Text(value)
                 .font(.subheadline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(BsColor.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -750,7 +750,7 @@ private struct RevokeCompTimeSheet: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("撤回事由")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                         TextEditor(text: $reason)
                             .focused($focused)
                             .scrollContentBackground(.hidden)
@@ -764,7 +764,7 @@ private struct RevokeCompTimeSheet: View {
 
                     Text("撤回申请经审批通过后，调休额度将返还，且对应日期的工作状态会重新派生。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 .padding(16)
             }
@@ -801,25 +801,25 @@ private struct RevokeCompTimeSheet: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.caption)
-                    .foregroundStyle(Color.orange)
+                    .foregroundStyle(BsColor.warning)
                 Text("原调休区间")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(BsColor.ink)
             }
             if let w = window {
                 let windowText = w.start == w.end ? w.start : "\(w.start) → \(w.end)"
                 Text(windowText)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(BsColor.ink)
             } else {
                 Text("—")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             if let id = originalApprovalId {
                 Text("原申请 ID: \(String(id.uuidString.prefix(8)))…")
                     .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
         .padding(12)

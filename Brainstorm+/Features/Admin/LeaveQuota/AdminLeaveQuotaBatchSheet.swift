@@ -90,7 +90,7 @@ public struct AdminLeaveQuotaBatchSheet: View {
         case .department:
             Section("选择部门") {
                 if vm.allDepartments.isEmpty {
-                    Text("暂无部门").foregroundStyle(.secondary).font(.subheadline)
+                    Text("暂无部门").foregroundStyle(BsColor.inkMuted).font(.subheadline)
                 } else {
                     Picker("部门", selection: $selectedDepartment) {
                         ForEach(vm.allDepartments, id: \.self) { d in
@@ -100,13 +100,13 @@ public struct AdminLeaveQuotaBatchSheet: View {
                     .pickerStyle(.navigationLink)
                     Text("将影响 \(departmentUserIds.count) 名员工")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
         case .individuals:
             Section("选择员工") {
                 if vm.rows.isEmpty {
-                    Text("暂无员工").foregroundStyle(.secondary).font(.subheadline)
+                    Text("暂无员工").foregroundStyle(BsColor.inkMuted).font(.subheadline)
                 } else {
                     ForEach(vm.rows) { row in
                         Button {
@@ -114,26 +114,26 @@ public struct AdminLeaveQuotaBatchSheet: View {
                         } label: {
                             HStack {
                                 Image(systemName: selectedUserIds.contains(row.userId) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedUserIds.contains(row.userId) ? BsColor.brandAzure : .secondary)
+                                    .foregroundStyle(selectedUserIds.contains(row.userId) ? BsColor.brandAzure : BsColor.inkMuted)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(row.displayName)
                                         .font(.subheadline)
                                         .foregroundStyle(BsColor.ink)
                                     Text(row.displayDepartment)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(BsColor.inkMuted)
                                 }
                                 Spacer()
                                 Text("\(row.totalDays) 天")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         }
                         .buttonStyle(.plain)
                     }
                     Text("已选 \(selectedUserIds.count) 人")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
@@ -152,7 +152,7 @@ public struct AdminLeaveQuotaBatchSheet: View {
             }
             Text("月份：\(vm.yearMonth)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
         }
     }
 

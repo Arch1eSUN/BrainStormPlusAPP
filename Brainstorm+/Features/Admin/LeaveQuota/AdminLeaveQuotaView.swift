@@ -27,7 +27,7 @@ public struct AdminLeaveQuotaView: View {
             } else if vm.rows.isEmpty {
                 Section {
                     Text("暂无员工数据")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .font(.subheadline)
                 }
             } else {
@@ -90,7 +90,7 @@ public struct AdminLeaveQuotaView: View {
         } footer: {
             Text("默认每人每月 \(AdminLeaveQuotaViewModel.defaultTotalDays) 天，可按需覆盖。")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
         }
     }
 
@@ -113,13 +113,13 @@ public struct AdminLeaveQuotaView: View {
                     .foregroundStyle(BsColor.ink)
                 Text("总额度 \(row.totalDays) · 已用 \(formatDays(row.usedDays)) · 返还 \(formatDays(row.revokedDays))")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("剩余")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Text(formatDays(row.availableDays))
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(row.availableDays > 0 ? BsColor.success : BsColor.brandCoral)

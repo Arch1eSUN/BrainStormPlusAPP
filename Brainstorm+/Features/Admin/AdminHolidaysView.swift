@@ -139,7 +139,7 @@ public struct AdminHolidaysView: View {
                 ProgressView().frame(maxWidth: .infinity, alignment: .center)
             } else if vm.rows.isEmpty {
                 Text("暂无该年份的公休记录")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                     .font(.subheadline)
             } else {
                 ForEach(vm.rows) { row in
@@ -152,17 +152,17 @@ public struct AdminHolidaysView: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Capsule().fill(
-                                    row.isWorkDay ? Color.orange.opacity(0.15)
-                                    : (row.isPaid ? Color.green.opacity(0.15) : Color.gray.opacity(0.15))
+                                    row.isWorkDay ? BsColor.warning.opacity(0.15)
+                                    : (row.isPaid ? BsColor.success.opacity(0.15) : BsColor.inkMuted.opacity(0.15))
                                 ))
                                 .foregroundStyle(
-                                    row.isWorkDay ? Color.orange
-                                    : (row.isPaid ? Color.green : Color.gray)
+                                    row.isWorkDay ? BsColor.warning
+                                    : (row.isPaid ? BsColor.success : BsColor.inkMuted)
                                 )
                         }
                         Text("\(row.name) · \(regionLabel(row.region)) · \(sourceLabel(row.source))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {

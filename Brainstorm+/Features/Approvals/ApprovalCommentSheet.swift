@@ -51,7 +51,7 @@ public struct ApprovalCommentSheet: View {
                 if let label = requestLabel, !label.isEmpty {
                     HStack(spacing: 4) {
                         Text("对象：")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                         Text(label)
                             .fontWeight(.medium)
                     }
@@ -61,7 +61,7 @@ public struct ApprovalCommentSheet: View {
                 ZStack(alignment: .topLeading) {
                     if isReject {
                         Rectangle()
-                            .fill(Color.red.opacity(0.6))
+                            .fill(BsColor.danger.opacity(0.6))
                             .frame(width: 4)
                             .cornerRadius(2)
                     }
@@ -77,7 +77,7 @@ public struct ApprovalCommentSheet: View {
                             if comment.isEmpty {
                                 Text(placeholder)
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary.opacity(0.7))
+                                    .foregroundStyle(BsColor.inkMuted.opacity(0.7))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 16)
                                     .padding(.leading, isReject ? 4 : 0)
@@ -89,7 +89,7 @@ public struct ApprovalCommentSheet: View {
                 if isReject {
                     Label("拒绝需填写原因（申请人会看到）", systemImage: "xmark.circle")
                         .font(.caption)
-                        .foregroundStyle(Color.red)
+                        .foregroundStyle(BsColor.danger)
                 }
 
                 Spacer(minLength: 0)
@@ -114,7 +114,7 @@ public struct ApprovalCommentSheet: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: isReject ? "xmark.circle.fill" : "checkmark.circle.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(.subheadline, weight: .semibold))
                             Text("确认")
                         }
                         .foregroundStyle(.white)

@@ -117,7 +117,7 @@ public struct AdminUserEditSheet: View {
                                 Text(pkg.label).font(.subheadline.weight(.semibold))
                                 Text(pkg.description)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         }
                     }
@@ -142,7 +142,7 @@ public struct AdminUserEditSheet: View {
                                 Text(AdminCapabilityLabels.label(cap))
                                     .font(.subheadline)
                                     .strikethrough(excludedCaps.contains(cap))
-                                    .foregroundStyle(excludedCaps.contains(cap) ? Color.secondary : Color.primary)
+                                    .foregroundStyle(excludedCaps.contains(cap) ? BsColor.inkMuted : BsColor.ink)
                             }
                         }
                     } header: {
@@ -176,7 +176,7 @@ public struct AdminUserEditSheet: View {
 
             if let err = errorText {
                 Section {
-                    Text(err).font(.footnote).foregroundStyle(.red)
+                    Text(err).font(.footnote).foregroundStyle(BsColor.danger)
                 }
             }
         }

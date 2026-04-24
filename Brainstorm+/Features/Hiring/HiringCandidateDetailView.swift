@@ -97,7 +97,7 @@ public struct HiringCandidateDetailView: View {
             if let title = c.jobPositions?.title, !title.isEmpty {
                 Label(title, systemImage: "briefcase")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
     }
@@ -106,7 +106,7 @@ public struct HiringCandidateDetailView: View {
     private func contactSection(_ c: Candidate) -> some View {
         card(title: "联系方式") {
             if (c.email ?? "").isEmpty && (c.phone ?? "").isEmpty {
-                Text("未填写").font(.caption).foregroundStyle(.secondary)
+                Text("未填写").font(.caption).foregroundStyle(BsColor.inkMuted)
             } else {
                 if let email = c.email, !email.isEmpty {
                     Label(email, systemImage: "envelope")
@@ -162,7 +162,7 @@ public struct HiringCandidateDetailView: View {
                         HStack {
                             Text("评分")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                             Text("\(score)")
                                 .font(.title2.weight(.bold))
                                 .foregroundStyle(scoreColor(score))
@@ -173,18 +173,18 @@ public struct HiringCandidateDetailView: View {
                         if !review.summary.isEmpty {
                             Text(review.summary)
                                 .font(.subheadline)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(BsColor.ink)
                         }
-                        aiBulletBlock(title: "匹配点", items: review.matchItems, systemImage: "checkmark.circle", tint: .green)
-                        aiBulletBlock(title: "优势", items: review.strengths, systemImage: "star.fill", tint: .yellow)
-                        aiBulletBlock(title: "缺口", items: review.gapItems, systemImage: "exclamationmark.triangle", tint: .orange)
-                        aiBulletBlock(title: "风险", items: review.riskPoints, systemImage: "exclamationmark.octagon", tint: .red)
-                        aiBulletBlock(title: "人工复核", items: review.manualReviewItems, systemImage: "person.fill.questionmark", tint: .purple)
-                        aiBulletBlock(title: "顾虑", items: review.concerns, systemImage: "questionmark.circle", tint: .gray)
+                        aiBulletBlock(title: "匹配点", items: review.matchItems, systemImage: "checkmark.circle", tint: BsColor.success)
+                        aiBulletBlock(title: "优势", items: review.strengths, systemImage: "star.fill", tint: BsColor.warning)
+                        aiBulletBlock(title: "缺口", items: review.gapItems, systemImage: "exclamationmark.triangle", tint: BsColor.warning)
+                        aiBulletBlock(title: "风险", items: review.riskPoints, systemImage: "exclamationmark.octagon", tint: BsColor.danger)
+                        aiBulletBlock(title: "人工复核", items: review.manualReviewItems, systemImage: "person.fill.questionmark", tint: BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
+                        aiBulletBlock(title: "顾虑", items: review.concerns, systemImage: "questionmark.circle", tint: BsColor.inkMuted)
                     }
                     Text("AI 审查由 Web 端触发；iOS 仅呈现已保存的审查结果。")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                 }
             }
         }
@@ -196,7 +196,7 @@ public struct HiringCandidateDetailView: View {
             card(title: "简历内容") {
                 Text(text)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(BsColor.ink)
             }
         }
         if let url = c.resumeUrl, !url.isEmpty, let resolved = URL(string: url) {
@@ -225,7 +225,7 @@ public struct HiringCandidateDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -246,7 +246,7 @@ public struct HiringCandidateDetailView: View {
                 ForEach(items, id: \.self) { item in
                     Text("• \(item)")
                         .font(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(BsColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -255,14 +255,14 @@ public struct HiringCandidateDetailView: View {
 
     private func color(for status: Candidate.CandidateStatus) -> Color {
         switch status {
-        case .new:        return .secondary
-        case .screening:  return .blue
-        case .interview:  return .orange
-        case .offer:      return .green
-        case .hired:      return .green
-        case .onboarding: return .teal
-        case .completed:  return .secondary
-        case .rejected:   return .red
+        case .new:        return BsColor.inkMuted
+        case .screening:  return BsColor.brandAzure
+        case .interview:  return BsColor.warning
+        case .offer:      return BsColor.success
+        case .hired:      return BsColor.success
+        case .onboarding: return BsColor.brandMint
+        case .completed:  return BsColor.inkMuted
+        case .rejected:   return BsColor.danger
         }
     }
 
@@ -280,9 +280,9 @@ public struct HiringCandidateDetailView: View {
     }
 
     private func scoreColor(_ score: Int) -> Color {
-        if score >= 80 { return .green }
-        if score >= 60 { return .orange }
-        return .red
+        if score >= 80 { return BsColor.success }
+        if score >= 60 { return BsColor.warning }
+        return BsColor.danger
     }
 }
 
@@ -300,7 +300,7 @@ private struct OfferToastView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            Capsule().fill(Color.green.gradient)
+            Capsule().fill(BsColor.success.gradient)
         )
         .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
     }

@@ -166,7 +166,7 @@ public struct DeliverableListView: View {
                             .font(.title3.weight(.bold))
                         Text(s.displayName)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -206,7 +206,7 @@ public struct DeliverableListView: View {
             HStack {
                 Text("项目")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Menu {
                     Button("所有项目") { viewModel.projectFilter = nil }
@@ -226,7 +226,7 @@ public struct DeliverableListView: View {
             HStack {
                 Text("负责人")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Menu {
                     Button("所有人") { viewModel.assigneeFilter = nil }
@@ -255,7 +255,7 @@ public struct DeliverableListView: View {
                 .labelsHidden()
                 .font(.caption)
                 Text("—")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(BsColor.inkFaint)
                 DatePicker(
                     "结束",
                     selection: Binding(
@@ -276,7 +276,7 @@ public struct DeliverableListView: View {
                         viewModel.assigneeFilter = nil
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(BsColor.danger)
                 }
             }
         }
@@ -336,8 +336,8 @@ public struct DeliverableListView: View {
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
-                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                .background(isSelected ? BsColor.brandAzure.opacity(0.15) : BsColor.inkMuted.opacity(0.08))
+                .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.ink)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -361,17 +361,17 @@ private struct DeliverableRow: View {
                             Label(project, systemImage: "folder")
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(BsColor.brandAzure)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.12))
+                                .background(BsColor.brandAzure.opacity(0.12))
                                 .clipShape(Capsule())
                         }
                     }
                     if let desc = item.description, !desc.isEmpty {
                         Text(desc)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .lineLimit(1)
                     }
                     HStack(spacing: 8) {
@@ -391,18 +391,18 @@ private struct DeliverableRow: View {
                         if let submittedAt = item.submittedAt {
                             Text(submittedAt, style: .date)
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(BsColor.inkFaint)
                         } else if let createdAt = item.createdAt {
                             Text(createdAt, style: .date)
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(BsColor.inkFaint)
                         }
                     }
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(BsColor.inkFaint)
             }
         }
     }

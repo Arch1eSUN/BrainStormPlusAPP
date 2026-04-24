@@ -72,20 +72,20 @@ public struct AdminEvaluationDetailView: View {
                 HStack(spacing: 6) {
                     Text(row.department ?? "未分部门")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     Text("·")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(BsColor.inkFaint)
                     Text("\(month) 月评估")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 if row.primaryRole == "superadmin" {
                     Text("超级管理员")
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.purple.opacity(0.15)))
-                        .foregroundStyle(Color.purple)
+                        .background(Capsule().fill(BsColor.brandAzure.opacity(0.15)))  // TODO(batch-3): evaluate .purple → brandAzure
+                        .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                 }
             }
             Spacer()
@@ -111,39 +111,39 @@ public struct AdminEvaluationDetailView: View {
                     .font(.title3.weight(.bold))
                     .foregroundStyle(color)
                 Text("总分")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(.caption2))
+                    .foregroundStyle(BsColor.inkFaint)
             }
         }
     }
 
     private func ringColor(_ score: Int?) -> Color {
-        guard let s = score else { return .gray }
+        guard let s = score else { return BsColor.inkMuted }
         if s >= 90 { return BsColor.success }
         if s >= 80 { return BsColor.brandAzure }
-        if s >= 60 { return .orange }
-        if s >= 40 { return Color.orange.opacity(0.85) }
-        return .red
+        if s >= 60 { return BsColor.warning }
+        if s >= 40 { return BsColor.warning.opacity(0.85) }
+        return BsColor.danger
     }
 
     // ── Manual review banner ───────────────────────────────────
     private var manualReviewBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(BsColor.warning)
             VStack(alignment: .leading, spacing: 2) {
                 Text("建议人工复核")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(BsColor.warning)
                 Text("数据不足或存在异常，奖金 / 调薪等决策请结合人工判断。")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             Spacer()
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.orange.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.orange.opacity(0.3), lineWidth: 0.8))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(BsColor.warning.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(BsColor.warning.opacity(0.3), lineWidth: 0.8))
     }
 
     // ── Risk flags ─────────────────────────────────────────────
@@ -151,7 +151,7 @@ public struct AdminEvaluationDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("风险标签")
                 .font(.caption.weight(.heavy))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
                 .tracking(1)
             WrappingHStack(items: flags) { flag in
@@ -159,8 +159,8 @@ public struct AdminEvaluationDetailView: View {
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.orange.opacity(0.15)))
-                    .foregroundStyle(.orange)
+                    .background(Capsule().fill(BsColor.warning.opacity(0.15)))
+                    .foregroundStyle(BsColor.warning)
             }
         }
         .padding(12)
@@ -173,7 +173,7 @@ public struct AdminEvaluationDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("综合叙述")
                 .font(.caption.weight(.heavy))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
                 .tracking(1)
             Text(text)
@@ -191,7 +191,7 @@ public struct AdminEvaluationDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("五维分数")
                 .font(.caption.weight(.heavy))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .textCase(.uppercase)
                 .tracking(1)
             VStack(spacing: 10) {
@@ -220,7 +220,7 @@ public struct AdminEvaluationDetailView: View {
             }
             Text("完整 evidence 明细请在 Web 端查看。")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(BsColor.inkFaint)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -244,7 +244,7 @@ public struct AdminEvaluationDetailView: View {
         HStack {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
             Spacer()
             Text(value)
                 .font(.caption.weight(.semibold))
@@ -272,7 +272,7 @@ public struct AdminEvaluationDetailView: View {
                 .font(.headline)
             Text("该员工 \(month) 月度评估尚未生成。批量任务目前在 Web 端触发。")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

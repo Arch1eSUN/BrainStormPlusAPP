@@ -59,7 +59,7 @@ public struct ActivityFeedView: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: "bolt.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.headline, weight: .semibold))
                         .foregroundStyle(.white)
                 )
 
@@ -221,7 +221,7 @@ private struct ActivityRow: View {
             .fill(meta.tint.opacity(0.12))
             .overlay(
                 Image(systemName: meta.icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(meta.tint)
             )
     }
@@ -236,7 +236,7 @@ private struct ActivityRow: View {
                         .foregroundStyle(BsColor.ink)
                 }
                 Text(ActivityFeedViewModel.timeFormatter.string(from: item.createdAt))
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(BsColor.inkMuted)
                 Spacer(minLength: 0)
             }
@@ -270,7 +270,7 @@ private struct ActivityRow: View {
             .frame(width: 18, height: 18)
             .overlay(
                 Text(initial)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(BsTypography.meta)
                     .foregroundStyle(BsColor.brandAzure)
             )
     }

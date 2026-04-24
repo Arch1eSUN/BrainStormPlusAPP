@@ -110,7 +110,7 @@ public struct AdminBroadcastView: View {
                 ZStack(alignment: .topLeading) {
                     if vm.body.isEmpty {
                         Text("正文内容…")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                             .padding(.top, 8)
                             .padding(.leading, 4)
                     }
@@ -127,7 +127,7 @@ public struct AdminBroadcastView: View {
 
             if let info = vm.info {
                 Section {
-                    Label(info, systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label(info, systemImage: "checkmark.circle").foregroundStyle(BsColor.success)
                 }
             }
 

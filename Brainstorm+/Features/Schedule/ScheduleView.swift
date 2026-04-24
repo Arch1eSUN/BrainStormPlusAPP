@@ -149,7 +149,7 @@ public struct ScheduleView: View {
         } label: {
             HStack(spacing: BsSpacing.xs) {
                 Image(systemName: mode.systemImage)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(.caption2, weight: .medium))
                 Text(mode.displayLabel)
                     .font(BsTypography.captionSmall)
             }
@@ -187,7 +187,7 @@ public struct ScheduleView: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("未来 14 天")
-                    .font(BsTypography.outfit(18, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundStyle(BsColor.ink)
                 Spacer()
                 Text(rangeSubtitle)
@@ -250,7 +250,7 @@ public struct ScheduleView: View {
 
             HStack {
                 Text("未来 14 天 · 列表")
-                    .font(BsTypography.outfit(18, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundStyle(BsColor.ink)
                 Spacer()
                 Text(rangeSubtitle)
@@ -318,7 +318,7 @@ public struct ScheduleView: View {
         VStack(alignment: .leading, spacing: BsSpacing.lg) {
             // Keep the today card context while the full chrome ships later.
             Text("今日状态")
-                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundStyle(BsColor.ink)
 
             if viewModel.isLoading && viewModel.selectedDayState == nil {
@@ -338,10 +338,10 @@ public struct ScheduleView: View {
             BsContentCard(padding: .none) {
                 VStack(spacing: BsSpacing.md) {
                     Image(systemName: mode.systemImage)
-                        .font(.system(size: 34, weight: .light))
+                        .font(.system(.largeTitle, weight: .light))
                         .foregroundStyle(BsColor.brandMint)
                     Text("\(mode.displayLabel) 视图即将推出")
-                        .font(BsTypography.outfit(16, weight: "Medium"))
+                        .font(Font.custom("Outfit-Medium", size: 16, relativeTo: .body))
                         .foregroundStyle(BsColor.ink)
                     Text("稍后将支持团队层面的时间线 / 月视图。")
                         .font(BsTypography.captionSmall)
@@ -380,12 +380,12 @@ public struct ScheduleView: View {
                         .fill(BsColor.brandMint.opacity(0.08))
                         .frame(width: 80, height: 80)
                     Image(systemName: "calendar")
-                        .font(.system(size: 32, weight: .light))
+                        .font(.system(.largeTitle, weight: .light))
                         .foregroundStyle(BsColor.brandMint)
                 }
 
                 Text("当天无排班记录")
-                    .font(BsTypography.outfit(16, weight: "Medium"))
+                    .font(Font.custom("Outfit-Medium", size: 16, relativeTo: .body))
                     .foregroundStyle(BsColor.ink)
 
                 Text("请联系管理员或等待 HR 排班")
@@ -457,10 +457,10 @@ private struct MyDayRow: View {
             // Date column
             VStack(alignment: .leading, spacing: 2) {
                 Text(dowLabel)
-                    .font(BsTypography.inter(11, weight: "Medium"))
+                    .font(BsTypography.captionSmall)
                     .foregroundStyle(BsColor.inkMuted)
                 Text(dayLabel)
-                    .font(BsTypography.outfit(15, weight: "SemiBold"))
+                    .font(Font.custom("Outfit-SemiBold", size: 15, relativeTo: .body))
                     .foregroundStyle(isToday ? BsColor.brandAzure : BsColor.ink)
             }
             .frame(width: 56, alignment: .leading)
@@ -476,7 +476,7 @@ private struct MyDayRow: View {
                 if let start = state?.expectedStart?.prefix(5),
                    let end = state?.expectedEnd?.prefix(5) {
                     Text("\(start) – \(end)")
-                        .font(BsTypography.inter(11, weight: "Regular"))
+                        .font(Font.custom("Inter-Regular", size: 11, relativeTo: .caption2))
                         .foregroundStyle(BsColor.inkMuted)
                 }
             }
@@ -507,7 +507,7 @@ private struct MyDayRow: View {
             onQuickApply(kind)
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(BsColor.inkMuted)
                 .frame(width: 28, height: 28)
                 .background(
@@ -563,7 +563,7 @@ private struct ListRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(shiftLabel)
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(Font.custom("Inter-Regular", size: 12, relativeTo: .caption))
                 .foregroundStyle(BsColor.inkMuted)
                 .frame(width: 100, alignment: .trailing)
         }

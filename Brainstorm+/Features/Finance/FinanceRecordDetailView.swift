@@ -71,21 +71,21 @@ public struct FinanceRecordDetailView: View {
                 Text(record.createdAt, format: .dateTime
                     .year().month().day().hour().minute())
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             if let model = record.aiModel, !model.isEmpty {
                 Text("模型：\(model)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
             if let summary = record.inputSummary, !summary.isEmpty {
                 Divider().padding(.vertical, 4)
                 Text("输入摘要")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Text(summary)
                     .font(.footnote)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(BsColor.ink)
                     .lineLimit(6)
             }
         }
@@ -104,7 +104,7 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("摘要", systemImage: "text.alignleft")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(BsColor.brandAzure)
                 Text(text)
                     .font(.footnote)
             }
@@ -112,7 +112,7 @@ public struct FinanceRecordDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.blue.opacity(0.08))
+                    .fill(BsColor.brandAzure.opacity(0.08))
             )
         }
     }
@@ -124,13 +124,13 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("关键指标", systemImage: "chart.bar")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(BsColor.success)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(metrics) { m in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(m.name)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                                 .lineLimit(1)
                             HStack(spacing: 4) {
                                 Text(m.value)
@@ -140,7 +140,7 @@ public struct FinanceRecordDetailView: View {
                             if let note = m.note, !note.isEmpty {
                                 Text(note)
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                                     .lineLimit(2)
                             }
                         }
@@ -156,7 +156,7 @@ public struct FinanceRecordDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.green.opacity(0.08))
+                    .fill(BsColor.success.opacity(0.08))
             )
         }
 
@@ -166,15 +166,15 @@ public struct FinanceRecordDetailView: View {
             case "up":
                 Image(systemName: "arrow.up.right")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(BsColor.success)
             case "down":
                 Image(systemName: "arrow.down.right")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(BsColor.danger)
             case "flat":
                 Image(systemName: "arrow.right")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             default: EmptyView()
             }
         }
@@ -186,7 +186,7 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("财务条目", systemImage: "list.bullet.rectangle")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(BsColor.brandAzure)
                 LazyVStack(spacing: 6) {
                     ForEach(items) { item in
                         HStack(alignment: .top) {
@@ -196,7 +196,7 @@ public struct FinanceRecordDetailView: View {
                                     .lineLimit(2)
                                 Text(item.category)
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                             Spacer()
                             Text(formatAmount(item.amount))
@@ -213,7 +213,7 @@ public struct FinanceRecordDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.blue.opacity(0.08))
+                    .fill(BsColor.brandAzure.opacity(0.08))
             )
         }
     }
@@ -225,14 +225,14 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("处理记录", systemImage: "tablecells")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .purple → brandAzure
                 LazyVStack(spacing: 6) {
                     ForEach(records) { r in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(alignment: .firstTextBaseline) {
                                 Text("#\(r.index)")
                                     .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                                 Spacer()
                                 Text("\(r.confidence)%")
                                     .font(.caption2.weight(.bold))
@@ -244,7 +244,7 @@ public struct FinanceRecordDetailView: View {
                             HStack(alignment: .top) {
                                 Text("原始：\(r.original)")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                                     .lineLimit(2)
                             }
                             HStack(alignment: .top) {
@@ -255,7 +255,7 @@ public struct FinanceRecordDetailView: View {
                             if let note = r.notes, !note.isEmpty {
                                 Text(note)
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(BsColor.inkMuted)
                             }
                         }
                         .padding(10)
@@ -269,14 +269,14 @@ public struct FinanceRecordDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.purple.opacity(0.08))
+                    .fill(BsColor.brandAzure.opacity(0.08))  // TODO(batch-3): evaluate .purple → brandAzure
             )
         }
 
         private func confidenceColor(_ v: Int) -> Color {
-            if v >= 80 { return .green }
-            if v >= 60 { return .orange }
-            return .red
+            if v >= 80 { return BsColor.success }
+            if v >= 60 { return BsColor.warning }
+            return BsColor.danger
         }
     }
 
@@ -289,7 +289,7 @@ public struct FinanceRecordDetailView: View {
                     BulletBlock(
                         title: "亮点",
                         iconName: "checkmark.seal.fill",
-                        color: .green,
+                        color: BsColor.success,
                         items: parsed.highlights
                     )
                 }
@@ -297,7 +297,7 @@ public struct FinanceRecordDetailView: View {
                     BulletBlock(
                         title: "隐忧",
                         iconName: "exclamationmark.triangle",
-                        color: .orange,
+                        color: BsColor.warning,
                         items: parsed.concerns
                     )
                 }
@@ -305,7 +305,7 @@ public struct FinanceRecordDetailView: View {
                     BulletBlock(
                         title: "风险标记",
                         iconName: "exclamationmark.octagon.fill",
-                        color: .red,
+                        color: BsColor.danger,
                         items: parsed.riskFlags
                     )
                 }
@@ -313,7 +313,7 @@ public struct FinanceRecordDetailView: View {
                     BulletBlock(
                         title: "待办事项",
                         iconName: "checklist",
-                        color: .blue,
+                        color: BsColor.brandAzure,
                         items: parsed.actionItems
                     )
                 }
@@ -321,7 +321,7 @@ public struct FinanceRecordDetailView: View {
                     BulletBlock(
                         title: "建议",
                         iconName: "lightbulb",
-                        color: .purple,
+                        color: BsColor.brandAzure,  // TODO(batch-3): evaluate .purple → brandAzure
                         items: parsed.recommendations
                     )
                 }
@@ -362,14 +362,14 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("建议下一步操作", systemImage: "arrow.right.circle")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(BsColor.brandAzure)
                 ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(idx + 1)")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(width: 20, height: 20)
-                            .background(Color.accentColor, in: Circle())
+                            .background(BsColor.brandAzure, in: Circle())
                         Text(step)
                             .font(.footnote)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -379,7 +379,7 @@ public struct FinanceRecordDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.08))
+                    .fill(BsColor.brandAzure.opacity(0.08))
             )
         }
     }
@@ -390,7 +390,7 @@ public struct FinanceRecordDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label("原始输出", systemImage: "curlybraces")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
                 Text(text)
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)

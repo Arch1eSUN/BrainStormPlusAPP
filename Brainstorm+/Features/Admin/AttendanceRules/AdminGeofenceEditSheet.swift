@@ -96,10 +96,10 @@ struct AdminGeofenceEditSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "hand.tap.fill")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                         Text("轻点地图任意位置设置中心点")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(BsColor.inkMuted)
                     }
                 } header: {
                     Text("在地图上选点")
@@ -132,7 +132,7 @@ struct AdminGeofenceEditSheet: View {
                         if let err = coordinateError {
                             Text(err)
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(BsColor.danger)
                         }
                     }
                 }
@@ -144,14 +144,14 @@ struct AdminGeofenceEditSheet: View {
                             Spacer()
                             Text(String(format: "%.6f", c.latitude))
                                 .font(.footnote.monospaced())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                         HStack {
                             Text("经度")
                             Spacer()
                             Text(String(format: "%.6f", c.longitude))
                                 .font(.footnote.monospaced())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(BsColor.inkMuted)
                         }
                     }
                 }

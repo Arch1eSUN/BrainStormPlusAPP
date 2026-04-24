@@ -77,7 +77,7 @@ public struct HiringCandidatesView: View {
                 if let title = c.jobPositions?.title, !title.isEmpty {
                     Label(title, systemImage: "briefcase")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 }
                 if let score = c.aiScore {
                     Label("AI \(score)", systemImage: "sparkles")
@@ -88,7 +88,7 @@ public struct HiringCandidatesView: View {
             if let email = c.email, !email.isEmpty {
                 Text(email)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             }
         }
         .padding(.vertical, 4)
@@ -107,20 +107,20 @@ public struct HiringCandidatesView: View {
 
     private func color(for status: Candidate.CandidateStatus) -> Color {
         switch status {
-        case .new:        return .secondary
-        case .screening:  return .blue
-        case .interview:  return .orange
-        case .offer:      return .green
-        case .hired:      return .green
-        case .onboarding: return .teal
-        case .completed:  return .secondary
-        case .rejected:   return .red
+        case .new:        return BsColor.inkMuted
+        case .screening:  return BsColor.brandAzure
+        case .interview:  return BsColor.warning
+        case .offer:      return BsColor.success
+        case .hired:      return BsColor.success
+        case .onboarding: return BsColor.brandMint
+        case .completed:  return BsColor.inkMuted
+        case .rejected:   return BsColor.danger
         }
     }
 
     private func scoreColor(_ score: Int) -> Color {
-        if score >= 80 { return .green }
-        if score >= 60 { return .orange }
-        return .red
+        if score >= 80 { return BsColor.success }
+        if score >= 60 { return BsColor.warning }
+        return BsColor.danger
     }
 }

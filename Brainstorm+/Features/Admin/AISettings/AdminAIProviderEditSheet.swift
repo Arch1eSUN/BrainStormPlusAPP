@@ -32,7 +32,7 @@ public struct AdminAIProviderEditSheet: View {
                 LabeledContent("Base URL") {
                     Text(provider.baseUrl)
                         .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -45,14 +45,14 @@ public struct AdminAIProviderEditSheet: View {
             Section {
                 HStack {
                     Text("当前 KEY")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                     Spacer()
                     Text(provider.maskedApiKey)
                         .font(.caption.monospaced())
                 }
                 SecureField("新 API Key（iOS 不支持替换）", text: $apiKeyPlaceholder)
                     .disabled(true)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BsColor.inkMuted)
             } header: {
                 Text("API Key")
             } footer: {
@@ -63,7 +63,7 @@ public struct AdminAIProviderEditSheet: View {
                 if provider.availableModels.isEmpty {
                     Text("该供应商尚未发现可用模型，请先在 Web 端运行「发现模型」。")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BsColor.inkMuted)
                 } else {
                     Picker("默认模型", selection: $selectedModel) {
                         Text("未选择").tag("")

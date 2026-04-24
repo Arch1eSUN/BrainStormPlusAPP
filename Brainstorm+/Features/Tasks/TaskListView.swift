@@ -109,7 +109,7 @@ public struct TaskListView: View {
                         isShowingCreateTask = true
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(.headline, weight: .semibold))
                     }
                 }
             }
@@ -267,10 +267,10 @@ public struct TaskListView: View {
                 BsContentCard(padding: .none) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(value)")
-                            .font(BsTypography.outfit(18, weight: "Bold"))
+                            .font(BsTypography.sectionTitle)
                             .foregroundColor(tint)
                         Text(label)
-                            .font(BsTypography.inter(10, weight: "Regular"))
+                            .font(BsTypography.meta)
                             .foregroundColor(BsColor.inkMuted)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -301,7 +301,7 @@ public struct TaskListView: View {
             }
         } label: {
             Image(systemName: viewModel.projectFilter == nil ? "folder" : "folder.fill")
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(.headline, weight: .medium))
         }
     }
 
@@ -314,7 +314,7 @@ public struct TaskListView: View {
             }
         } label: {
             Image(systemName: viewMode == .list ? "rectangle.split.3x1" : "list.bullet")
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(.headline, weight: .medium))
         }
     }
 
@@ -351,11 +351,11 @@ public struct TaskListView: View {
                     .fill(column.tint)
                     .frame(width: 8, height: 8)
                 Text(column.cnLabel)
-                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .font(Font.custom("Inter-SemiBold", size: 14, relativeTo: .subheadline))
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 Text("\(tasks.count)")
-                    .font(BsTypography.inter(11, weight: "Medium"))
+                    .font(BsTypography.captionSmall)
                     .foregroundColor(BsColor.inkMuted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -396,7 +396,7 @@ public struct TaskListView: View {
                     }
                     if tasks.isEmpty {
                         Text("暂无任务")
-                            .font(BsTypography.inter(12, weight: "Regular"))
+                            .font(BsTypography.caption)
                             .foregroundColor(BsColor.inkMuted.opacity(0.7))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, BsSpacing.xxxl - 8)
@@ -432,7 +432,7 @@ public struct TaskListView: View {
                         .fill(BsColor.brandMint.opacity(0.18))
                         .frame(width: 100, height: 100)
                     Image(systemName: "checklist")
-                        .font(.system(size: 40))
+                        .font(.system(.largeTitle))
                         .foregroundColor(BsColor.brandAzure)
                 }
                 Text("暂无\(selectedFilter.cnLabel)任务")
@@ -472,10 +472,10 @@ public struct CreateTaskView: View {
             Form {
                 Section(header: Text("任务详情").font(BsTypography.bodySmall).foregroundColor(BsColor.inkMuted)) {
                     TextField("任务标题", text: $title)
-                        .font(BsTypography.inter(16, weight: "Regular"))
+                        .font(Font.custom("Inter-Regular", size: 16, relativeTo: .body))
 
                     TextField("描述 (可选)", text: $description, axis: .vertical)
-                        .font(BsTypography.inter(16, weight: "Regular"))
+                        .font(Font.custom("Inter-Regular", size: 16, relativeTo: .body))
                         .lineLimit(3...6)
                 }
 
@@ -486,7 +486,7 @@ public struct CreateTaskView: View {
                         Text(TaskModel.TaskPriority.high.cnLabel).tag(TaskModel.TaskPriority.high)
                         Text(TaskModel.TaskPriority.urgent.cnLabel).tag(TaskModel.TaskPriority.urgent)
                     }
-                    .font(BsTypography.inter(16, weight: "Regular"))
+                    .font(Font.custom("Inter-Regular", size: 16, relativeTo: .body))
 
                     Picker("所属项目 (可选)", selection: $projectId) {
                         Text("不关联项目").tag(nil as UUID?)
@@ -494,10 +494,10 @@ public struct CreateTaskView: View {
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
-                    .font(BsTypography.inter(16, weight: "Regular"))
+                    .font(Font.custom("Inter-Regular", size: 16, relativeTo: .body))
 
                     Toggle("设置截止日期", isOn: $includeDueDate)
-                        .font(BsTypography.inter(16, weight: "Regular"))
+                        .font(Font.custom("Inter-Regular", size: 16, relativeTo: .body))
 
                     if includeDueDate {
                         DatePicker("日期", selection: $dueDate, displayedComponents: .date)
@@ -528,11 +528,11 @@ public struct CreateTaskView: View {
                                         .foregroundColor(selectedParticipants.contains(member.id) ? BsColor.brandAzure : BsColor.inkMuted)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(member.displayName)
-                                            .font(BsTypography.inter(14, weight: "Medium"))
+                                            .font(BsTypography.bodySmall)
                                             .foregroundColor(BsColor.ink)
                                         if let dept = member.department, !dept.isEmpty {
                                             Text(dept)
-                                                .font(BsTypography.inter(11, weight: "Regular"))
+                                                .font(BsTypography.captionSmall)
                                                 .foregroundColor(BsColor.inkMuted)
                                         }
                                     }
@@ -547,7 +547,7 @@ public struct CreateTaskView: View {
                 if let error = submissionError {
                     Section {
                         Text(error)
-                            .font(BsTypography.inter(14, weight: "Medium"))
+                            .font(BsTypography.bodySmall)
                             .foregroundColor(BsColor.danger)
                     }
                 }
@@ -568,7 +568,7 @@ public struct CreateTaskView: View {
                         Haptic.light()
                         dismiss()
                     }
-                    .font(BsTypography.inter(16, weight: "Medium"))
+                    .font(Font.custom("Inter-Medium", size: 16, relativeTo: .body))
                     .foregroundColor(BsColor.inkMuted)
                     .disabled(isSubmitting)
                 }
@@ -577,7 +577,7 @@ public struct CreateTaskView: View {
                     Button("创建") {
                         submitTask()
                     }
-                    .font(BsTypography.inter(16, weight: "SemiBold"))
+                    .font(Font.custom("Inter-SemiBold", size: 16, relativeTo: .body))
                     .foregroundColor(title.trimmingCharacters(in: .whitespaces).isEmpty ? BsColor.inkMuted : BsColor.brandAzure)
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
                 }
