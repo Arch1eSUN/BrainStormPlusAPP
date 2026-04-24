@@ -7,50 +7,60 @@ public struct AnnouncementsListView: View {
     @State private var showCreate: Bool = false
     @State private var pendingDelete: Announcement?
 
-    public init(viewModel: AnnouncementsListViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: AnnouncementsListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("公告通知")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    if canManage {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button {
-                                showCreate = true
-                            } label: {
-                                Label("发布公告", systemImage: "plus")
-                            }
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
+        content
+            .navigationTitle("公告通知")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if canManage {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showCreate = true
+                        } label: {
+                            Label("发布公告", systemImage: "plus")
                         }
                     }
                 }
-                .task { await viewModel.load() }
-                .refreshable { await viewModel.load() }
-                .sheet(isPresented: $showCreate) {
-                    AnnouncementCreateView(viewModel: viewModel)
+            }
+            .task { await viewModel.load() }
+            .refreshable { await viewModel.load() }
+            .sheet(isPresented: $showCreate) {
+                AnnouncementCreateView(viewModel: viewModel)
+            }
+            .confirmationDialog(
+                "确认删除",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { target in
+                Button("删除", role: .destructive) {
+                    Task { await viewModel.delete(target) }
+                    pendingDelete = nil
                 }
-                .confirmationDialog(
-                    "确认删除",
-                    isPresented: Binding(
-                        get: { pendingDelete != nil },
-                        set: { if !$0 { pendingDelete = nil } }
-                    ),
-                    titleVisibility: .visible,
-                    presenting: pendingDelete
-                ) { target in
-                    Button("删除", role: .destructive) {
-                        Task { await viewModel.delete(target) }
-                        pendingDelete = nil
-                    }
-                    Button("取消", role: .cancel) { pendingDelete = nil }
-                } message: { target in
-                    Text("将删除公告「\(target.title)」，该操作无法撤销。")
-                }
-                .zyErrorBanner($viewModel.errorMessage)
-        }
+                Button("取消", role: .cancel) { pendingDelete = nil }
+            } message: { target in
+                Text("将删除公告「\(target.title)」，该操作无法撤销。")
+            }
+            .zyErrorBanner($viewModel.errorMessage)
     }
 
     @ViewBuilder

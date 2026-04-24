@@ -111,9 +111,22 @@ public struct AdminHolidaysView: View {
     @StateObject private var vm = AdminHolidaysViewModel()
     @State private var showAddSheet = false
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         List {
             Section {
                 Stepper("年份：\(vm.year)", value: $vm.year, in: 2000...2100)

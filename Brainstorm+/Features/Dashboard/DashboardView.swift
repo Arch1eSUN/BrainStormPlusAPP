@@ -255,7 +255,7 @@ struct DashboardView: View {
             // 放在 ZStack 底层,CTA 按钮盖在上面独立拦截点击。
             // Phase 21：matchedTransitionSource 让 AttendanceView 从卡位 zoom 放大出来
             NavigationLink(destination:
-                AttendanceView()
+                AttendanceView(isEmbedded: true)
                     .navigationTransition(.zoom(sourceID: "attendance.card", in: attendanceNamespace))
             ) {
                 Color.clear
@@ -544,38 +544,38 @@ struct DashboardView: View {
             // —— 常用 (高频每日用，无权限门) ——
             BsAppGrid("常用") {
                 BsAppTile(name: "考勤", systemImage: "clock.fill", tint: BsColor.brandAzure) {
-                    AnyView(AttendanceView())
+                    AnyView(AttendanceView(isEmbedded: true))
                 }
                 BsAppTile(name: "排班", systemImage: "calendar", tint: BsColor.brandAzure) {
-                    AnyView(ScheduleView())
+                    AnyView(ScheduleView(isEmbedded: true))
                 }
                 BsAppTile(name: "请假", systemImage: "calendar.badge.minus", tint: BsColor.brandMint) {
-                    AnyView(LeavesView(client: supabase))
+                    AnyView(LeavesView(client: supabase, isEmbedded: true))
                 }
                 BsAppTile(name: "日报", systemImage: "doc.text.fill", tint: BsColor.brandMint) {
-                    AnyView(ReportingListView(viewModel: ReportingViewModel(client: supabase)))
+                    AnyView(ReportingListView(viewModel: ReportingViewModel(client: supabase), isEmbedded: true))
                 }
                 BsAppTile(name: "周报", systemImage: "doc.richtext.fill", tint: BsColor.brandMint) {
-                    AnyView(ReportingListView(viewModel: ReportingViewModel(client: supabase)))
+                    AnyView(ReportingListView(viewModel: ReportingViewModel(client: supabase), isEmbedded: true))
                 }
                 BsAppTile(name: "通知", systemImage: "bell.fill", tint: BsColor.brandCoral) {
-                    AnyView(NotificationListView(viewModel: NotificationListViewModel(client: supabase)))
+                    AnyView(NotificationListView(viewModel: NotificationListViewModel(client: supabase), isEmbedded: true))
                 }
             }
 
             // —— 协作 (跟人有关) ——
             BsAppGrid("协作") {
                 BsAppTile(name: "公告", systemImage: "megaphone.fill", tint: BsColor.brandCoral) {
-                    AnyView(AnnouncementsListView(viewModel: AnnouncementsListViewModel(client: supabase)))
+                    AnyView(AnnouncementsListView(viewModel: AnnouncementsListViewModel(client: supabase), isEmbedded: true))
                 }
                 BsAppTile(name: "团队", systemImage: "person.3.fill", tint: BsColor.brandAzure) {
-                    AnyView(TeamDirectoryView())
+                    AnyView(TeamDirectoryView(isEmbedded: true))
                 }
                 BsAppTile(name: "活动", systemImage: "sparkle", tint: BsColor.brandMint) {
-                    AnyView(ActivityFeedView(viewModel: ActivityFeedViewModel(client: supabase)))
+                    AnyView(ActivityFeedView(viewModel: ActivityFeedViewModel(client: supabase), isEmbedded: true))
                 }
                 BsAppTile(name: "知识库", systemImage: "book.fill", tint: BsColor.brandAzure) {
-                    AnyView(KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase)))
+                    AnyView(KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase), isEmbedded: true))
                 }
             }
 
@@ -587,36 +587,36 @@ struct DashboardView: View {
                 BsAppGrid("业务") {
                     // 项目类 —— 全员可见
                     BsAppTile(name: "项目", systemImage: "rectangle.3.group.fill", tint: BsColor.brandAzure) {
-                        AnyView(ProjectListView(viewModel: ProjectListViewModel(client: supabase)))
+                        AnyView(ProjectListView(viewModel: ProjectListViewModel(client: supabase), isEmbedded: true))
                     }
                     BsAppTile(name: "OKR", systemImage: "target", tint: BsColor.brandAzure) {
-                        AnyView(OKRListView(viewModel: OKRListViewModel(client: supabase)))
+                        AnyView(OKRListView(viewModel: OKRListViewModel(client: supabase), isEmbedded: true))
                     }
                     BsAppTile(name: "交付物", systemImage: "shippingbox.fill", tint: BsColor.brandMint) {
-                        AnyView(DeliverableListView(viewModel: DeliverableListViewModel(client: supabase)))
+                        AnyView(DeliverableListView(viewModel: DeliverableListViewModel(client: supabase), isEmbedded: true))
                     }
 
                     // 财务类 —— 权限门
                     if hasCap(.finance_ops) || isAdminTier {
                         BsAppTile(name: "财务", systemImage: "yensign.circle.fill", tint: BsColor.brandCoral) {
-                            AnyView(FinanceView(client: supabase))
+                            AnyView(FinanceView(client: supabase, isEmbedded: true))
                         }
                         BsAppTile(name: "薪资", systemImage: "banknote.fill", tint: BsColor.brandCoral) {
-                            AnyView(PayrollListView(viewModel: PayrollListViewModel(client: supabase)))
+                            AnyView(PayrollListView(viewModel: PayrollListViewModel(client: supabase), isEmbedded: true))
                         }
                     }
 
                     // 招聘 —— HR 权限
                     if hasCap(.hr_ops) || hasCap(.recruitment_approval) || isAdminTier {
                         BsAppTile(name: "招聘", systemImage: "briefcase.fill", tint: BsColor.brandCoral) {
-                            AnyView(HiringCenterView())
+                            AnyView(HiringCenterView(isEmbedded: true))
                         }
                     }
 
                     // AI 分析 —— AI 权限
                     if hasCap(.ai_media_analysis) || hasCap(.ai_resume_screening) || hasCap(.ai_finance_docs) || isAdminTier {
                         BsAppTile(name: "AI 分析", systemImage: "brain.head.profile", tint: BsColor.brandMint) {
-                            AnyView(AIAnalysisView())
+                            AnyView(AIAnalysisView(isEmbedded: true))
                         }
                     }
                 }
@@ -626,22 +626,22 @@ struct DashboardView: View {
             if isAdminTier {
                 BsAppGrid("管理") {
                     BsAppTile(name: "管理中心", systemImage: "shield.lefthalf.filled", tint: BsColor.brandAzure) {
-                        AnyView(AdminCenterView())
+                        AnyView(AdminCenterView(isEmbedded: true))
                     }
                     BsAppTile(name: "用户", systemImage: "person.crop.rectangle.stack.fill", tint: BsColor.brandAzure) {
-                        AnyView(AdminUsersView(canAssignPrivileges: true))
+                        AnyView(AdminUsersView(canAssignPrivileges: true, isEmbedded: true))
                     }
                     BsAppTile(name: "审计", systemImage: "doc.text.magnifyingglass", tint: BsColor.inkMuted) {
-                        AnyView(AdminAuditView())
+                        AnyView(AdminAuditView(isEmbedded: true))
                     }
                     BsAppTile(name: "广播", systemImage: "dot.radiowaves.left.and.right", tint: BsColor.brandCoral) {
-                        AnyView(AdminBroadcastView())
+                        AnyView(AdminBroadcastView(isEmbedded: true))
                     }
                     BsAppTile(name: "组织配置", systemImage: "building.2.fill", tint: BsColor.inkMuted) {
-                        AnyView(AdminOrgConfigView())
+                        AnyView(AdminOrgConfigView(isEmbedded: true))
                     }
                     BsAppTile(name: "公休", systemImage: "calendar.badge.plus", tint: BsColor.brandMint) {
-                        AnyView(AdminHolidaysView())
+                        AnyView(AdminHolidaysView(isEmbedded: true))
                     }
                 }
             }
@@ -658,7 +658,7 @@ struct DashboardView: View {
                 .tracking(0.8)
                 .textCase(.uppercase)
             Spacer()
-            NavigationLink(destination: ScheduleView()) {
+            NavigationLink(destination: ScheduleView(isEmbedded: true)) {
                 HStack(spacing: 2) {
                     Text("详情")
                     Image(systemName: "chevron.right")

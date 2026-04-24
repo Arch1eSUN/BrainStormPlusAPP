@@ -12,12 +12,24 @@ public struct AIAnalysisView: View {
     @StateObject private var viewModel: AIAnalysisViewModel
     @Environment(SessionManager.self) private var sessionManager
 
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
     @MainActor
-    public init() {
+    public init(isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: AIAnalysisViewModel())
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         Group {
             if hasAccess {
                 main

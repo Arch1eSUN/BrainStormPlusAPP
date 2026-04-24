@@ -9,9 +9,22 @@ public struct AttendanceView: View {
     /// Mirrors the Web `acquiring | in-fence` gating on the outer rings.
     @State private var isAwaitingSuccess = false
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         ZStack {
             // Ambient 弥散底 —— Azure/Mint blobs 漂在暖米纸底上。
             // AttendanceView 常被作为嵌入视图（Dashboard widget），

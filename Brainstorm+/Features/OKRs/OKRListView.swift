@@ -8,36 +8,45 @@ import Supabase
 public struct OKRListView: View {
     @StateObject private var viewModel: OKRListViewModel
     @State private var expanded: Set<UUID> = []
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
 
-    public init(viewModel: OKRListViewModel) {
+    public init(viewModel: OKRListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                BsColor.surfaceSecondary.ignoresSafeArea()
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
 
-                Group {
-                    if viewModel.isLoading && viewModel.objectives.isEmpty {
-                        ProgressView()
-                            .scaleEffect(1.3)
-                            .tint(BsColor.brandAzure)
-                    } else if let error = viewModel.errorMessage, viewModel.objectives.isEmpty {
-                        errorState(message: error)
-                    } else {
-                        content
-                    }
+    private var coreContent: some View {
+        ZStack {
+            BsColor.surfaceSecondary.ignoresSafeArea()
+
+            Group {
+                if viewModel.isLoading && viewModel.objectives.isEmpty {
+                    ProgressView()
+                        .scaleEffect(1.3)
+                        .tint(BsColor.brandAzure)
+                } else if let error = viewModel.errorMessage, viewModel.objectives.isEmpty {
+                    errorState(message: error)
+                } else {
+                    content
                 }
             }
-            .navigationTitle("OKR 目标管理")
-            .navigationBarTitleDisplayMode(.large)
-            .task(id: viewModel.period) {
-                await viewModel.fetchObjectives()
-            }
-            .refreshable {
-                await viewModel.fetchObjectives()
-            }
+        }
+        .navigationTitle("OKR 目标管理")
+        .navigationBarTitleDisplayMode(.large)
+        .task(id: viewModel.period) {
+            await viewModel.fetchObjectives()
+        }
+        .refreshable {
+            await viewModel.fetchObjectives()
         }
     }
 

@@ -8,6 +8,8 @@ import Supabase
 
 public struct AdminUsersView: View {
     let canAssignPrivileges: Bool
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
     @StateObject private var viewModel = AdminUsersViewModel()
     @Environment(SessionManager.self) private var sessionManager
 
@@ -20,11 +22,20 @@ public struct AdminUsersView: View {
         sessionManager.currentProfile?.id
     }
 
-    public init(canAssignPrivileges: Bool) {
+    public init(canAssignPrivileges: Bool, isEmbedded: Bool = false) {
         self.canAssignPrivileges = canAssignPrivileges
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         contentView
             .navigationTitle("用户管理")
             .navigationBarTitleDisplayMode(.large)

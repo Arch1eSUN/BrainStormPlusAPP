@@ -22,7 +22,12 @@ public struct ScheduleView: View {
     // Quick-apply sheet state (from "my" view rows).
     @State private var quickApply: QuickApplyRoute?
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     private func setupStripDates() {
         let calendar = Calendar.current
@@ -35,39 +40,45 @@ public struct ScheduleView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                BsAmbientBackground()
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
 
-                VStack(spacing: 0) {
-                    headerSection
-                        .zIndex(10)
+    private var coreContent: some View {
+        ZStack(alignment: .top) {
+            BsAmbientBackground()
 
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: BsSpacing.xl) {
-                            switch viewModel.viewMode {
-                            case .my:
-                                myModeSection
-                            case .list:
-                                listModeSection
-                            case .timeline, .calendar:
-                                stubModeSection(for: viewModel.viewMode)
-                            }
+            VStack(spacing: 0) {
+                headerSection
+                    .zIndex(10)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: BsSpacing.xl) {
+                        switch viewModel.viewMode {
+                        case .my:
+                            myModeSection
+                        case .list:
+                            listModeSection
+                        case .timeline, .calendar:
+                            stubModeSection(for: viewModel.viewMode)
                         }
-                        .padding(.top, BsSpacing.xl)
-                        .padding(.horizontal, BsSpacing.xl)
-                        .padding(.bottom, 120) // safe space for tabbar
                     }
-                    .refreshable {
-                        Haptic.soft()
-                        await viewModel.refresh()
-                    }
+                    .padding(.top, BsSpacing.xl)
+                    .padding(.horizontal, BsSpacing.xl)
+                    .padding(.bottom, 120) // safe space for tabbar
+                }
+                .refreshable {
+                    Haptic.soft()
+                    await viewModel.refresh()
                 }
             }
-            .navigationBarHidden(true)
-            .sheet(item: $quickApply) { route in
-                quickApplySheet(for: route)
-            }
+        }
+        .navigationBarHidden(true)
+        .sheet(item: $quickApply) { route in
+            quickApplySheet(for: route)
         }
         .onAppear {
             if stripDates.isEmpty { setupStripDates() }
@@ -243,7 +254,7 @@ public struct ScheduleView: View {
         VStack(alignment: .leading, spacing: BsSpacing.lg) {
             // Keep the geofence attendance card at the top so "my" mode
             // remains the employee's home — matches today's iOS UX.
-            AttendanceView()
+            AttendanceView(isEmbedded: true)
                 .clipShape(RoundedRectangle(cornerRadius: BsRadius.xxl - 4, style: .continuous))
                 .bsShadow(BsShadow.md)
 

@@ -22,9 +22,12 @@ public struct FinanceView: View {
     @Environment(SessionManager.self) private var sessionManager
     @State private var showHistorySheet: Bool = false
     @State private var pushedRecord: FinanceAIRecord?
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
 
-    public init(client: SupabaseClient = supabase) {
+    public init(client: SupabaseClient = supabase, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: FinanceViewModel(client: client))
+        self.isEmbedded = isEmbedded
     }
 
     /// Mirrors Web gate (`hasCapability(caps, 'finance_ops')` at page.tsx:44).
@@ -43,49 +46,57 @@ public struct FinanceView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if !canAccess {
-                    ContentUnavailableView(
-                        "无权访问",
-                        systemImage: "lock",
-                        description: Text("财务 AI 工作台仅对拥有财务相关能力的管理员开放。")
-                    )
-                } else {
-                    content
-                }
-            }
-            .navigationTitle("财务 AI 工作台")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if canAccess {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showHistorySheet = true
-                        } label: {
-                            Image(systemName: "clock.arrow.circlepath")
-                        }
-                        .accessibilityLabel("处理历史")
-                    }
-                }
-            }
-            .task {
-                if canAccess { await viewModel.fetchHistory() }
-            }
-            .refreshable {
-                if canAccess { await viewModel.fetchHistory() }
-            }
-            .sheet(isPresented: $showHistorySheet) {
-                historySheet
-            }
-            .navigationDestination(for: FinanceAIRecord.self) { record in
-                FinanceRecordDetailView(record: record)
-            }
-            .navigationDestination(item: $pushedRecord) { record in
-                FinanceRecordDetailView(record: record)
+        Group {
+            if isEmbedded {
+                coreContent
+            } else {
+                NavigationStack { coreContent }
             }
         }
         .zyErrorBanner($viewModel.errorMessage)
+    }
+
+    private var coreContent: some View {
+        Group {
+            if !canAccess {
+                ContentUnavailableView(
+                    "无权访问",
+                    systemImage: "lock",
+                    description: Text("财务 AI 工作台仅对拥有财务相关能力的管理员开放。")
+                )
+            } else {
+                content
+            }
+        }
+        .navigationTitle("财务 AI 工作台")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if canAccess {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showHistorySheet = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+                    .accessibilityLabel("处理历史")
+                }
+            }
+        }
+        .task {
+            if canAccess { await viewModel.fetchHistory() }
+        }
+        .refreshable {
+            if canAccess { await viewModel.fetchHistory() }
+        }
+        .sheet(isPresented: $showHistorySheet) {
+            historySheet
+        }
+        .navigationDestination(for: FinanceAIRecord.self) { record in
+            FinanceRecordDetailView(record: record)
+        }
+        .navigationDestination(item: $pushedRecord) { record in
+            FinanceRecordDetailView(record: record)
+        }
     }
 
     // MARK: - Main content

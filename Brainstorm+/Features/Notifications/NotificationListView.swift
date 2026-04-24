@@ -19,8 +19,12 @@ public struct NotificationListView: View {
         }
     }
 
-    public init(viewModel: NotificationListViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: NotificationListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     private var filteredNotifications: [AppNotification] {
@@ -35,6 +39,14 @@ public struct NotificationListView: View {
     }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         ZStack {
             // Fusion ambient 底层 —— 通知列表需要"airy"感，不是白底。
             BsAmbientBackground()

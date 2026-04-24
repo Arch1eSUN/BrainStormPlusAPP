@@ -12,9 +12,22 @@ public struct AdminCenterView: View {
     @StateObject private var viewModel = AdminCenterViewModel()
     @Environment(SessionManager.self) private var sessionManager
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         Group {
             if viewModel.canEnterAdmin {
                 content
@@ -135,7 +148,7 @@ public struct AdminCenterView: View {
                         title: "用户管理",
                         subtitle: "创建 · 编辑 · 角色 · 能力包"
                     ) {
-                        AdminUsersView(canAssignPrivileges: viewModel.canAssignPrivileges)
+                        AdminUsersView(canAssignPrivileges: viewModel.canAssignPrivileges, isEmbedded: true)
                     }
                     divider()
                 }
@@ -159,7 +172,7 @@ public struct AdminCenterView: View {
                         title: "组织架构",
                         subtitle: "部门 · 职位"
                     ) {
-                        AdminOrgConfigView()
+                        AdminOrgConfigView(isEmbedded: true)
                     }
                     divider()
                 }
@@ -171,7 +184,7 @@ public struct AdminCenterView: View {
                         title: "公休日历",
                         subtitle: "添加 · 删除 · 分区域"
                     ) {
-                        AdminHolidaysView()
+                        AdminHolidaysView(isEmbedded: true)
                     }
                     divider()
                 }
@@ -216,7 +229,7 @@ public struct AdminCenterView: View {
                         title: "广播通知",
                         subtitle: "向全员推送系统消息"
                     ) {
-                        AdminBroadcastView()
+                        AdminBroadcastView(isEmbedded: true)
                     }
                     divider()
                 }
@@ -240,7 +253,7 @@ public struct AdminCenterView: View {
                         title: "操作审计",
                         subtitle: "查看管理操作日志"
                     ) {
-                        AdminAuditView()
+                        AdminAuditView(isEmbedded: true)
                     }
                 }
             }

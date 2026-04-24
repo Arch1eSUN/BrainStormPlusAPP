@@ -95,9 +95,22 @@ public struct AdminOrgConfigView: View {
     @State private var newDept: String = ""
     @State private var newPosition: String = ""
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         Form {
             Section {
                 ForEach(Array(vm.departments.enumerated()), id: \.offset) { idx, dept in

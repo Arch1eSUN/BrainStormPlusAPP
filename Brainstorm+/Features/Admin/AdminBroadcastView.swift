@@ -88,9 +88,22 @@ final class AdminBroadcastViewModel: ObservableObject {
 public struct AdminBroadcastView: View {
     @StateObject private var vm = AdminBroadcastViewModel()
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         Form {
             Section("消息") {
                 TextField("标题", text: $vm.title)

@@ -83,9 +83,22 @@ final class AdminAuditViewModel: ObservableObject {
 public struct AdminAuditView: View {
     @StateObject private var vm = AdminAuditViewModel()
 
-    public init() {}
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         Group {
             if vm.isLoading && vm.rows.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)

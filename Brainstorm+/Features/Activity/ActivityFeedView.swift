@@ -4,15 +4,28 @@ import Supabase
 public struct ActivityFeedView: View {
     @StateObject private var viewModel: ActivityFeedViewModel
 
-    public init(viewModel: ActivityFeedViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: ActivityFeedViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
-    public init(client: SupabaseClient = supabase) {
+    public init(client: SupabaseClient = supabase, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: ActivityFeedViewModel(client: client))
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: BsSpacing.xl) {
                 header

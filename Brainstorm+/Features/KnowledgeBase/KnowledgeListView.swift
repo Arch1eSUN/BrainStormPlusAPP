@@ -40,92 +40,102 @@ public struct KnowledgeListView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showFileImporter: Bool = false
 
-    public init(viewModel: KnowledgeListViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: KnowledgeListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.articles.isEmpty {
-                    ProgressView()
-                } else {
-                    content
-                }
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
+        Group {
+            if viewModel.isLoading && viewModel.articles.isEmpty {
+                ProgressView()
+            } else {
+                content
             }
-            .navigationTitle("知识库")
-            .toolbar {
-                if isAdmin {
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button {
-                                editTarget = .new
-                            } label: {
-                                Label("新建文档", systemImage: "square.and.pencil")
-                            }
-                            Button {
-                                showUploadSheet = true
-                            } label: {
-                                Label("上传文件", systemImage: "arrow.up.doc")
-                            }
+        }
+        .navigationTitle("知识库")
+        .toolbar {
+            if isAdmin {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button {
+                            editTarget = .new
                         } label: {
-                            Image(systemName: "plus")
+                            Label("新建文档", systemImage: "square.and.pencil")
                         }
+                        Button {
+                            showUploadSheet = true
+                        } label: {
+                            Label("上传文件", systemImage: "arrow.up.doc")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
                     }
                 }
             }
-            .searchable(text: $viewModel.searchText, prompt: "搜索文档…")
-            .onSubmit(of: .search) {
-                Task { await viewModel.fetchArticles() }
-            }
-            // Match Web's `useEffect([search, catFilter])` — when the
-            // user clears the query with the native `x` button there
-            // is no `onSubmit`, so we also reload on empty-string
-            // transitions and on every category filter change.
-            .onChange(of: viewModel.searchText) { old, new in
-                if old.isEmpty == false, new.isEmpty {
-                    Task { await viewModel.fetchArticles() }
-                }
-            }
-            .onChange(of: viewModel.categoryFilter) { _, _ in
-                Task { await viewModel.fetchArticles() }
-            }
-            .refreshable {
-                await viewModel.fetchArticles()
-            }
-            .task {
-                await viewModel.fetchArticles()
-            }
-            .sheet(item: $editTarget) { target in
-                KnowledgeEditView(
-                    viewModel: viewModel,
-                    existingArticle: target.article
-                )
-            }
-            .sheet(isPresented: $showUploadSheet) {
-                uploadSheet
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                // Broad content-type list to mirror Web's
-                // `FILE_ACCEPT` (pdf/doc/docx/pptx/pages/txt/md +
-                // audio/video). Server-side RLS + the bucket's 100MB
-                // cap are the real guardrails — the client picker is
-                // a usability filter only.
-                allowedContentTypes: [
-                    .pdf, .plainText, .rtf, .image, .movie, .audio, .item
-                ],
-                allowsMultipleSelection: false
-            ) { result in
-                Task { await handlePickedFiles(result) }
-            }
-            .onChange(of: photoItems) { _, newValue in
-                guard !newValue.isEmpty else { return }
-                Task { await handlePhotoItems(newValue) }
-                photoItems = []
-            }
-            .zyErrorBanner($viewModel.errorMessage)
         }
+        .searchable(text: $viewModel.searchText, prompt: "搜索文档…")
+        .onSubmit(of: .search) {
+            Task { await viewModel.fetchArticles() }
+        }
+        // Match Web's `useEffect([search, catFilter])` — when the
+        // user clears the query with the native `x` button there
+        // is no `onSubmit`, so we also reload on empty-string
+        // transitions and on every category filter change.
+        .onChange(of: viewModel.searchText) { old, new in
+            if old.isEmpty == false, new.isEmpty {
+                Task { await viewModel.fetchArticles() }
+            }
+        }
+        .onChange(of: viewModel.categoryFilter) { _, _ in
+            Task { await viewModel.fetchArticles() }
+        }
+        .refreshable {
+            await viewModel.fetchArticles()
+        }
+        .task {
+            await viewModel.fetchArticles()
+        }
+        .sheet(item: $editTarget) { target in
+            KnowledgeEditView(
+                viewModel: viewModel,
+                existingArticle: target.article
+            )
+        }
+        .sheet(isPresented: $showUploadSheet) {
+            uploadSheet
+        }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            // Broad content-type list to mirror Web's
+            // `FILE_ACCEPT` (pdf/doc/docx/pptx/pages/txt/md +
+            // audio/video). Server-side RLS + the bucket's 100MB
+            // cap are the real guardrails — the client picker is
+            // a usability filter only.
+            allowedContentTypes: [
+                .pdf, .plainText, .rtf, .image, .movie, .audio, .item
+            ],
+            allowsMultipleSelection: false
+        ) { result in
+            Task { await handlePickedFiles(result) }
+        }
+        .onChange(of: photoItems) { _, newValue in
+            guard !newValue.isEmpty else { return }
+            Task { await handlePhotoItems(newValue) }
+            photoItems = []
+        }
+        .zyErrorBanner($viewModel.errorMessage)
     }
 
     // MARK: - Content

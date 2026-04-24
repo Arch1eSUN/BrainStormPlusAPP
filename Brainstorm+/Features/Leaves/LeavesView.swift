@@ -27,12 +27,24 @@ public struct LeavesView: View {
     @State private var isSubmitPresented: Bool = false
     private let client: SupabaseClient
 
-    public init(client: SupabaseClient = supabase) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(client: SupabaseClient = supabase, isEmbedded: Bool = false) {
         self.client = client
+        self.isEmbedded = isEmbedded
         _viewModel = StateObject(wrappedValue: LeavesViewModel(client: client))
     }
 
     public var body: some View {
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BsSpacing.lg + 4) {
                 headerSection

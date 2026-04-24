@@ -25,82 +25,91 @@ public struct DeliverableListView: View {
     @StateObject private var viewModel: DeliverableListViewModel
     @State private var showFilters: Bool = false
     @State private var showCreateSheet: Bool = false
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
 
-    public init(viewModel: DeliverableListViewModel) {
+    public init(viewModel: DeliverableListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.items.isEmpty {
-                    ProgressView()
-                } else {
-                    content
-                }
-            }
-            .navigationTitle("交付物")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("新建交付物")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showFilters.toggle()
-                        }
-                    } label: {
-                        Image(systemName: showFilters
-                              ? "line.3.horizontal.decrease.circle.fill"
-                              : "line.3.horizontal.decrease.circle")
-                    }
-                    .accessibilityLabel("筛选")
-                }
-            }
-            .sheet(isPresented: $showCreateSheet) {
-                DeliverableCreateSheet(viewModel: viewModel)
-            }
-            .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
-            .onSubmit(of: .search) {
-                Task { await viewModel.reloadItems() }
-            }
-            .onChange(of: viewModel.searchText) { old, new in
-                // Web reloads on every keystroke; we reload on "clear"
-                // (the native x button fires no onSubmit) and keep the
-                // explicit submit for typed-in queries. Matches the
-                // KnowledgeListView pattern.
-                if !old.isEmpty, new.isEmpty {
-                    Task { await viewModel.reloadItems() }
-                }
-            }
-            .onChange(of: viewModel.statusFilter) { _, _ in
-                Task { await viewModel.reloadItems() }
-            }
-            .onChange(of: viewModel.projectFilter) { _, _ in
-                Task { await viewModel.reloadItems() }
-            }
-            .onChange(of: viewModel.assigneeFilter) { _, _ in
-                Task { await viewModel.reloadItems() }
-            }
-            .onChange(of: viewModel.dateFrom) { _, _ in
-                Task { await viewModel.reloadItems() }
-            }
-            .onChange(of: viewModel.dateTo) { _, _ in
-                Task { await viewModel.reloadItems() }
-            }
-            .refreshable {
-                await viewModel.loadAll()
-            }
-            .task {
-                await viewModel.loadAll()
-            }
-            .zyErrorBanner($viewModel.errorMessage)
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
         }
+    }
+
+    private var coreContent: some View {
+        Group {
+            if viewModel.isLoading && viewModel.items.isEmpty {
+                ProgressView()
+            } else {
+                content
+            }
+        }
+        .navigationTitle("交付物")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showCreateSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("新建交付物")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showFilters.toggle()
+                    }
+                } label: {
+                    Image(systemName: showFilters
+                          ? "line.3.horizontal.decrease.circle.fill"
+                          : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("筛选")
+            }
+        }
+        .sheet(isPresented: $showCreateSheet) {
+            DeliverableCreateSheet(viewModel: viewModel)
+        }
+        .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
+        .onSubmit(of: .search) {
+            Task { await viewModel.reloadItems() }
+        }
+        .onChange(of: viewModel.searchText) { old, new in
+            // Web reloads on every keystroke; we reload on "clear"
+            // (the native x button fires no onSubmit) and keep the
+            // explicit submit for typed-in queries. Matches the
+            // KnowledgeListView pattern.
+            if !old.isEmpty, new.isEmpty {
+                Task { await viewModel.reloadItems() }
+            }
+        }
+        .onChange(of: viewModel.statusFilter) { _, _ in
+            Task { await viewModel.reloadItems() }
+        }
+        .onChange(of: viewModel.projectFilter) { _, _ in
+            Task { await viewModel.reloadItems() }
+        }
+        .onChange(of: viewModel.assigneeFilter) { _, _ in
+            Task { await viewModel.reloadItems() }
+        }
+        .onChange(of: viewModel.dateFrom) { _, _ in
+            Task { await viewModel.reloadItems() }
+        }
+        .onChange(of: viewModel.dateTo) { _, _ in
+            Task { await viewModel.reloadItems() }
+        }
+        .refreshable {
+            await viewModel.loadAll()
+        }
+        .task {
+            await viewModel.loadAll()
+        }
+        .zyErrorBanner($viewModel.errorMessage)
     }
 
     // MARK: - Content

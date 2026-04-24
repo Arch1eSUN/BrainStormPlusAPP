@@ -24,145 +24,155 @@ public struct ProjectListView: View {
     /// dialog (`BrainStorm+-Web/src/app/dashboard/projects/page.tsx` line 31).
     @State private var isShowingCreateSheet: Bool = false
 
-    public init(viewModel: ProjectListViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: ProjectListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                BsColor.surfaceSecondary
-                    .ignoresSafeArea()
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
 
-                Group {
-                    if viewModel.isLoading && viewModel.projects.isEmpty {
-                        ProgressView()
-                            .scaleEffect(1.3)
-                            .tint(BsColor.brandAzure)
-                    } else if let error = viewModel.errorMessage, viewModel.projects.isEmpty {
-                        errorStateView(message: error)
-                    } else if viewModel.scopeOutcome == .noMembership {
-                        noMembershipStateView
-                    } else if viewModel.projects.isEmpty {
-                        if hasActiveFilter {
-                            filteredEmptyStateView
-                        } else {
-                            emptyStateView
-                        }
+    private var coreContent: some View {
+        ZStack {
+            BsColor.surfaceSecondary
+                .ignoresSafeArea()
+
+            Group {
+                if viewModel.isLoading && viewModel.projects.isEmpty {
+                    ProgressView()
+                        .scaleEffect(1.3)
+                        .tint(BsColor.brandAzure)
+                } else if let error = viewModel.errorMessage, viewModel.projects.isEmpty {
+                    errorStateView(message: error)
+                } else if viewModel.scopeOutcome == .noMembership {
+                    noMembershipStateView
+                } else if viewModel.projects.isEmpty {
+                    if hasActiveFilter {
+                        filteredEmptyStateView
                     } else {
-                        contentList
+                        emptyStateView
                     }
+                } else {
+                    contentList
                 }
             }
-            .navigationTitle("项目管理")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    statusFilterMenu
-                }
-                // D.2a: create entry. Any authenticated user can create a project (Web
-                // `createProject` gates on `serverGuard` only, no admin check).
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundColor(BsColor.brandAzure)
-                    }
-                    .accessibilityLabel("新建项目")
-                }
+        }
+        .navigationTitle("项目管理")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                statusFilterMenu
             }
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索项目"
-            )
-            .onSubmit(of: .search) {
-                // User pressed the Search key on the keyboard — push the server-side `ilike`.
+            // D.2a: create entry. Any authenticated user can create a project (Web
+            // `createProject` gates on `serverGuard` only, no admin check).
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingCreateSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundColor(BsColor.brandAzure)
+                }
+                .accessibilityLabel("新建项目")
+            }
+        }
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索项目"
+        )
+        .onSubmit(of: .search) {
+            // User pressed the Search key on the keyboard — push the server-side `ilike`.
+            Task { await reload() }
+        }
+        .onChange(of: viewModel.searchText) { _, newValue in
+            // Handles the `.searchable` clear (X) affordance — when the user empties the
+            // field we must re-fetch without the `ilike` filter so the list isn't frozen
+            // at the last server-side filtered result set.
+            if newValue.isEmpty {
                 Task { await reload() }
             }
-            .onChange(of: viewModel.searchText) { _, newValue in
-                // Handles the `.searchable` clear (X) affordance — when the user empties the
-                // field we must re-fetch without the `ilike` filter so the list isn't frozen
-                // at the last server-side filtered result set.
-                if newValue.isEmpty {
+        }
+        .onChange(of: viewModel.statusFilter) { _, _ in
+            // Discrete choice — safe to trigger server-side `eq('status', s)` immediately.
+            Task { await reload() }
+        }
+        .refreshable {
+            await reload()
+        }
+        .task {
+            await reload()
+        }
+        // 1.9: secondary edit entry. Long-press on a row surfaces a context-menu "Edit"
+        // action which sets `projectBeingEdited`, triggering this identifiable sheet.
+        .sheet(item: $projectBeingEdited) { project in
+            ProjectEditSheet(
+                client: supabase,
+                project: project,
+                onSaved: { _ in
                     Task { await reload() }
-                }
-            }
-            .onChange(of: viewModel.statusFilter) { _, _ in
-                // Discrete choice — safe to trigger server-side `eq('status', s)` immediately.
-                Task { await reload() }
-            }
-            .refreshable {
-                await reload()
-            }
-            .task {
-                await reload()
-            }
-            // 1.9: secondary edit entry. Long-press on a row surfaces a context-menu "Edit"
-            // action which sets `projectBeingEdited`, triggering this identifiable sheet.
-            .sheet(item: $projectBeingEdited) { project in
-                ProjectEditSheet(
-                    client: supabase,
-                    project: project,
-                    onSaved: { _ in
-                        Task { await reload() }
-                    }
-                )
-            }
-            // D.2a: create sheet. Presents when the "+" toolbar button is tapped. The sheet
-            // calls `onCreated` with the fresh row; we reload the list so membership-scoped
-            // non-admin users see the new project they just became the owner of.
-            .sheet(isPresented: $isShowingCreateSheet) {
-                ProjectCreateSheet(
-                    client: supabase,
-                    currentUserId: userId,
-                    onCreated: { _ in
-                        Task { await reload() }
-                    }
-                )
-            }
-            // 2.0: row-level delete confirmation. Mirrors Web `confirm('确定删除这个项目吗？')`
-            // semantics via the native `.confirmationDialog` + `Button(role: .destructive)`
-            // pattern. The destructive action is gated behind `isDeleting` to prevent double-taps.
-            .confirmationDialog(
-                "确定删除这个项目吗？",
-                isPresented: Binding(
-                    get: { projectPendingDelete != nil },
-                    set: { newValue in if !newValue { projectPendingDelete = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: projectPendingDelete
-            ) { project in
-                Button("删除 “\(project.name)”", role: .destructive) {
-                    Task {
-                        let succeeded = await viewModel.deleteProject(id: project.id)
-                        projectPendingDelete = nil
-                        if !succeeded {
-                            // Error surfaces via the `.alert` below; list rows stay intact.
-                        }
-                    }
-                }
-                Button("取消", role: .cancel) {
-                    projectPendingDelete = nil
-                }
-            } message: { project in
-                Text("将永久删除 “\(project.name)” 及其全部成员，此操作不可撤销。")
-            }
-            .alert(
-                "删除失败",
-                isPresented: Binding(
-                    get: { viewModel.deleteErrorMessage != nil },
-                    set: { newValue in if !newValue { viewModel.deleteErrorMessage = nil } }
-                ),
-                actions: {
-                    Button("好的", role: .cancel) { viewModel.deleteErrorMessage = nil }
-                },
-                message: {
-                    Text(viewModel.deleteErrorMessage ?? "")
                 }
             )
         }
+        // D.2a: create sheet. Presents when the "+" toolbar button is tapped. The sheet
+        // calls `onCreated` with the fresh row; we reload the list so membership-scoped
+        // non-admin users see the new project they just became the owner of.
+        .sheet(isPresented: $isShowingCreateSheet) {
+            ProjectCreateSheet(
+                client: supabase,
+                currentUserId: userId,
+                onCreated: { _ in
+                    Task { await reload() }
+                }
+            )
+        }
+        // 2.0: row-level delete confirmation. Mirrors Web `confirm('确定删除这个项目吗？')`
+        // semantics via the native `.confirmationDialog` + `Button(role: .destructive)`
+        // pattern. The destructive action is gated behind `isDeleting` to prevent double-taps.
+        .confirmationDialog(
+            "确定删除这个项目吗？",
+            isPresented: Binding(
+                get: { projectPendingDelete != nil },
+                set: { newValue in if !newValue { projectPendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: projectPendingDelete
+        ) { project in
+            Button("删除 “\(project.name)”", role: .destructive) {
+                Task {
+                    let succeeded = await viewModel.deleteProject(id: project.id)
+                    projectPendingDelete = nil
+                    if !succeeded {
+                        // Error surfaces via the `.alert` below; list rows stay intact.
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {
+                projectPendingDelete = nil
+            }
+        } message: { project in
+            Text("将永久删除 “\(project.name)” 及其全部成员，此操作不可撤销。")
+        }
+        .alert(
+            "删除失败",
+            isPresented: Binding(
+                get: { viewModel.deleteErrorMessage != nil },
+                set: { newValue in if !newValue { viewModel.deleteErrorMessage = nil } }
+            ),
+            actions: {
+                Button("好的", role: .cancel) { viewModel.deleteErrorMessage = nil }
+            },
+            message: {
+                Text(viewModel.deleteErrorMessage ?? "")
+            }
+        )
     }
 
     // MARK: - Identity / reload

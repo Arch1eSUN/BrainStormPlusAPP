@@ -14,69 +14,79 @@ public struct ReportingListView: View {
     @State private var dailyEditTarget: DailyLogEditTarget?
     @State private var weeklyEditTarget: WeeklyEditTarget?
 
-    public init(viewModel: ReportingViewModel) {
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
+    public init(viewModel: ReportingViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    Picker("视图", selection: $viewModel.selectedTab) {
-                        ForEach(ReportingViewModel.Tab.allCases) { tab in
-                            Text(tab.title).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .padding(.top, 40)
-                    } else {
-                        switch viewModel.selectedTab {
-                        case .daily:
-                            dailySection
-                        case .weekly:
-                            weeklySection
-                        }
-                    }
-                }
-                .padding(.vertical)
-            }
-            .navigationTitle("报告")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        switch viewModel.selectedTab {
-                        case .daily:  dailyEditTarget = .new
-                        case .weekly: weeklyEditTarget = .new
-                        }
-                    } label: {
-                        Label("新建", systemImage: "plus")
-                    }
-                }
-            }
-            .refreshable {
-                await viewModel.fetchReports()
-            }
-            .task {
-                await viewModel.fetchReports()
-            }
-            .sheet(item: $dailyEditTarget) { target in
-                DailyLogEditView(
-                    viewModel: viewModel,
-                    existingLog: target.log
-                )
-            }
-            .sheet(item: $weeklyEditTarget) { target in
-                WeeklyReportEditView(
-                    viewModel: viewModel,
-                    existingReport: target.report
-                )
-            }
-            .zyErrorBanner($viewModel.errorMessage)
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
         }
+    }
+
+    private var coreContent: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Picker("视图", selection: $viewModel.selectedTab) {
+                    ForEach(ReportingViewModel.Tab.allCases) { tab in
+                        Text(tab.title).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                if viewModel.isLoading {
+                    ProgressView()
+                        .padding(.top, 40)
+                } else {
+                    switch viewModel.selectedTab {
+                    case .daily:
+                        dailySection
+                    case .weekly:
+                        weeklySection
+                    }
+                }
+            }
+            .padding(.vertical)
+        }
+        .navigationTitle("报告")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    switch viewModel.selectedTab {
+                    case .daily:  dailyEditTarget = .new
+                    case .weekly: weeklyEditTarget = .new
+                    }
+                } label: {
+                    Label("新建", systemImage: "plus")
+                }
+            }
+        }
+        .refreshable {
+            await viewModel.fetchReports()
+        }
+        .task {
+            await viewModel.fetchReports()
+        }
+        .sheet(item: $dailyEditTarget) { target in
+            DailyLogEditView(
+                viewModel: viewModel,
+                existingLog: target.log
+            )
+        }
+        .sheet(item: $weeklyEditTarget) { target in
+            WeeklyReportEditView(
+                viewModel: viewModel,
+                existingReport: target.report
+            )
+        }
+        .zyErrorBanner($viewModel.errorMessage)
     }
 
     // ── Daily ────────────────────────────────────────────────────

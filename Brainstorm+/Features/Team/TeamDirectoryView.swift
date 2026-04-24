@@ -20,39 +20,49 @@ public struct TeamDirectoryView: View {
         GridItem(.adaptive(minimum: 160), spacing: BsSpacing.md)
     ]
 
+    // Phase 3: isEmbedded parameterization
+    public let isEmbedded: Bool
+
     @MainActor
-    public init() {
+    public init(isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: TeamDirectoryViewModel())
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.allMembers.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    content
-                }
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    private var coreContent: some View {
+        Group {
+            if viewModel.isLoading && viewModel.allMembers.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                content
             }
-            .background(BsAmbientBackground())
-            .navigationTitle("团队")
-            .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: UUID.self) { userId in
-                TeamMemberDetailView(userId: userId)
-            }
-            .navigationDestination(item: $chatDestination) { channel in
-                ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
-            }
-            .zyErrorBanner($chatError)
-            .searchable(text: $viewModel.searchText,
-                        prompt: viewModel.canViewDetails ? "搜索姓名、部门、职位…" : "搜索姓名、部门…")
-            .task {
-                await viewModel.load(sessionProfile: sessionManager.currentProfile)
-            }
-            .refreshable {
-                await viewModel.load(sessionProfile: sessionManager.currentProfile)
-            }
+        }
+        .background(BsAmbientBackground())
+        .navigationTitle("团队")
+        .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(for: UUID.self) { userId in
+            TeamMemberDetailView(userId: userId)
+        }
+        .navigationDestination(item: $chatDestination) { channel in
+            ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
+        }
+        .zyErrorBanner($chatError)
+        .searchable(text: $viewModel.searchText,
+                    prompt: viewModel.canViewDetails ? "搜索姓名、部门、职位…" : "搜索姓名、部门…")
+        .task {
+            await viewModel.load(sessionProfile: sessionManager.currentProfile)
+        }
+        .refreshable {
+            await viewModel.load(sessionProfile: sessionManager.currentProfile)
         }
     }
 
