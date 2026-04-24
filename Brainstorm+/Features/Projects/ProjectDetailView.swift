@@ -88,6 +88,7 @@ public struct ProjectDetailView: View {
                     } label: {
                         Image(systemName: "pencil")
                             .foregroundColor(BsColor.brandAzure)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .accessibilityLabel("编辑项目")
                     .disabled(viewModel.isDeleting)
@@ -100,6 +101,7 @@ public struct ProjectDetailView: View {
                     } label: {
                         Image(systemName: "trash")
                             .foregroundColor(BsColor.warning)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .accessibilityLabel("删除项目")
                     .disabled(viewModel.isDeleting)
@@ -110,7 +112,7 @@ public struct ProjectDetailView: View {
             if viewModel.isLoading && viewModel.project != nil {
                 ProgressView()
                     .tint(BsColor.brandAzure)
-                    .padding(.top, 8)
+                    .padding(.top, BsSpacing.sm)
             }
         }
         // 2.0: dimmed progress overlay covers the scroll while a delete is in flight to
@@ -122,7 +124,7 @@ public struct ProjectDetailView: View {
                     .tint(BsColor.brandAzure)
                     .padding()
                     .background(BsColor.surfacePrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
             }
         }
         .sheet(isPresented: $isShowingEditSheet) {
@@ -279,7 +281,7 @@ public struct ProjectDetailView: View {
                 foundationScopeNote
             }
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, BsSpacing.sm)
             .padding(.bottom, 40)
         }
     }
@@ -287,7 +289,7 @@ public struct ProjectDetailView: View {
     // MARK: - Sections
 
     private func headerSection(project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: BsSpacing.md) {
             Text(project.name)
                 .font(BsTypography.brandTitle)
                 .foregroundColor(BsColor.ink)
@@ -299,8 +301,8 @@ public struct ProjectDetailView: View {
     private func statusBadge(status: Project.ProjectStatus) -> some View {
         let (label, fg, bg) = Self.statusStyle(for: status)
         return Text(label)
-            .font(BsTypography.inter(12, weight: "SemiBold"))
-            .padding(.horizontal, 12)
+            .font(BsTypography.caption)
+            .padding(.horizontal, BsSpacing.md)
             .padding(.vertical, 6)
             .background(bg)
             .foregroundColor(fg)
@@ -308,7 +310,7 @@ public struct ProjectDetailView: View {
     }
 
     private func metadataSection(project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             if let start = project.startDate {
                 metaRow(icon: "calendar", label: "开始", value: Self.dateFormatter.string(from: start))
             }
@@ -323,7 +325,7 @@ public struct ProjectDetailView: View {
                 metaRow(icon: "clock", label: "创建", value: Self.dateFormatter.string(from: createdAt))
             }
         }
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -348,14 +350,14 @@ public struct ProjectDetailView: View {
     /// Owner-row layout: inline avatar (or person icon fallback) + label + value. Mirrors the
     /// shape of `metaRow` so the metadata card stays visually consistent.
     private func ownerMetaRowLayout(label: String, value: String, avatarUrl: String?) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             ownerAvatarView(urlString: avatarUrl, diameter: 22)
             Text(label)
                 .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
             Spacer()
             Text(value)
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -396,7 +398,7 @@ public struct ProjectDetailView: View {
     }
 
     private func metaRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: BsSpacing.md) {
             Image(systemName: icon)
                 .foregroundColor(BsColor.brandAzure)
                 .frame(width: 20)
@@ -405,7 +407,7 @@ public struct ProjectDetailView: View {
                 .foregroundColor(BsColor.inkMuted)
             Spacer()
             Text(value)
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.ink)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -413,30 +415,30 @@ public struct ProjectDetailView: View {
     }
 
     private func progressSection(project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack {
                 Text("进度")
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 Text("\(project.progress)%")
-                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall)
                     .foregroundColor(BsColor.brandAzure)
             }
             ProgressView(value: Double(min(max(project.progress, 0), 100)) / 100.0)
                 .progressViewStyle(.linear)
                 .tint(BsColor.brandAzure)
         }
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
     }
 
     private func descriptionSection(description: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             Text("项目描述")
-                .font(BsTypography.outfit(16, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text(description)
                 .font(BsTypography.bodySmall)
@@ -444,7 +446,7 @@ public struct ProjectDetailView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -463,20 +465,20 @@ public struct ProjectDetailView: View {
             if viewModel.tasks.isEmpty && viewModel.enrichmentErrors[.tasks] == nil {
                 emptyLine("暂无任务。")
             } else {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
                     ForEach(viewModel.tasks.prefix(8)) { task in
-                        HStack(alignment: .top, spacing: 10) {
+                        HStack(alignment: .top, spacing: BsSpacing.smd) {
                             Image(systemName: "circle")
                                 .foregroundColor(Self.taskStatusColor(task.status))
                                 .frame(width: 16)
-                                .padding(.top, 2)
-                            VStack(alignment: .leading, spacing: 2) {
+                                .padding(.top, BsSpacing.xxs)
+                            VStack(alignment: .leading, spacing: BsSpacing.xxs) {
                                 Text(task.title)
                                     .font(BsTypography.caption)
                                     .foregroundColor(BsColor.ink)
                                     .lineLimit(2)
                                 Text(taskMetaLine(for: task))
-                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .font(BsTypography.captionSmall)
                                     .foregroundColor(BsColor.inkMuted)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
@@ -486,9 +488,9 @@ public struct ProjectDetailView: View {
                     }
                     if viewModel.tasks.count > 8 {
                         Text("还有 \(viewModel.tasks.count - 8) 条")
-                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
-                            .padding(.top, 2)
+                            .padding(.top, BsSpacing.xxs)
                     }
                 }
             }
@@ -511,31 +513,31 @@ public struct ProjectDetailView: View {
             if viewModel.dailyLogs.isEmpty && viewModel.enrichmentErrors[.dailyLogs] == nil {
                 emptyLine("暂无日报。")
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: BsSpacing.smd) {
                     ForEach(viewModel.dailyLogs.prefix(5)) { log in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: BsSpacing.xs) {
                             HStack(spacing: 6) {
                                 Text(log.date)
-                                    .font(BsTypography.inter(12, weight: "SemiBold"))
+                                    .font(BsTypography.caption)
                                     .foregroundColor(BsColor.brandAzure)
                                 if let authorLine = authorLine(forUserId: log.userId) {
                                     Text("·")
-                                        .font(BsTypography.inter(11, weight: "Regular"))
+                                        .font(BsTypography.captionSmall)
                                         .foregroundColor(BsColor.inkMuted)
                                     Text(authorLine)
-                                        .font(BsTypography.inter(11, weight: "Medium"))
+                                        .font(BsTypography.captionSmall)
                                         .foregroundColor(BsColor.inkMuted)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                             }
                             Text(log.content)
-                                .font(BsTypography.inter(13, weight: "Regular"))
+                                .font(BsTypography.bodySmall)
                                 .foregroundColor(BsColor.ink)
                                 .lineLimit(3)
                             if let blockers = log.blockers, !blockers.isEmpty {
                                 Text("阻塞：\(blockers)")
-                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .font(BsTypography.captionSmall)
                                     .foregroundColor(BsColor.warning)
                                     .lineLimit(2)
                             }
@@ -543,7 +545,7 @@ public struct ProjectDetailView: View {
                     }
                     if viewModel.dailyLogs.count > 5 {
                         Text("还有 \(viewModel.dailyLogs.count - 5) 条")
-                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
                     }
                 }
@@ -567,31 +569,31 @@ public struct ProjectDetailView: View {
             if viewModel.weeklySummaries.isEmpty && viewModel.enrichmentErrors[.weeklySummaries] == nil {
                 emptyLine("暂无周报。")
             } else {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: BsSpacing.smd) {
                     ForEach(viewModel.weeklySummaries.prefix(3)) { week in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: BsSpacing.xs) {
                             HStack(spacing: 6) {
                                 Text("\(week.weekStart) 当周")
-                                    .font(BsTypography.inter(12, weight: "SemiBold"))
+                                    .font(BsTypography.caption)
                                     .foregroundColor(BsColor.brandAzure)
                                 if let authorLine = authorLine(forUserId: week.userId) {
                                     Text("·")
-                                        .font(BsTypography.inter(11, weight: "Regular"))
+                                        .font(BsTypography.captionSmall)
                                         .foregroundColor(BsColor.inkMuted)
                                     Text(authorLine)
-                                        .font(BsTypography.inter(11, weight: "Medium"))
+                                        .font(BsTypography.captionSmall)
                                         .foregroundColor(BsColor.inkMuted)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                             }
                             Text(week.summary)
-                                .font(BsTypography.inter(13, weight: "Regular"))
+                                .font(BsTypography.bodySmall)
                                 .foregroundColor(BsColor.ink)
                                 .lineLimit(3)
                             if let highlights = week.highlights, !highlights.isEmpty {
                                 Text("亮点：\(highlights)")
-                                    .font(BsTypography.inter(11, weight: "Regular"))
+                                    .font(BsTypography.captionSmall)
                                     .foregroundColor(BsColor.inkMuted)
                                     .lineLimit(2)
                             }
@@ -599,7 +601,7 @@ public struct ProjectDetailView: View {
                     }
                     if viewModel.weeklySummaries.count > 3 {
                         Text("还有 \(viewModel.weeklySummaries.count - 3) 条")
-                            .font(BsTypography.inter(11, weight: "Medium"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
                     }
                 }
@@ -619,24 +621,24 @@ public struct ProjectDetailView: View {
         errorMessage: String?,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 if let subtitle {
                     Text(subtitle)
-                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .font(BsTypography.captionSmall)
                         .foregroundColor(BsColor.inkMuted)
                 }
             }
             if let errorMessage {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundColor(BsColor.warning)
                     Text("加载失败：\(errorMessage)")
-                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .font(BsTypography.caption)
                         .foregroundColor(BsColor.warning)
                         .lineLimit(3)
                 }
@@ -645,7 +647,7 @@ public struct ProjectDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -653,12 +655,12 @@ public struct ProjectDetailView: View {
 
     private func emptyLine(_ text: String) -> some View {
         Text(text)
-            .font(BsTypography.inter(12, weight: "Regular"))
+            .font(BsTypography.caption)
             .foregroundColor(BsColor.inkMuted)
     }
 
     private func errorBanner(message: String) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: BsSpacing.smd) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundColor(BsColor.warning)
             Text(message)
@@ -667,9 +669,9 @@ public struct ProjectDetailView: View {
                 .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(BsSpacing.md)
         .background(BsColor.warning.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
     // MARK: - 1.8 sublist display helpers
@@ -701,12 +703,12 @@ public struct ProjectDetailView: View {
         // reopen / effectiveness / governance note), generating fresh risk analyses from
         // iOS, and the full risk action management surface.
         Text("生成新的风险分析以及处理结果写回（关闭 / 重开 / 有效性）暂仅支持 Web 端，iOS 后续版本补齐。")
-            .font(BsTypography.inter(12, weight: "Regular"))
+            .font(BsTypography.caption)
             .foregroundColor(BsColor.inkMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
+            .padding(BsSpacing.md)
             .background(BsColor.brandAzureLight.opacity(0.35))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
     // MARK: - 2.2 AI summary foundation section
@@ -722,21 +724,21 @@ public struct ProjectDetailView: View {
     /// - success: structured sections rendered below + "重新生成" button.
     /// - error: isolated warning row + "重试" button.
     private var aiSummarySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack(alignment: .firstTextBaseline) {
                 Text("AI 项目摘要")
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 if let caption = summaryProvenanceCaption(for: viewModel.projectSummary) {
                     Text(caption)
-                        .font(BsTypography.inter(11, weight: "Medium"))
+                        .font(BsTypography.captionSmall)
                         .foregroundColor(BsColor.inkMuted)
                 }
             }
 
             Text("由 Web 端 AI 服务生成 · 涵盖进度简述、已完成亮点、进行中事项、下一步与风险提示。")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -749,7 +751,7 @@ public struct ProjectDetailView: View {
             summaryActionButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -757,7 +759,7 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func projectSummaryContent(summary: ProjectSummary) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: BsSpacing.md) {
             if !summary.snapshotSummary.isEmpty {
                 summarySection(title: "简述", body: summary.snapshotSummary)
             }
@@ -778,12 +780,12 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func summarySection(title: String, body: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text(title)
-                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
             Text(body)
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -791,17 +793,17 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func summaryBulletSection(title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: BsSpacing.xs) {
             Text(title)
-                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: 6) {
                     Text("•")
-                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .font(BsTypography.bodySmall)
                         .foregroundColor(BsColor.inkMuted)
                     Text(item)
-                        .font(BsTypography.inter(13, weight: "Regular"))
+                        .font(BsTypography.bodySmall)
                         .foregroundColor(BsColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -846,7 +848,7 @@ public struct ProjectDetailView: View {
             Button {
                 Task { await viewModel.generateSummary() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     if viewModel.isGeneratingSummary {
                         ProgressView()
                             .progressViewStyle(.circular)
@@ -856,10 +858,10 @@ public struct ProjectDetailView: View {
                         Image(systemName: "sparkles")
                     }
                     Text(label)
-                        .font(BsTypography.inter(13, weight: "SemiBold"))
+                        .font(BsTypography.bodySmall)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.smd)
                 .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
@@ -874,18 +876,18 @@ public struct ProjectDetailView: View {
     }
 
     private func summaryErrorRow(message: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: BsSpacing.sm) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundColor(BsColor.warning)
             Text(message)
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.warning)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(BsSpacing.smd)
         .background(BsColor.warning.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
     private static let generatedAtFormatter: DateFormatter = {
@@ -915,10 +917,10 @@ public struct ProjectDetailView: View {
     /// Supabase Edge Function proxying `askAI`) can drop in a generate action alongside
     /// `refreshRiskAnalysis()` without changing the UI binding.
     private var riskAnalysisSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack(alignment: .firstTextBaseline) {
                 Text("AI 风险分析")
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 if let analysis = viewModel.riskAnalysis {
@@ -927,7 +929,7 @@ public struct ProjectDetailView: View {
             }
 
             Text("由 Web 端 AI 服务生成 · 包含整体风险等级、摘要说明、逐条风险项与处置建议。")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -937,7 +939,7 @@ public struct ProjectDetailView: View {
                 riskAnalysisContent(analysis: analysis)
             } else if viewModel.riskAnalysisNotYetGenerated {
                 Text("Web 端尚未为该项目生成风险分析。")
-                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .font(BsTypography.caption)
                     .foregroundColor(BsColor.inkMuted)
             }
 
@@ -952,7 +954,7 @@ public struct ProjectDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -1002,7 +1004,7 @@ public struct ProjectDetailView: View {
         let isSyncing = viewModel.riskActionSyncPhase == .syncing
         let didSucceed = viewModel.riskActionSyncPhase == .succeeded
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             HStack {
                 Spacer()
                 Button {
@@ -1012,7 +1014,7 @@ public struct ProjectDetailView: View {
                     pendingRiskActionDraft = draft
                     isShowingRiskActionSyncConfirm = true
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: BsSpacing.sm) {
                         if isSyncing {
                             ProgressView()
                                 .progressViewStyle(.circular)
@@ -1022,10 +1024,10 @@ public struct ProjectDetailView: View {
                             Image(systemName: "arrow.triangle.branch")
                         }
                         Text(isSyncing ? "转换中…" : "转为风险动作")
-                            .font(BsTypography.inter(13, weight: "SemiBold"))
+                            .font(BsTypography.bodySmall)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, BsSpacing.lg)
+                    .padding(.vertical, BsSpacing.smd)
                     .background(canSyncRiskAction ? BsColor.warning : BsColor.inkMuted.opacity(0.4))
                     .foregroundColor(.white)
                     .clipShape(Capsule())
@@ -1044,7 +1046,7 @@ public struct ProjectDetailView: View {
                 // iOS pre-gates so the user isn't surprised by an RLS error. The hint
                 // keeps that predictability explicit.
                 Text("转为风险动作需要管理员或经理权限。")
-                    .font(BsTypography.inter(11, weight: "Regular"))
+                    .font(BsTypography.captionSmall)
                     .foregroundColor(BsColor.inkMuted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -1061,13 +1063,13 @@ public struct ProjectDetailView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(BsColor.brandAzure)
                     Text("已转为风险动作，并关联到本次分析。")
-                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .font(BsTypography.caption)
                         .foregroundColor(BsColor.brandAzure)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
+                .padding(BsSpacing.smd)
                 .background(BsColor.brandAzureLight.opacity(0.55))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             }
         }
     }
@@ -1098,18 +1100,18 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func riskAnalysisContent(analysis: ProjectRiskAnalysis) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             if !analysis.summary.isEmpty {
                 Text(analysis.summary)
-                    .font(BsTypography.inter(13, weight: "Regular"))
+                    .font(BsTypography.bodySmall)
                     .foregroundColor(BsColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if !analysis.risks.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
                     Text("风险项")
-                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .font(BsTypography.caption)
                         .foregroundColor(BsColor.inkMuted)
                     ForEach(Array(analysis.risks.enumerated()), id: \.offset) { _, item in
                         riskItemRow(item: item)
@@ -1119,7 +1121,7 @@ public struct ProjectDetailView: View {
 
             if let caption = riskAnalysisProvenanceCaption(for: analysis) {
                 Text(caption)
-                    .font(BsTypography.inter(11, weight: "Medium"))
+                    .font(BsTypography.captionSmall)
                     .foregroundColor(BsColor.inkMuted)
             }
         }
@@ -1135,32 +1137,32 @@ public struct ProjectDetailView: View {
             }
             if !item.title.isEmpty {
                 Text(item.title)
-                    .font(BsTypography.inter(13, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall)
                     .foregroundColor(BsColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !item.description.isEmpty {
                 Text(item.description)
-                    .font(BsTypography.inter(12, weight: "Regular"))
+                    .font(BsTypography.caption)
                     .foregroundColor(BsColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !item.suggestedAction.isEmpty {
-                HStack(alignment: .top, spacing: 4) {
+                HStack(alignment: .top, spacing: BsSpacing.xs) {
                     Text("建议：")
-                        .font(BsTypography.inter(12, weight: "SemiBold"))
+                        .font(BsTypography.caption)
                         .foregroundColor(BsColor.brandAzure)
                     Text(item.suggestedAction)
-                        .font(BsTypography.inter(12, weight: "Regular"))
+                        .font(BsTypography.caption)
                         .foregroundColor(BsColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(BsSpacing.smd)
         .background(BsColor.brandAzureLight.opacity(0.20))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
     private func riskCategoryChip(category: String) -> some View {
@@ -1174,8 +1176,8 @@ public struct ProjectDetailView: View {
             }
         }()
         return Text(label)
-            .font(BsTypography.inter(10, weight: "Medium"))
-            .padding(.horizontal, 8)
+            .font(BsTypography.meta)
+            .padding(.horizontal, BsSpacing.sm)
             .padding(.vertical, 3)
             .background(BsColor.brandAzure.opacity(0.15))
             .foregroundColor(BsColor.brandAzure)
@@ -1194,8 +1196,8 @@ public struct ProjectDetailView: View {
             }
         }()
         return Text(label)
-            .font(BsTypography.inter(10, weight: "SemiBold"))
-            .padding(.horizontal, 8)
+            .font(BsTypography.meta)
+            .padding(.horizontal, BsSpacing.sm)
             .padding(.vertical, 3)
             .background(bg)
             .foregroundColor(fg)
@@ -1218,7 +1220,7 @@ public struct ProjectDetailView: View {
             Button {
                 Task { await viewModel.refreshRiskAnalysis() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     if viewModel.isLoadingRiskAnalysis {
                         ProgressView()
                             .progressViewStyle(.circular)
@@ -1228,10 +1230,10 @@ public struct ProjectDetailView: View {
                         Image(systemName: "shield.checkered")
                     }
                     Text(label)
-                        .font(BsTypography.inter(13, weight: "SemiBold"))
+                        .font(BsTypography.bodySmall)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.smd)
                 .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
@@ -1246,9 +1248,9 @@ public struct ProjectDetailView: View {
     private func riskLevelBadge(level: ProjectRiskAnalysis.RiskLevel) -> some View {
         let (label, fg, bg) = Self.riskLevelStyle(for: level)
         return Text(label)
-            .font(BsTypography.inter(11, weight: "SemiBold"))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .font(BsTypography.label)
+            .padding(.horizontal, BsSpacing.smd)
+            .padding(.vertical, BsSpacing.xs)
             .background(bg)
             .foregroundColor(fg)
             .clipShape(Capsule())
@@ -1293,13 +1295,13 @@ public struct ProjectDetailView: View {
     /// also cleared on the denied path (see `ProjectDetailViewModel.applyDeniedState()`), so
     /// owner / tasks / daily logs / weekly summaries are never rendered for a denied caller.
     private var deniedStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: BsSpacing.lg) {
             ZStack {
                 Circle()
                     .fill(BsColor.warning.opacity(0.12))
                     .frame(width: 96, height: 96)
                 Image(systemName: "lock.shield")
-                    .font(.system(size: 36))
+                    .font(.title)
                     .foregroundColor(BsColor.warning)
             }
             Text("无权访问此项目")
@@ -1309,46 +1311,46 @@ public struct ProjectDetailView: View {
                 .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, BsSpacing.xxl)
         }
         .padding(.vertical, 40)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, BsSpacing.xl)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, BsSpacing.xl)
     }
 
     private func errorStateView(message: String) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: BsSpacing.md) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
+                .font(.title)
                 .foregroundColor(BsColor.warning)
             Text("项目加载失败")
-                .font(BsTypography.outfit(18, weight: "SemiBold"))
+                .font(BsTypography.sectionTitle)
                 .foregroundColor(BsColor.ink)
             Text(message)
-                .font(BsTypography.inter(13, weight: "Regular"))
+                .font(BsTypography.bodySmall)
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, BsSpacing.xxl)
             Button {
                 Task { await reload() }
             } label: {
                 Text("重试")
-                    .font(BsTypography.inter(14, weight: "SemiBold"))
+                    .font(BsTypography.bodySmall)
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, BsSpacing.smd)
                     .background(BsColor.brandAzure)
                     .foregroundColor(.white)
                     .clipShape(Capsule())
             }
         }
-        .padding(.vertical, 32)
-        .padding(.horizontal, 24)
+        .padding(.vertical, BsSpacing.xxl)
+        .padding(.horizontal, BsSpacing.xl)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal, 24)
+        .padding(.horizontal, BsSpacing.xl)
     }
 
     // MARK: - Styling helpers
@@ -1417,22 +1419,22 @@ public struct ProjectDetailView: View {
     /// select) the server action runs. Writing new risk actions ("转为风险动作") remains
     /// Web-only and is explicitly out of scope.
     private var linkedRiskActionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack(alignment: .firstTextBaseline) {
                 Text("已关联风险动作")
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 if viewModel.linkedRiskActionsPhase == .loaded,
                    !viewModel.linkedRiskActions.isEmpty {
-                    Text("\(viewModel.linkedRiskActions.count) linked")
-                        .font(BsTypography.inter(11, weight: "Medium"))
+                    Text("\(viewModel.linkedRiskActions.count) 条已关联")
+                        .font(BsTypography.captionSmall)
                         .foregroundColor(BsColor.inkMuted)
                 }
             }
 
             Text("与当前风险分析关联的动作列表。关闭 / 重开 / 有效性等处理结果写回暂仅支持 Web 端。")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -1445,7 +1447,7 @@ public struct ProjectDetailView: View {
             linkedRiskActionsActionButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -1462,32 +1464,32 @@ public struct ProjectDetailView: View {
 
         case .noRiskAnalysisSource:
             Text("该项目暂无风险分析。请先在 Web 端生成分析，再返回这里查看已关联动作。")
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .empty:
             Text("当前分析尚无关联的风险动作。")
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
 
         case .loaded:
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
                 ForEach(viewModel.linkedRiskActions.prefix(3)) { action in
                     linkedRiskActionRow(action: action)
                 }
                 if viewModel.linkedRiskActions.count > 3 {
-                    Text("+ \(viewModel.linkedRiskActions.count - 3) more on the web dashboard")
-                        .font(BsTypography.inter(11, weight: "Medium"))
+                    Text("还有 \(viewModel.linkedRiskActions.count - 3) 条在 Web 端")
+                        .font(BsTypography.captionSmall)
                         .foregroundColor(BsColor.inkMuted)
-                        .padding(.top, 2)
+                        .padding(.top, BsSpacing.xxs)
                 }
             }
         }
     }
 
     private func linkedRiskActionRow(action: ProjectLinkedRiskAction) -> some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: BsSpacing.smd) {
             Circle()
                 .fill(Self.linkedActionStatusColor(action.status))
                 .frame(width: 8, height: 8)
@@ -1495,7 +1497,7 @@ public struct ProjectDetailView: View {
                 .font(BsTypography.caption)
                 .foregroundColor(BsColor.ink)
                 .lineLimit(2)
-            Spacer(minLength: 8)
+            Spacer(minLength: BsSpacing.sm)
             linkedActionSeverityBadge(severity: action.severity)
         }
     }
@@ -1503,8 +1505,8 @@ public struct ProjectDetailView: View {
     private func linkedActionSeverityBadge(severity: String) -> some View {
         let (label, fg, bg) = Self.linkedActionSeverityStyle(for: severity)
         return Text(label)
-            .font(BsTypography.inter(10, weight: "SemiBold"))
-            .padding(.horizontal, 8)
+            .font(BsTypography.meta)
+            .padding(.horizontal, BsSpacing.sm)
             .padding(.vertical, 3)
             .background(bg)
             .foregroundColor(fg)
@@ -1530,7 +1532,7 @@ public struct ProjectDetailView: View {
             Button {
                 Task { await viewModel.refreshLinkedRiskActions() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(.circular)
@@ -1540,10 +1542,10 @@ public struct ProjectDetailView: View {
                         Image(systemName: "link")
                     }
                     Text(label)
-                        .font(BsTypography.inter(13, weight: "SemiBold"))
+                        .font(BsTypography.bodySmall)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.smd)
                 .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
@@ -1617,22 +1619,22 @@ public struct ProjectDetailView: View {
     /// directly under the same org-scoped RLS that gates other risk reads. No source-of-
     /// truth discrepancy this round.
     private var resolutionFeedbackSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: BsSpacing.smd) {
             HStack(alignment: .firstTextBaseline) {
                 Text("处理结果回流")
-                    .font(BsTypography.outfit(16, weight: "SemiBold"))
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 if viewModel.resolutionFeedbackPhase == .loaded,
                    let feedback = viewModel.resolutionFeedback {
-                    Text("\(feedback.total) tracked")
-                        .font(BsTypography.inter(11, weight: "Medium"))
+                    Text("共 \(feedback.total) 条")
+                        .font(BsTypography.captionSmall)
                         .foregroundColor(BsColor.inkMuted)
                 }
             }
 
             Text("只读 · 处理结果写回与治理干预暂仅支持 Web 端。")
-                .font(BsTypography.inter(11, weight: "Regular"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -1645,7 +1647,7 @@ public struct ProjectDetailView: View {
             resolutionFeedbackActionButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(BsSpacing.lg)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
@@ -1659,19 +1661,19 @@ public struct ProjectDetailView: View {
 
         case .noRiskAnalysisSource:
             Text("该项目暂无风险分析。请先在 Web 端生成分析，再返回这里查看处理结果回流。")
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .empty:
             Text("当前分析还没有跟踪中的风险动作，暂无处理结果可聚合。")
-                .font(BsTypography.inter(12, weight: "Regular"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .loaded:
             if let feedback = viewModel.resolutionFeedback {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: BsSpacing.md) {
                     resolutionCountsRow(feedback: feedback)
                     if feedback.governanceSignal != .none || feedback.isProneToReopen {
                         governanceBanner(feedback: feedback)
@@ -1692,7 +1694,7 @@ public struct ProjectDetailView: View {
         // active / follow-up / reopened. Horizontal scroll avoids compression on narrow
         // widths when all five badges are populated.
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: BsSpacing.sm) {
                 resolutionStatBadge(label: "已解决", count: feedback.resolved,
                                     fg: BsColor.brandAzure, bg: BsColor.brandAzureLight)
                 resolutionStatBadge(label: "已忽略", count: feedback.dismissed,
@@ -1710,11 +1712,11 @@ public struct ProjectDetailView: View {
     private func resolutionStatBadge(label: String, count: Int, fg: Color, bg: Color) -> some View {
         HStack(spacing: 6) {
             Text("\(count)")
-                .font(BsTypography.inter(13, weight: "SemiBold"))
+                .font(BsTypography.bodySmall)
             Text(label)
-                .font(BsTypography.inter(11, weight: "Medium"))
+                .font(BsTypography.captionSmall)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, BsSpacing.smd)
         .padding(.vertical, 6)
         .background(bg)
         .foregroundColor(fg)
@@ -1731,49 +1733,49 @@ public struct ProjectDetailView: View {
         // governance tone, so a green "Intervention effective" banner cannot mute the
         // warning color of the prone-to-reopen subline.
         let (title, tint, bg) = Self.governanceStyle(for: feedback.governanceSignal)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: BsSpacing.xs) {
+            HStack(spacing: BsSpacing.sm) {
                 Image(systemName: feedback.governanceSignal == .interventionEffective
                       ? "checkmark.shield.fill"
                       : "exclamationmark.shield.fill")
                     .foregroundColor(tint)
                 Text(title)
-                    .font(BsTypography.inter(12, weight: "SemiBold"))
+                    .font(BsTypography.caption)
                     .foregroundColor(tint)
             }
             if feedback.isProneToReopen {
                 Text("易重开 · \(feedback.reopenedCount) 个曾重开的动作仍未完全解决。")
-                    .font(BsTypography.inter(11, weight: "Regular"))
+                    .font(BsTypography.captionSmall)
                     .foregroundColor(BsColor.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(BsSpacing.smd)
         .background(bg)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
     private func dominantCategoryRow(category: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "tag")
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundColor(BsColor.inkMuted)
             Text("主要处理方式")
-                .font(BsTypography.inter(11, weight: "Medium"))
+                .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
             Text(Self.humanize(category))
-                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.ink)
         }
     }
 
     private func recentResolutionsList(resolutions: [ProjectResolutionFeedback.RecentResolution]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
             Text("最近治理动作")
-                .font(BsTypography.inter(12, weight: "SemiBold"))
+                .font(BsTypography.caption)
                 .foregroundColor(BsColor.inkMuted)
-                .padding(.top, 2)
+                .padding(.top, BsSpacing.xxs)
             ForEach(Array(resolutions.prefix(3).enumerated()), id: \.offset) { _, resolution in
                 recentResolutionRow(resolution: resolution)
             }
@@ -1781,12 +1783,12 @@ public struct ProjectDetailView: View {
     }
 
     private func recentResolutionRow(resolution: ProjectResolutionFeedback.RecentResolution) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: BsSpacing.smd) {
             Circle()
                 .fill(Self.resolutionStatusColor(resolution.status))
                 .frame(width: 8, height: 8)
                 .padding(.top, 6)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: BsSpacing.xs) {
                 Text(resolution.title)
                     .font(BsTypography.caption)
                     .foregroundColor(BsColor.ink)
@@ -1797,7 +1799,7 @@ public struct ProjectDetailView: View {
                     }
                     if let dateText = resolvedAtDisplayDate(resolution.resolvedAtRaw) {
                         Text(dateText)
-                            .font(BsTypography.inter(11, weight: "Regular"))
+                            .font(BsTypography.captionSmall)
                             .foregroundColor(BsColor.inkMuted)
                             .lineLimit(1)
                     }
@@ -1810,8 +1812,8 @@ public struct ProjectDetailView: View {
     private func effectivenessCapsule(effectiveness: String) -> some View {
         let (label, fg, bg) = Self.effectivenessStyle(for: effectiveness)
         return Text(label)
-            .font(BsTypography.inter(10, weight: "SemiBold"))
-            .padding(.horizontal, 8)
+            .font(BsTypography.meta)
+            .padding(.horizontal, BsSpacing.sm)
             .padding(.vertical, 3)
             .background(bg)
             .foregroundColor(fg)
@@ -1863,7 +1865,7 @@ public struct ProjectDetailView: View {
             Button {
                 Task { await viewModel.refreshResolutionFeedback() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: BsSpacing.sm) {
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(.circular)
@@ -1873,10 +1875,10 @@ public struct ProjectDetailView: View {
                         Image(systemName: "checkmark.seal")
                     }
                     Text(label)
-                        .font(BsTypography.inter(13, weight: "SemiBold"))
+                        .font(BsTypography.bodySmall)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.smd)
                 .background(BsColor.brandAzure)
                 .foregroundColor(.white)
                 .clipShape(Capsule())
