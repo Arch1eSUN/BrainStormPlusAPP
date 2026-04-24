@@ -39,7 +39,7 @@ public struct MessagesView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Segmented picker — v1.1: 单色 Azure tint 选中态
-                Picker("", selection: $selected) {
+                Picker("切换聊天或通知", selection: $selected) {
                     ForEach(MessagesSubTab.allCases) { tab in
                         Text(tab.label).tag(tab)
                     }
@@ -49,6 +49,8 @@ public struct MessagesView: View {
                 .padding(.top, BsSpacing.sm)
                 .padding(.bottom, BsSpacing.sm)
                 .tint(BsColor.brandAzure)
+                .accessibilityLabel("消息分类")
+                .accessibilityHint("聊天或通知")
 
                 Divider()
                     .opacity(0.4)

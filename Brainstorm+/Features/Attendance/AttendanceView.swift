@@ -249,18 +249,48 @@ public struct AttendanceView: View {
     @ViewBuilder
     private var messageBanner: some View {
         if let msg = viewModel.successMessage {
-            Text(msg)
-                .font(BsTypography.caption)
-                .foregroundStyle(BsColor.success)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.move(edge: .top).combined(with: .opacity))
+            HStack(spacing: BsSpacing.xs) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(.caption))
+                Text(msg)
+                    .font(BsTypography.caption)
+            }
+            .foregroundStyle(BsColor.success)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.move(edge: .top).combined(with: .opacity))
         } else if let err = viewModel.errorMessage {
-            Text(err)
-                .font(BsTypography.caption)
-                .foregroundStyle(BsColor.danger)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.move(edge: .top).combined(with: .opacity))
+            // 分辨错误类型：定位 / 网络 / 其他 —— 让用户知道下一步该做什么
+            HStack(spacing: BsSpacing.xs) {
+                Image(systemName: errorIcon(for: err))
+                    .font(.system(.caption, weight: .semibold))
+                Text(err)
+                    .font(BsTypography.caption)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                Button {
+                    Haptic.light()
+                    Task { await viewModel.punch() }
+                } label: {
+                    Text("重试")
+                        .font(BsTypography.captionSmall.weight(.semibold))
+                        .foregroundStyle(BsColor.brandAzure)
+                }
+                .buttonStyle(.plain)
+            }
+            .foregroundStyle(BsColor.danger)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
+    }
+
+    private func errorIcon(for message: String) -> String {
+        if message.contains("定位") || message.contains("位置") || message.contains("围栏") {
+            return "location.slash"
+        }
+        if message.contains("网络") || message.contains("超时") || message.contains("连接") {
+            return "wifi.exclamationmark"
+        }
+        return "exclamationmark.triangle.fill"
     }
 
     // MARK: - Summary grid (上班 / 下班 / 工时 / 状态)
@@ -334,11 +364,11 @@ public struct AttendanceView: View {
 
     private var fenceLabel: String {
         switch viewModel.fenceState {
-        case .idle: return viewModel.hasLocation ? "待打卡" : "等待定位"
+        case .idle: return viewModel.hasLocation ? "可打卡" : "等待定位"
         case .acquiring: return "正在获取位置…"
         case .inFence: return "已在围栏内"
-        case .outOfFence: return "围栏外,请靠近"
-        case .error: return "定位/网络失败"
+        case .outOfFence: return "围栏外，请靠近"
+        case .error: return "定位或网络失败"
         }
     }
 
@@ -364,8 +394,13 @@ public struct AttendanceView: View {
 
     private static func fmtHours(_ h: Double?) -> String {
         guard let h else { return "—" }
-        let whole = Int(h)
-        let mins = Int(round((h - Double(whole)) * 60))
+        // 极端值保护：负数 / NaN / 超过 24h 都按合理上限回退
+        guard h.isFinite, h >= 0 else { return "—" }
+        let clamped = min(h, 99.9)
+        let whole = Int(clamped)
+        let mins = Int(round((clamped - Double(whole)) * 60))
+        // round up 导致 mins == 60 时的进位
+        if mins == 60 { return "\(whole + 1)h0m" }
         return "\(whole)h\(mins)m"
     }
 

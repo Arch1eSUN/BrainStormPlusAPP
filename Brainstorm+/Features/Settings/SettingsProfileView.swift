@@ -103,16 +103,17 @@ public struct SettingsProfileView: View {
             }
 
             // Editable fields
-            editableField(label: "姓名", text: $viewModel.fullName, placeholder: "姓名")
-            editableField(label: "显示名称", text: $viewModel.displayName, placeholder: "显示名称（可选）")
+            editableField(label: "姓名", text: $viewModel.fullName, placeholder: "请输入真实姓名", contentType: .name)
+            editableField(label: "显示名称", text: $viewModel.displayName, placeholder: "同事看到的昵称（可选）", contentType: .nickname)
             editableField(
                 label: "电话",
                 text: $viewModel.phone,
-                placeholder: "手机号码",
-                keyboard: .phonePad
+                placeholder: "11 位手机号",
+                keyboard: .phonePad,
+                contentType: .telephoneNumber
             )
-            editableField(label: "部门", text: $viewModel.department, placeholder: "所在部门")
-            editableField(label: "职位", text: $viewModel.position, placeholder: "职位名称")
+            editableField(label: "部门", text: $viewModel.department, placeholder: "例：产品部 / 技术部", contentType: .organizationName)
+            editableField(label: "职位", text: $viewModel.position, placeholder: "例：产品经理 / iOS 工程师", contentType: .jobTitle)
         } header: {
             Text("个人资料")
         }
@@ -123,7 +124,8 @@ public struct SettingsProfileView: View {
         label: String,
         text: Binding<String>,
         placeholder: String,
-        keyboard: UIKeyboardType = .default
+        keyboard: UIKeyboardType = .default,
+        contentType: UITextContentType? = nil
     ) -> some View {
         HStack(alignment: .center, spacing: BsSpacing.md) {
             Text(label)
@@ -134,10 +136,13 @@ public struct SettingsProfileView: View {
                 .font(BsTypography.body)
                 .foregroundStyle(viewModel.canEditProfile ? BsColor.ink : BsColor.inkMuted)
                 .keyboardType(keyboard)
+                .textContentType(contentType)
+                .submitLabel(.done)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .disabled(!viewModel.canEditProfile)
                 .multilineTextAlignment(.trailing)
+                .accessibilityLabel(label)
         }
     }
 

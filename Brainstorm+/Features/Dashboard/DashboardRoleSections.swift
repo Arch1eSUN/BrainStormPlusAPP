@@ -385,7 +385,7 @@ private struct MonthlySnapshotSection: View {
             label: "本月快照",
             accessory: {
                 if snapshot.flexibleHours {
-                    AnyView(BsBadge("弹性", tone: .coral, size: .small))
+                    AnyView(BsTagPill("弹性工时", tone: .admin, icon: "clock.arrow.circlepath"))
                 } else {
                     AnyView(EmptyView())
                 }
@@ -568,9 +568,11 @@ private struct ObjectiveRow: View {
                     .font(BsTypography.caption)
                     .foregroundStyle(BsColor.ink)
                     .lineLimit(1)
-                Text("\(obj.krCount) KRs · \(obj.period)")
+                    .truncationMode(.middle)
+                Text("\(obj.krCount) 个 KR · \(obj.period)")
                     .font(BsTypography.meta)
                     .foregroundStyle(BsColor.inkMuted)
+                    .lineLimit(1)
             }
             Spacer()
         }
@@ -619,7 +621,7 @@ private struct RecentActivitySection: View {
             }
         ) {
             if activity.isEmpty {
-                EmptyStateCard(iconName: "clock", title: "暂无近期动态", hint: nil)
+                EmptyStateCard(iconName: "clock", title: "暂无近期动态", hint: "团队成员开始行动后将在此显示")
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(activity.enumerated()), id: \.element.id) { index, entry in
@@ -640,12 +642,28 @@ private struct RecentActivitySection: View {
 private struct ActivityRow: View {
     let entry: DashboardWidgetsViewModel.ActivityEntry
 
-    private static let dateFormatter: DateFormatter = {
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.unitsStyle = .short
+        return f
+    }()
+
+    private static let fallbackFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
         f.dateFormat = "M月d日 HH:mm"
         return f
     }()
+
+    /// 近 24h 用相对时间（"3 分钟前"），更久用绝对日期避免"5 天前"这种模糊描述。
+    private func formatTime(_ d: Date) -> String {
+        let diff = abs(d.timeIntervalSinceNow)
+        if diff < 60 * 60 * 24 {
+            return Self.relativeFormatter.localizedString(for: d, relativeTo: Date())
+        }
+        return Self.fallbackFormatter.string(from: d)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: BsSpacing.sm + 2) {
@@ -654,11 +672,14 @@ private struct ActivityRow: View {
                     Text(entry.userName)
                         .font(BsTypography.caption)
                         .foregroundStyle(BsColor.ink)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Spacer()
                     if let d = entry.createdAt {
-                        Text(Self.dateFormatter.string(from: d))
+                        Text(formatTime(d))
                             .font(BsTypography.meta)
                             .foregroundStyle(BsColor.inkMuted)
+                            .monospacedDigit()
                     }
                 }
                 if let label = ActivityActionLabels.describe(entry.action) {
@@ -693,7 +714,7 @@ private struct ApprovalSummaryCard: View {
                 HStack(spacing: BsSpacing.sm) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(BsColor.success)
-                    Text("全部已处理")
+                    Text("审批已全部处理")
                         .font(BsTypography.bodyMedium)
                         .foregroundStyle(BsColor.ink)
                 }
@@ -1008,10 +1029,15 @@ private struct ExecutiveKPIsCard: View {
             }
         ) {
             if isEmpty {
-                Text("今日暂无数据")
-                    .font(BsTypography.bodySmall)
-                    .foregroundStyle(BsColor.inkMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: BsSpacing.xs) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(.footnote))
+                        .foregroundStyle(BsColor.inkFaint)
+                    Text("今日暂无经营数据 · 下拉可刷新")
+                        .font(BsTypography.bodySmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: BsSpacing.sm) {
                     BsStatTileRow([

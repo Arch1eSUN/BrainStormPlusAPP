@@ -34,15 +34,15 @@ public struct ChatListView: View {
             VStack(spacing: 0) {
                 Group {
                     if viewModel.isLoading && viewModel.channels.isEmpty {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Skeleton 行匹配 channelRow 实际高度，比 ProgressView 更少抖动
+                        channelSkeleton
                     } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
                         searchResultsList
                     } else if viewModel.channels.isEmpty {
                         BsEmptyState(
-                            title: "暂无消息",
+                            title: "还没有会话",
                             systemImage: "message",
-                            description: "你还没有进行中的会话。"
+                            description: "点击右上角的笔图标，开始一段对话"
                         )
                     } else {
                         channelList
@@ -111,6 +111,38 @@ public struct ChatListView: View {
         }
     }
 
+    // MARK: - Skeleton
+
+    /// Loading skeleton —— 匹配 channelRow 高度避免首屏跳动
+    @ViewBuilder
+    private var channelSkeleton: some View {
+        VStack(spacing: BsSpacing.md) {
+            ForEach(0..<6, id: \.self) { _ in
+                HStack(spacing: BsSpacing.lg) {
+                    Circle()
+                        .fill(BsColor.inkFaint.opacity(0.18))
+                        .frame(width: 50, height: 50)
+                    VStack(alignment: .leading, spacing: BsSpacing.xs) {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(BsColor.inkFaint.opacity(0.18))
+                            .frame(height: 14)
+                            .frame(maxWidth: 160, alignment: .leading)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(BsColor.inkFaint.opacity(0.12))
+                            .frame(height: 11)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.xs)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, BsSpacing.md)
+        .shimmer()
+        .accessibilityLabel("正在加载会话")
+    }
+
     // MARK: - Channel list
 
     @ViewBuilder
@@ -148,24 +180,33 @@ public struct ChatListView: View {
             }
 
             VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                HStack {
+                HStack(spacing: BsSpacing.xs) {
                     Text(channel.name)
                         .font(BsTypography.cardTitle)
                         .foregroundStyle(BsColor.ink)
-                    Spacer()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: BsSpacing.xs)
                     Text(ChatDateFormatter.format(channel.lastMessageAt))
                         .font(BsTypography.captionSmall)
                         .foregroundStyle(BsColor.inkMuted)
+                        .monospacedDigit()
+                        .layoutPriority(1)
                 }
 
-                Text(channel.lastMessage ?? "暂无消息")
+                Text(channel.lastMessage?.isEmpty == false
+                     ? channel.lastMessage!
+                     : "尚无消息 · 发一条开始聊天")
                     .font(BsTypography.bodySmall)
-                    .foregroundStyle(BsColor.inkMuted)
+                    .foregroundStyle(channel.lastMessage?.isEmpty == false
+                                      ? BsColor.inkMuted
+                                      : BsColor.inkFaint)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
         }
         .padding(.vertical, BsSpacing.xs)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Search results
@@ -173,7 +214,13 @@ public struct ChatListView: View {
     @ViewBuilder
     private var searchResultsList: some View {
         if viewModel.isSearching && viewModel.searchResults.isEmpty {
-            ProgressView()
+            VStack(spacing: BsSpacing.sm) {
+                ProgressView()
+                Text("正在搜索消息…")
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.searchResults.isEmpty {
             ContentUnavailableView.search(text: viewModel.searchQuery)
         } else {

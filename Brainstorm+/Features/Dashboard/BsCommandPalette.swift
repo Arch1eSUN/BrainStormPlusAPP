@@ -29,6 +29,9 @@ public struct BsCommandPalette: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var searchQuery: String = ""
+    /// Debounced search value — updated 180ms after user stops typing so
+    /// filtering + stagger recompute don't thrash on every keystroke.
+    @State private var debouncedQuery: String = ""
 
     // MARK: - Module catalog
 
@@ -161,7 +164,7 @@ public struct BsCommandPalette: View {
     }
 
     private var visibleModules: [ModuleEntry] {
-        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        let q = debouncedQuery.trimmingCharacters(in: .whitespaces)
         return allModules.filter { m in
             guard isAccessible(m) else { return false }
             if q.isEmpty { return true }
@@ -204,8 +207,18 @@ public struct BsCommandPalette: View {
             .searchable(
                 text: $searchQuery,
                 placement: .navigationBarDrawer(displayMode: .always),
-                prompt: "搜索应用"
+                prompt: "搜索模块名称（如 考勤 / OKR / 审计）"
             )
+            .onChange(of: searchQuery) { _, newValue in
+                // Debounce: 180ms after last keystroke push into debouncedQuery.
+                // Cheap enough for local in-memory filter, but avoids rebuilding
+                // the grouped grid + re-running stagger animations per-char.
+                Task { @MainActor in
+                    let snapshot = newValue
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+                    if snapshot == searchQuery { debouncedQuery = snapshot }
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -234,9 +247,10 @@ public struct BsCommandPalette: View {
     @ViewBuilder
     private func categorySection(category: ModuleCategory, items: [ModuleEntry], categoryIndex: Int) -> some View {
         VStack(alignment: .leading, spacing: BsSpacing.md) {
-            Text(category.rawValue)
-                .font(.custom("Inter-SemiBold", size: 15))
-                .foregroundStyle(BsColor.ink)
+            // Polish: unify section headers with BsSectionTitle so palette
+            // picks up the Coral underline accent + uppercase tracking
+            // shared across Dashboard/OKR/Reporting surfaces.
+            BsSectionTitle(category.rawValue, accent: sectionAccent(for: category))
                 .padding(.horizontal, BsSpacing.xs)
 
             LazyVGrid(
@@ -291,20 +305,32 @@ public struct BsCommandPalette: View {
         .simultaneousGesture(TapGesture().onEnded { Haptic.light() })
     }
 
-    private var emptyState: some View {
-        VStack(spacing: BsSpacing.md) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 40, weight: .light))
-                .foregroundStyle(BsColor.inkFaint)
-            Text("没有匹配的应用")
-                .font(BsTypography.cardTitle)
-                .foregroundStyle(BsColor.ink)
-            Text("试试别的关键词，或清空搜索")
-                .font(BsTypography.bodySmall)
-                .foregroundStyle(BsColor.inkMuted)
+    /// Category → section accent mapping so each group has a distinct
+    /// visual anchor (Coral for 常用/管理 admin-tier warmth, Mint for 协作,
+    /// Azure for 业务).
+    private func sectionAccent(for category: ModuleCategory) -> BsSectionAccent {
+        switch category {
+        case .daily:    return .coral
+        case .collab:   return .mint
+        case .business: return .azure
+        case .admin:    return .coral
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        // Polish: reuse design-system ContentUnavailableView wrapper so the
+        // palette's "no match" state matches every other list surface.
+        let q = debouncedQuery.trimmingCharacters(in: .whitespaces)
+        BsEmptyState(
+            title: q.isEmpty ? "当前无可用应用" : "没有匹配“\(q)”的应用",
+            systemImage: "sparkle.magnifyingglass",
+            description: q.isEmpty
+                ? "请联系管理员为你开通所需模块权限。"
+                : "试试模块中文名（如 考勤 / 汇报 / OKR），或清空搜索后浏览全部分类。"
+        )
         .frame(maxWidth: .infinity)
-        .padding(BsSpacing.xxxl)
+        .padding(.vertical, BsSpacing.xxl)
     }
 }
 

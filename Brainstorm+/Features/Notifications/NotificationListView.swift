@@ -53,8 +53,7 @@ public struct NotificationListView: View {
 
             Group {
                 if viewModel.isLoading && viewModel.notifications.isEmpty {
-                    ProgressView()
-                        .scaleEffect(1.2)
+                    notificationSkeleton
                 } else if filteredNotifications.isEmpty {
                     VStack(spacing: BsSpacing.md) {
                         filterChipRow
@@ -62,9 +61,11 @@ public struct NotificationListView: View {
                             .padding(.top, BsSpacing.xs)
 
                         BsEmptyState(
-                            title: filter == .unread ? "没有未读通知" : "暂无通知",
-                            systemImage: "bell.slash",
-                            description: "一切安好"
+                            title: filter == .unread ? "全部已读" : "暂无通知",
+                            systemImage: filter == .unread ? "envelope.open" : "bell.slash",
+                            description: filter == .unread
+                                ? "最近没有新的提醒"
+                                : "新任务、审批与消息会在此汇总"
                         )
                         .padding(.top, BsSpacing.xxl + 8)
 
@@ -113,10 +114,11 @@ public struct NotificationListView: View {
                         Haptic.medium()
                         Task { await viewModel.markAllAsRead() }
                     } label: {
-                        Image(systemName: "checkmark.circle.badge.xmark")
-                            .foregroundStyle(BsColor.brandCoral)
+                        Label("全部已读", systemImage: "envelope.open.fill")
+                            .font(BsTypography.captionSmall.weight(.semibold))
+                            .foregroundStyle(BsColor.brandAzure)
                     }
-                    .accessibilityLabel("全部已读")
+                    .accessibilityLabel("全部标记为已读")
                 }
             }
         }
@@ -129,15 +131,45 @@ public struct NotificationListView: View {
         .zyErrorBanner($viewModel.errorMessage)
     }
 
+    /// Loading skeleton —— 行高对齐 NotificationCardView 视觉密度
+    @ViewBuilder
+    private var notificationSkeleton: some View {
+        VStack(spacing: BsSpacing.md) {
+            ForEach(0..<5, id: \.self) { _ in
+                HStack(alignment: .top, spacing: BsSpacing.md) {
+                    Circle()
+                        .fill(BsColor.inkFaint.opacity(0.18))
+                        .frame(width: 36, height: 36)
+                    VStack(alignment: .leading, spacing: 6) {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(BsColor.inkFaint.opacity(0.18))
+                            .frame(height: 13)
+                            .frame(maxWidth: 210, alignment: .leading)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(BsColor.inkFaint.opacity(0.12))
+                            .frame(height: 11)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, BsSpacing.lg)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, BsSpacing.lg)
+        .shimmer()
+        .accessibilityLabel("正在加载通知")
+    }
+
     @ViewBuilder
     private var filterChipRow: some View {
         HStack(spacing: BsSpacing.sm) {
             ForEach(Filter.allCases) { f in
                 chip(
-                    label: f == .unread && unreadCount > 0 ? "未读 (\(unreadCount))" : f.displayLabel,
+                    label: f == .unread && unreadCount > 0 ? "未读 · \(unreadCount)" : f.displayLabel,
                     isSelected: filter == f
                 ) {
-                    Haptic.rigid()
+                    // rigid → light：filter 切换是轻量操作，rigid 在这里偏重
+                    Haptic.light()
                     filter = f
                 }
             }

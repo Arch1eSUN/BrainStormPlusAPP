@@ -342,12 +342,8 @@ struct DashboardView: View {
     // MARK: - Schedule section
 
     private var scheduleSectionHeader: some View {
-        HStack {
-            Text("今日班次")
-                .font(BsTypography.label)
-                .foregroundStyle(BsColor.inkMuted)
-                .tracking(0.8)
-                .textCase(.uppercase)
+        HStack(alignment: .bottom) {
+            BsSectionTitle("今日班次", accent: .coral)
             Spacer()
             NavigationLink(destination: ScheduleView(isEmbedded: true)) {
                 HStack(spacing: 2) {
@@ -378,10 +374,15 @@ struct DashboardView: View {
                 .frame(width: 44, height: 44)
                 .background(BsColor.brandAzure.opacity(0.06))
                 .clipShape(Circle())
-            Text("今日暂无排班")
-                .font(BsTypography.bodyMedium)
-                .foregroundStyle(BsColor.inkMuted)
-            Spacer()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("今日暂无排班")
+                    .font(BsTypography.bodyMedium)
+                    .foregroundStyle(BsColor.ink)
+                Text("休息日 · 下拉可刷新最新班表")
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
+            }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, BsSpacing.lg)
         .padding(.vertical, BsSpacing.lg)

@@ -119,7 +119,7 @@ public struct SettingsView: View {
                     }
                 }
             } message: {
-                Text("确定要退出 BrainStorm+ 吗？")
+                Text("退出后需要重新登录才能查看考勤、审批与通知。")
             }
         }
     }
@@ -158,6 +158,8 @@ public struct SettingsView: View {
             }
         }
         .padding(.vertical, 20)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("查看并编辑个人资料")
     }
 
     // v1.1: admin 入口已永久迁到 BsCommandPalette 的"管理"分组。

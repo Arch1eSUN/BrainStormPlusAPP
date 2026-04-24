@@ -70,6 +70,7 @@ public struct SettingsNotificationsView: View {
                         .font(BsTypography.captionSmall)
                         .foregroundStyle(BsColor.inkMuted)
                 }
+                .accessibilityElement(children: .combine)
             }
             .tint(BsColor.brandAzure)
             .onChange(of: viewModel.pushNotifications) { _, _ in Haptic.light() }
@@ -83,6 +84,7 @@ public struct SettingsNotificationsView: View {
                         .font(BsTypography.captionSmall)
                         .foregroundStyle(BsColor.inkMuted)
                 }
+                .accessibilityElement(children: .combine)
             }
             .tint(BsColor.brandAzure)
             .onChange(of: viewModel.emailNotifications) { _, _ in Haptic.light() }
@@ -151,6 +153,7 @@ public struct SettingsNotificationsView: View {
                     .font(BsTypography.captionSmall)
                     .foregroundStyle(BsColor.inkMuted)
             }
+            .accessibilityElement(children: .combine)
         }
         .tint(BsColor.brandAzure)
     }
@@ -185,7 +188,7 @@ public struct SettingsNotificationsView: View {
         } header: {
             Text("免打扰时段")
         } footer: {
-            Text("在此时段内不会推送通知。跨日区间（如 22:00 – 08:00）会自动识别为次日凌晨结束。")
+            Text("在此时段内不会推送通知；重要消息仍会进入通知列表。跨日区间（如 22:00 – 08:00）自动识别为次日凌晨结束。")
         }
     }
 

@@ -42,14 +42,17 @@ public struct BsOnboardingOverlay: View {
                         Haptic.light()
                         onDismiss()
                     } label: {
+                        // Polish: step down to caption weight so the tertiary
+                        // "skip" never competes with the primary CTA for focus.
                         Text("跳过")
-                            .font(BsTypography.bodyMedium)
+                            .font(BsTypography.caption)
                             .foregroundStyle(BsColor.inkMuted)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .glassEffect(.regular.interactive(), in: Capsule())
                     }
                     .accessibilityLabel("跳过引导")
+                    .accessibilityHint("直接进入 BrainStorm+ 工作台")
                 }
                 .padding(.horizontal, BsSpacing.lg)
                 .padding(.top, BsSpacing.xs)
@@ -89,10 +92,19 @@ public struct BsOnboardingOverlay: View {
                     .fill(idx == currentStep ? BsColor.brandAzure : BsColor.inkFaint.opacity(0.3))
                     .frame(width: idx == currentStep ? 22 : 8, height: 8)
                     .animation(BsMotion.Anim.overshoot, value: currentStep)
+                    // Polish: let users tap a dot to jump — improves discovery
+                    // without stealing weight from the primary CTA.
+                    .contentShape(Rectangle().inset(by: -8))
+                    .onTapGesture {
+                        guard idx != currentStep else { return }
+                        Haptic.soft()
+                        withAnimation(BsMotion.Anim.overshoot) { currentStep = idx }
+                    }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("第 \(currentStep + 1) 步 共 \(totalSteps) 步")
+        .accessibilityLabel("引导进度")
+        .accessibilityValue("第 \(currentStep + 1) 步，共 \(totalSteps) 步")
     }
 
     // MARK: - Primary CTA

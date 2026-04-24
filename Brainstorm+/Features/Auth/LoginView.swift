@@ -160,15 +160,18 @@ struct LoginView: View {
                 label: "工作邮箱 / 用户名",
                 field: .account
             ) {
-                TextField("you@company.com", text: $account)
+                TextField("邮箱 / 用户名 / 工号", text: $account)
                     .textContentType(.username)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .submitLabel(.next)
                     .focused($focusedField, equals: .account)
+                    .onSubmit { focusedField = .password }
                     .onChange(of: focusedField) { _, new in
                         if new == .account { Haptic.soft() }
                     }
+                    .accessibilityLabel("工作邮箱或用户名")
             }
 
             liquidField(
@@ -181,12 +184,15 @@ struct LoginView: View {
                 },
                 field: .password
             ) {
-                SecureField("••••••••", text: $password)
+                SecureField("8-20 位，含数字字母", text: $password)
                     .textContentType(.password)
+                    .submitLabel(.go)
                     .focused($focusedField, equals: .password)
+                    .onSubmit { handleLogin() }
                     .onChange(of: focusedField) { _, new in
                         if new == .password { Haptic.soft() }
                     }
+                    .accessibilityLabel("登录密码")
             }
         }
     }
@@ -282,8 +288,14 @@ struct LoginView: View {
 
     private func handleLogin() {
         let trimmed = account.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !password.isEmpty else {
-            triggerShake(message: "请填写完整")
+        guard !trimmed.isEmpty else {
+            focusedField = .account
+            triggerShake(message: "请输入账号")
+            return
+        }
+        guard !password.isEmpty else {
+            focusedField = .password
+            triggerShake(message: "请输入密码")
             return
         }
 
@@ -350,8 +362,8 @@ private enum LoginResolveError: LocalizedError {
     case unknownUsername, network
     var errorDescription: String? {
         switch self {
-        case .unknownUsername: return "用户名不存在"
-        case .network:         return "网络错误，请重试"
+        case .unknownUsername: return "账号不存在，请检查邮箱 / 用户名 / 工号是否正确"
+        case .network:         return "网络连接不稳定，请检查后重试"
         }
     }
 }
