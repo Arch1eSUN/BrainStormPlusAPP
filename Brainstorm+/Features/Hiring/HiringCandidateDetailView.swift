@@ -15,20 +15,16 @@ public struct HiringCandidateDetailView: View {
     }
 
     public var body: some View {
+        candidateContent
+    }
+
+    // MARK: - Body content（拆出来避免主 body 类型推断超时）
+
+    @ViewBuilder
+    private var candidateContent: some View {
         Group {
             if let candidate = viewModel.candidate {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        header(candidate)
-                        contactSection(candidate)
-                        statusSection(candidate)
-                        aiReviewSection(candidate)
-                        resumeScoreSection(candidate)
-                        resumeSection(candidate)
-                        notesSection(candidate)
-                    }
-                    .padding()
-                }
+                candidateScrollView(candidate)
             } else if viewModel.isLoading {
                 ProgressView().padding(.top, 40)
             } else {
@@ -71,9 +67,7 @@ public struct HiringCandidateDetailView: View {
             Button("发送") {
                 Task { await viewModel.sendOfferEmail() }
             }
-            Button("仅更新状态", role: .cancel) {
-                // noop — 状态已在 transition() 中更新
-            }
+            Button("仅更新状态", role: .cancel) {}
         } message: {
             Text("候选人已进入 Offer 阶段，是否立即发送 Offer 邮件？")
         }
@@ -89,6 +83,22 @@ public struct HiringCandidateDetailView: View {
             }
         }
         .animation(BsMotion.Anim.smooth, value: viewModel.toastMessage)
+    }
+
+    @ViewBuilder
+    private func candidateScrollView(_ candidate: Candidate) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                header(candidate)
+                contactSection(candidate)
+                statusSection(candidate)
+                aiReviewSection(candidate)
+                resumeScoreSection(candidate)
+                resumeSection(candidate)
+                notesSection(candidate)
+            }
+            .padding()
+        }
     }
 
     // MARK: - Sections
