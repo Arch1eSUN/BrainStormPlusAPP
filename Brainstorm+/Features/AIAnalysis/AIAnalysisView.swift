@@ -107,13 +107,13 @@ public struct AIAnalysisView: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Image(systemName: "brain.head.profile")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(.white)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("媒体智能分析")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(.title2, weight: .bold))
                     .foregroundStyle(BsColor.ink)
                 HStack(spacing: 6) {
                     Text("社交媒体内容智能分析 ·")
@@ -144,7 +144,7 @@ public struct AIAnalysisView: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(BsColor.warning)
-                .font(.system(size: 18))
+                .font(.system(.body))
             VStack(alignment: .leading, spacing: 4) {
                 Text("未配置 AI 供应商").font(.subheadline.weight(.semibold)).foregroundStyle(BsColor.warning)
                 Text(msg).font(.caption).foregroundStyle(.orange.opacity(0.85))
@@ -261,7 +261,7 @@ public struct AIAnalysisView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: p.icon)
-                    .font(.system(size: 20))
+                    .font(.system(.title3))
                 Text(p.label)
                     .font(.caption.weight(.medium))
             }
@@ -384,16 +384,16 @@ public struct AIAnalysisView: View {
                     .frame(width: 18, height: 18)
                 if isComplete {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(BsTypography.label)
                         .foregroundStyle(.white)
                 } else {
                     Text("\(idx + 1)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(BsTypography.label)
                         .foregroundStyle(isPending ? Color.secondary : Color.white)
                 }
             }
             Text(phase.label)
-                .font(.system(size: 10, weight: isPending ? .regular : .medium))
+                .font(BsTypography.meta.weight(isPending ? .regular : .medium))
                 .foregroundStyle(isPending ? .secondary : BsColor.ink)
                 .lineLimit(1)
         }
@@ -735,7 +735,7 @@ private struct IntelReportView: View {
     private func infoCell(label: String, valueView: AnyView, fullWidth: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.system(size: 9, weight: .semibold))
+                .font(BsTypography.label)
                 .kerning(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(BsColor.inkMuted)
@@ -782,10 +782,10 @@ private struct IntelReportView: View {
                 ForEach(data) { d in
                     VStack(spacing: 4) {
                         Text("\(d.emoji) \(d.label)")
-                            .font(.system(size: 9))
+                            .font(BsTypography.captionSmall)
                             .foregroundStyle(BsColor.inkMuted)
                         Text(d.value > 0 ? Self.formatInt(d.value) : "—")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(.footnote, weight: .bold))
                             .foregroundStyle(d.value > 0 ? BsColor.ink : .secondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -805,12 +805,12 @@ private struct IntelReportView: View {
     private var contentBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("主题").font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                Text("主题").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                 Text(result.content.theme).font(.caption).foregroundStyle(BsColor.ink)
             }
             if !result.content.sellingPoints.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("核心卖点").font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                    Text("核心卖点").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                     ForEach(Array(result.content.sellingPoints.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .top, spacing: 4) {
                             Text("•").foregroundStyle(BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
@@ -820,7 +820,7 @@ private struct IntelReportView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("目标受众").font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                Text("目标受众").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                 Text(result.content.targetAudience).font(.caption).foregroundStyle(BsColor.ink)
             }
         }
@@ -870,13 +870,13 @@ private struct IntelReportView: View {
             }
             if !p.audienceTargeting.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("定向人群").font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                    Text("定向人群").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                     chipRow(items: p.audienceTargeting, color: BsColor.brandAzure)  // TODO(batch-3): evaluate .indigo → brandAzure
                 }
             }
             if !p.bestTimeSlots.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("最佳投放时段").font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                    Text("最佳投放时段").font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                     chipRow(items: p.bestTimeSlots, color: BsColor.brandMint)
                 }
             }
@@ -886,7 +886,7 @@ private struct IntelReportView: View {
     private func budgetTile(label: String, tier: MediaAnalysisResult.PaidPromotion.Tier, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label).font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
+                Text(label).font(BsTypography.label).textCase(.uppercase).foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Text(tier.dailyCny).font(.caption.weight(.bold)).foregroundStyle(accent)
             }
@@ -920,7 +920,7 @@ private struct IntelReportView: View {
 
     private func keywordGroup(title: String, items: [String], color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 9, weight: .bold)).textCase(.uppercase).foregroundStyle(color)
+            Text(title).font(BsTypography.label).textCase(.uppercase).foregroundStyle(color)
             chipRow(items: items, color: color, prefix: "#")
         }
     }

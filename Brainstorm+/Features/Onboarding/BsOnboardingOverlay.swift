@@ -27,8 +27,9 @@ public struct BsOnboardingOverlay: View {
 
     public var body: some View {
         ZStack {
-            // Backdrop —— 近乎不透明的 pageBackground + ultraThinMaterial 模糊
-            BsColor.pageBackground.opacity(0.98)
+            // Backdrop —— 半透 pageBackground + ultraThinMaterial 模糊（材质才能真正穿透）
+            // 原 opacity 0.98 完全盖死后 material 等于零效果（audit Batch 6 修复）
+            BsColor.pageBackground.opacity(0.6)
                 .background(.ultraThinMaterial)
                 .ignoresSafeArea()
 
