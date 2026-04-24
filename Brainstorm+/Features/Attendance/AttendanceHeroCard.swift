@@ -47,63 +47,66 @@ public struct AttendanceHeroCard: View {
         BsHeroCard(padding: 0) {
             ZStack(alignment: .bottomLeading) {
                 // ─── Liquid fill layer ────────────────────────────────────
-                // ─── 3 层液体栈 ──────────────────────────────────────────
-                // Layer 1 body —— 线性渐变填充（底深 0.55 → 顶浅 0.22），
-                //                  微 0.4pt blur 软化像素级硬边，出液态表面张力
-                // Layer 2 glow  —— 液面下方 3pt 柔光晕（折射/subsurface scattering）
-                // Layer 3 specular —— 液面高光细线（水面反光），gradient white
+                // ─── 粘稠发光能量液（Build Driver 风）──────────────────
+                // 参数走 viscous（honey/molten metal）：amp 小 / freq 长 / 慢速
+                // 4 层栈：
+                //   Layer 0: outer halo — stateColor 在液体外扩散 neon glow
+                //   Layer 1: body gradient — 亮度推到 0.45–0.85 出能量感
+                //   Layer 2: rising bubbles — Canvas 画 7 个气泡持续升起（ clipped to body）
+                //   Layer 3: neon surface line — 白 stroke + stateColor 双层 shadow glow
                 TimelineView(.animation) { ctx in
-                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 2.2
-                    let amp: CGFloat = reduceMotion ? 0 : 12
-                    let freq: CGFloat = 1.6
+                    let t = ctx.date.timeIntervalSinceReferenceDate
+                    let phase = CGFloat(t) * 1.4          // 粘稠慢速（honey-like）
+                    let amp: CGFloat = reduceMotion ? 0 : 9
+                    let freq: CGFloat = 1.2               // 长波长（粘性流体）
                     let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
 
                     ZStack {
-                        // Layer 1: body with gradient（深度感）
+                        // Layer 0: 外层发光 halo
+                        LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                            .fill(stateColor.opacity(0.55))
+                            .blur(radius: 18)
+
+                        // Layer 1: 主体亮渐变
                         LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        stateColor.opacity(0.55),
-                                        stateColor.opacity(0.40),
-                                        stateColor.opacity(0.22),
+                                        stateColor.opacity(0.85),
+                                        stateColor.opacity(0.65),
+                                        stateColor.opacity(0.45),
                                     ],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
                             )
-                            .blur(radius: 0.4)
 
-                        // Layer 2: underside glow（折射 subsurface 感）
-                        LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
-                            .stroke(stateColor.opacity(0.5), lineWidth: 3)
-                            .blur(radius: 3)
-                            .offset(y: 2)
-                            .mask(
-                                // 只保留液面内部的晕光（不透出水面外）
-                                LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
-                            )
+                        // Layer 2: 上升气泡（Canvas，clipped to liquid body）
+                        if !reduceMotion {
+                            Canvas(rendersAsynchronously: true) { gctx, size in
+                                let liquidRect = CGRect(origin: .zero, size: size)
+                                let liquidPath = LiquidFillShape(
+                                    progress: progress, phase: phase, tiltX: tilt,
+                                    amplitude: amp, frequency: freq
+                                ).path(in: liquidRect)
+                                gctx.clip(to: liquidPath)
+                                Self.drawBubbles(into: gctx, size: size, time: t, progress: progress)
+                            }
+                        }
 
-                        // Layer 3: specular surface highlight（水面反射细线）
+                        // Layer 3: neon 水面高光线 + 双层 shadow glow
                         LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.0),
-                                        Color.white.opacity(0.55),
-                                        Color.white.opacity(0.35),
-                                        Color.white.opacity(0.55),
-                                        Color.white.opacity(0.0),
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1.1
-                            )
-                            .blur(radius: 0.3)
+                            .stroke(Color.white.opacity(0.82), lineWidth: 1.4)
+                            .shadow(color: stateColor.opacity(0.95), radius: 3)
+                            .shadow(color: stateColor.opacity(0.55), radius: 9)
                     }
                 }
-                .animation(.smooth(duration: 0.9), value: progress)
+                // 注入/打卡 瞬间：interpolatingSpring underdamped 有 overshoot
+                // 不是 smooth ease —— 是能量冲击的爆发感
+                .animation(
+                    .interpolatingSpring(mass: 1.3, stiffness: 55, damping: 9),
+                    value: progress
+                )
                 .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.55), value: motion.tiltX)
 
                 // ─── Content overlay ──────────────────────────────────────
@@ -297,6 +300,60 @@ public struct AttendanceHeroCard: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+
+    // MARK: - Bubble renderer（上升能量粒子）
+
+    /// 在液体内部画 7 个持续升起的白色气泡粒子（Build Driver 能量感）。
+    /// 每个粒子参数由 index seed 确定：上升速度 / x 抖动 / 半径 / cycle 错相。
+    /// 用 Canvas imperative 画，外层 TimelineView 驱动 time，成本低于 N 个 SwiftUI View。
+    nonisolated fileprivate static func drawBubbles(
+        into ctx: GraphicsContext,
+        size: CGSize,
+        time t: TimeInterval,
+        progress: CGFloat
+    ) {
+        let progressClamped = max(0, min(1, progress))
+        let fillTopY = size.height * (1 - progressClamped)
+        let bubbleBottom = size.height - 4
+        // 液体太浅（< 24pt）就不画气泡，否则挤
+        guard bubbleBottom - fillTopY > 24 else { return }
+
+        let bubbleCount = 7
+        for i in 0..<bubbleCount {
+            let seed = Double(i) * 0.371
+
+            // 每粒气泡周期 2.2 – 4.2 秒（不同速率）
+            let cycle = 2.2 + (1.0 + cos(seed * 2.7)) * 1.0
+            let bubbleT = fmod(t + seed * 5.0, cycle)
+            let rise = bubbleT / cycle   // 0..1 归一化
+
+            // x 位置：7 点均布 + 微幅 x 抖动
+            let xBase = Double(size.width) * (0.1 + Double(i) * 0.117)
+            let xJitter = sin(rise * 3.8 + seed) * 6.0
+            let x = xBase + xJitter
+
+            // y 位置：从底部升到液面
+            let totalRise = Double(bubbleBottom) - Double(fillTopY)
+            let y = Double(bubbleBottom) - rise * totalRise
+
+            // 半径：1.8 – 3.8pt，随 rise 略微膨胀（向上减压）
+            let baseRadius = 1.8 + Double(i % 3) * 0.7
+            let radius = baseRadius * (1.0 + rise * 0.25)
+
+            // alpha：起止 fade in/out
+            let alphaFade: Double
+            if rise < 0.12 { alphaFade = rise / 0.12 }
+            else if rise > 0.82 { alphaFade = max(0, (1.0 - rise) / 0.18) }
+            else { alphaFade = 1.0 }
+            let alpha = 0.55 * alphaFade
+
+            let r = CGFloat(radius)
+            let cx = CGFloat(x)
+            let cy = CGFloat(y)
+            let ellipse = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+            ctx.fill(ellipse, with: .color(.white.opacity(alpha)))
+        }
     }
 }
 
