@@ -65,6 +65,7 @@ public struct PayrollListView: View {
             if viewModel.canEdit {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptic.light()
                         showAdminCreateSheet = true
                     } label: {
                         Image(systemName: "plus")
@@ -102,6 +103,7 @@ public struct PayrollListView: View {
         Picker("查看范围", selection: Binding(
             get: { viewModel.scope },
             set: { newValue in
+                Haptic.selection()
                 Task { await viewModel.setScope(newValue) }
             }
         )) {

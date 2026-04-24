@@ -213,10 +213,10 @@ public struct DeliverableListView: View {
                     .foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Menu {
-                    Button("所有项目") { viewModel.projectFilter = nil }
+                    Button("所有项目") { Haptic.selection(); viewModel.projectFilter = nil }
                     ForEach(viewModel.projects, id: \.id) { p in
                         if let pid = p.id {
-                            Button(p.name ?? "(未命名)") { viewModel.projectFilter = pid }
+                            Button(p.name ?? "(未命名)") { Haptic.selection(); viewModel.projectFilter = pid }
                         }
                     }
                 } label: {
@@ -233,10 +233,10 @@ public struct DeliverableListView: View {
                     .foregroundStyle(BsColor.inkMuted)
                 Spacer()
                 Menu {
-                    Button("所有人") { viewModel.assigneeFilter = nil }
+                    Button("所有人") { Haptic.selection(); viewModel.assigneeFilter = nil }
                     ForEach(viewModel.members, id: \.id) { m in
                         if let mid = m.id {
-                            Button(m.fullName ?? "未命名") { viewModel.assigneeFilter = mid }
+                            Button(m.fullName ?? "未命名") { Haptic.selection(); viewModel.assigneeFilter = mid }
                         }
                     }
                 } label: {
@@ -274,6 +274,7 @@ public struct DeliverableListView: View {
                 if viewModel.dateFrom != nil || viewModel.dateTo != nil
                     || viewModel.projectFilter != nil || viewModel.assigneeFilter != nil {
                     Button("清除") {
+                        Haptic.light()
                         viewModel.dateFrom = nil
                         viewModel.dateTo = nil
                         viewModel.projectFilter = nil

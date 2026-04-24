@@ -259,6 +259,7 @@ public struct OKRListView: View {
             // Header row — tap chevron to expand, tap title area to push detail.
             HStack(spacing: BsSpacing.md) {
                 Button {
+                    Haptic.light()
                     withAnimation(BsMotion.Anim.smooth) {
                         if isOpen { expanded.remove(obj.id) } else { expanded.insert(obj.id) }
                     }
@@ -270,6 +271,7 @@ public struct OKRListView: View {
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isOpen ? "收起关键结果" : "展开关键结果")
 
                 NavigationLink {
                     OKRDetailView(

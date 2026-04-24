@@ -166,6 +166,8 @@ public struct AdminHolidaysView: View {
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
+                            Haptic.rigid()
+                            Haptic.warning()
                             Task { await vm.delete(id: row.id) }
                         } label: {
                             Label("删除", systemImage: "trash")
@@ -179,10 +181,12 @@ public struct AdminHolidaysView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     showAddSheet = true
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("新增公休")
             }
         }
         .sheet(isPresented: $showAddSheet) {
@@ -247,6 +251,7 @@ private struct HolidayAddSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("保存") {
+                        Haptic.medium()
                         let f = DateFormatter()
                         f.calendar = Calendar(identifier: .gregorian)
                         f.locale = Locale(identifier: "en_US_POSIX")

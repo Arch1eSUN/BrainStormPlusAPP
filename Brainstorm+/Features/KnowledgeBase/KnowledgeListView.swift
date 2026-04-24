@@ -223,8 +223,13 @@ public struct KnowledgeListView: View {
                 .buttonStyle(.plain)
                 .contextMenu {
                     if isAdmin {
-                        Button("编辑") { editTarget = .edit(article) }
+                        Button("编辑") {
+                            Haptic.light()
+                            editTarget = .edit(article)
+                        }
                         Button("删除", role: .destructive) {
+                            Haptic.rigid()
+                            Haptic.warning()
                             Task { await viewModel.deleteArticle(article) }
                         }
                     }
@@ -237,11 +242,14 @@ public struct KnowledgeListView: View {
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if isAdmin {
                         Button(role: .destructive) {
+                            Haptic.rigid()
+                            Haptic.warning()
                             Task { await viewModel.deleteArticle(article) }
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
                         Button {
+                            Haptic.light()
                             editTarget = .edit(article)
                         } label: {
                             Label("编辑", systemImage: "pencil")
@@ -273,6 +281,7 @@ public struct KnowledgeListView: View {
                     }
 
                     Button {
+                        Haptic.light()
                         showFileImporter = true
                     } label: {
                         Label("选择文件", systemImage: "doc.badge.plus")

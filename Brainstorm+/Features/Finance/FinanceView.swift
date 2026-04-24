@@ -216,6 +216,7 @@ public struct FinanceView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .onChange(of: viewModel.docType) { _, _ in Haptic.selection() }
             case .reportSummarize:
                 Picker("报表类型", selection: $viewModel.reportType) {
                     ForEach(FinanceReportType.allCases) { t in
@@ -223,6 +224,7 @@ public struct FinanceView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .onChange(of: viewModel.reportType) { _, _ in Haptic.selection() }
             case .dataProcess:
                 Picker("处理类型", selection: $viewModel.processType) {
                     ForEach(FinanceProcessType.allCases) { t in
@@ -230,6 +232,7 @@ public struct FinanceView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .onChange(of: viewModel.processType) { _, _ in Haptic.selection() }
             }
 
             ZStack(alignment: .topLeading) {

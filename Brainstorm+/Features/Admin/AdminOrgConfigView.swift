@@ -118,11 +118,13 @@ public struct AdminOrgConfigView: View {
                         Text(dept)
                         Spacer()
                         Button(role: .destructive) {
+                            Haptic.rigid()
                             vm.departments.remove(at: idx)
                         } label: {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("删除部门 \(dept)")
                     }
                 }
                 HStack {
@@ -146,11 +148,13 @@ public struct AdminOrgConfigView: View {
                         Text(pos)
                         Spacer()
                         Button(role: .destructive) {
+                            Haptic.rigid()
                             vm.positions.remove(at: idx)
                         } label: {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("删除职位 \(pos)")
                     }
                 }
                 HStack {
@@ -181,6 +185,7 @@ public struct AdminOrgConfigView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(vm.isSaving ? "保存中…" : "保存") {
+                    Haptic.medium()
                     Task { await vm.save() }
                 }
                 .disabled(vm.isSaving || vm.isLoading)

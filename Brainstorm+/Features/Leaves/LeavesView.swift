@@ -95,6 +95,7 @@ public struct LeavesView: View {
             Spacer()
 
             Button {
+                Haptic.light()
                 isSubmitPresented = true
             } label: {
                 HStack(spacing: 6) {

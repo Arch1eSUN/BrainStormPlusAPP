@@ -193,6 +193,7 @@ public struct TeamAttendanceView: View {
                 .foregroundStyle(BsColor.brandAzure)
         }
         .frame(width: 40, height: 40)
+        .accessibilityLabel(profile.fullName ?? "用户")
     }
 
     @ViewBuilder
