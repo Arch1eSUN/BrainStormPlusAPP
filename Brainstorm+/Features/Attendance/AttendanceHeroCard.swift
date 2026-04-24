@@ -41,6 +41,29 @@ public struct AttendanceHeroCard: View {
     @StateObject private var motion = BsMotionManager()
     @State private var lowPowerActive: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
 
+    // MARK: - v1.3 色彩状态机（overtime + 跨日重置）
+    //
+    // 状态图：
+    //   .ready       → 空池（progress=0, 不 render 液体 body）
+    //   .clockedIn   → 液体 Azure → Mint 按 progress 线性插值（同色系）
+    //   .done (<8h)  → 定格 Mint
+    //   8h crossing  → Coral 自下而上覆盖（~1.3s rise），Haptic.warning 一次
+    //   overtime     → 液体定格 Coral，不再随 progress 变色
+    //   跨日 (attendance.date 变) → hasHitOvertime 重置，重新开始循环
+
+    /// 今天是否已触发 overtime Coral 覆盖（@AppStorage 持久跨 app 生命周期）
+    @AppStorage("bs_attendance_overtime_today") private var hasHitOvertime: Bool = false
+
+    /// 最后记录的工作日 ISO date（YYYY-MM-DD）用于跨日检测
+    @AppStorage("bs_attendance_last_day") private var lastWorkDay: String = ""
+
+    /// Overtime Coral 自下而上 rise 的 progress（0=完全未覆盖，1=已完全覆盖）
+    /// 动画过渡期间从 0 平滑到 1.0，之后 hasHitOvertime 接管常驻。
+    @State private var overtimeRiseProgress: CGFloat = 0
+
+    /// 正在播放 overtime 覆盖动画（1.3s 窗口），防重复触发
+    @State private var isOvertimeRising: Bool = false
+
     // MARK: - Body
 
     public var body: some View {
@@ -59,41 +82,48 @@ public struct AttendanceHeroCard: View {
                     let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
 
                     ZStack {
-                        // Layer 0: 外层发光 halo（state color - 远场身份感）
+                        // Layer 0: 外层发光 halo（stateColor 决定远场身份感）
                         LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .fill(stateColor.opacity(0.55))
                             .blur(radius: 18)
 
-                        // Layer 1: 主体 3 色温度分层（v1.2 三色液体核心）
-                        //
-                        // 物理类比：深水冷色（Azure/state 主色）→ 中层过渡（Mint）→
-                        //           水面暖色（Coral 反射）。色彩分区有自然合理性，
-                        //           不是并列 3 色条。
-                        //
-                        // 视觉权重（液面满时可见占比）：
-                        //   bottom 60% state color（Azure/Mint/Coral 按状态）
-                        //   middle 25% Mint（永远作过渡层）
-                        //   top    15% Coral（永远作水面暖反射）
-                        //
-                        // 任何状态下 3 色都会出现至少 2 种。打卡中（Azure state）
-                        //   = 全三色；完成（Mint state）= Mint+Coral；加班（Coral
-                        //   state）= Coral+Mint+Coral（橙占比偏多，加班警示感）。
+                        // Layer 1: 液体主体
+                        // - 非 overtime：stateColor 按 progress 从 Azure 插值到 Mint（同色系自然过渡）
+                        // - overtime: liquidBaseColor 变 Coral，常驻
+                        // gradient 纵向用单色系（顶端提亮，底端深）只做深浅，不做跨色
                         LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .fill(
                                 LinearGradient(
-                                    stops: [
-                                        .init(color: stateColor.opacity(0.90), location: 0.00),  // 水最深
-                                        .init(color: stateColor.opacity(0.72), location: 0.25),
-                                        .init(color: BsColor.brandMint.opacity(0.55), location: 0.55), // 中层过渡（永远 Mint）
-                                        .init(color: BsColor.brandMint.opacity(0.42), location: 0.78),
-                                        .init(color: BsColor.brandCoral.opacity(0.38), location: 1.00), // 水面暖反射（永远 Coral）
+                                    colors: [
+                                        liquidBaseColor.opacity(0.90),
+                                        liquidBaseColor.opacity(0.72),
+                                        liquidBaseColor.opacity(0.48),
                                     ],
                                     startPoint: .bottom,
                                     endPoint: .top
                                 )
                             )
 
-                        // Layer 2: neon 水面高光线 + 双层 shadow glow
+                        // Layer 2 (overtime rise overlay): 仅在 8h 跨线的 1.3s 覆盖动画期间出现
+                        // Coral 从 progress=0 升到 progress=1.0 覆盖整个液面（bottom-up）。
+                        // 之后 hasHitOvertime 持久为 true，此 overlay 淡出（overtimeRiseProgress 回 0）。
+                        if isOvertimeRising {
+                            LiquidFillShape(progress: overtimeRiseProgress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            BsColor.brandCoral.opacity(0.92),
+                                            BsColor.brandCoral.opacity(0.72),
+                                            BsColor.brandCoral.opacity(0.50),
+                                        ],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .transition(.opacity)
+                        }
+
+                        // Layer 3: neon 水面高光线 + 双层 shadow glow
                         LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .stroke(Color.white.opacity(0.82), lineWidth: 1.4)
                             .shadow(color: stateColor.opacity(0.95), radius: 3)
@@ -124,6 +154,8 @@ public struct AttendanceHeroCard: View {
             if !reduceMotion && !ProcessInfo.processInfo.isLowPowerModeEnabled {
                 motion.start()
             }
+            // v1.3 · 跨日检测：对齐 attendance.date 字段的 ISO 日期
+            checkNewDayReset()
         }
         .onDisappear { motion.stop() }
         .onChange(of: lowPowerActive) { _, active in
@@ -135,6 +167,14 @@ public struct AttendanceHeroCard: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPowerActive = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+        // v1.3 · 8h crossing 侦测 —— Haptic.warning() + Coral bottom-up rise
+        .onChange(of: progress) { _, newValue in
+            if !hasHitOvertime && !isOvertimeRising
+                && newValue >= 1.0
+                && viewModel.clockState == .clockedIn {
+                triggerOvertimeRise()
+            }
         }
         // Phase 7: Hero 数字 48pt 在 XXXL+ 会炸布局，clamp 到 xxLarge
         // （系统 Large Title 放大范围内封顶，辅助功能用户仍能读出所有文字）
@@ -236,15 +276,38 @@ public struct AttendanceHeroCard: View {
         }
     }
 
+    /// v1.3 · 进度驱动液体底色（Azure 打卡 → Mint 完成 的同色系自然过渡）
+    /// - .ready         → inkFaint
+    /// - .clockedIn     → Azure ↔ Mint 按 progress 线性插值
+    /// - .done (<8h)    → 定格 Mint
+    ///
+    /// 使用 SwiftUI 原生 `Color.mix(with:by:)`（iOS 18+）保持 dynamic color 正确。
     private var stateColor: Color {
         switch viewModel.clockState {
         case .ready:
             return BsColor.inkFaint
         case .clockedIn:
-            return BsColor.brandAzure
+            return BsColor.brandAzure.mix(with: BsColor.brandMint, by: Double(progress))
         case .done:
-            return progress >= 1.0 ? BsColor.brandCoral : BsColor.brandMint
+            return BsColor.brandMint
         }
+    }
+
+    /// 液体主 body 实际使用的色：
+    /// - overtime 已触发 → 定格 Coral
+    /// - 否则 → stateColor (Azure→Mint interpolation)
+    private var liquidBaseColor: Color {
+        hasHitOvertime ? BsColor.brandCoral : stateColor
+    }
+
+    /// 今天 ISO 日期（对齐 Attendance 模型的 date 字段）
+    private static func todayISO() -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
     }
 
     private var statusLabel: String {
@@ -301,6 +364,41 @@ public struct AttendanceHeroCard: View {
         return f.string(from: date)
     }
 
+    // MARK: - v1.3 状态机 transition methods
+
+    /// 8h crossing 瞬间：Coral 自下而上覆盖 rise 动画（1.3s）+ Haptic.warning
+    private func triggerOvertimeRise() {
+        Haptic.warning()
+        isOvertimeRising = true
+        overtimeRiseProgress = 0
+        // Coral 自下而上 rise：0 → 1.0 over 1.3s
+        withAnimation(.smooth(duration: 1.3)) {
+            overtimeRiseProgress = 1.0
+        }
+        // 动画完成后 flip 持久 overtime state，overlay 淡出
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+            withAnimation(.smooth(duration: 0.25)) {
+                hasHitOvertime = true
+                isOvertimeRising = false
+                overtimeRiseProgress = 0
+            }
+        }
+    }
+
+    /// 跨日检测：如果今天 ISO date 与 lastWorkDay 不同，reset overtime flag
+    /// 液体自然 drain（progress 随 viewModel.loadToday() 重置回 0 通过
+    /// interpolatingSpring 下降+末端回弹，视觉上就是"排空"动画）。
+    private func checkNewDayReset() {
+        let today = Self.todayISO()
+        if !lastWorkDay.isEmpty && lastWorkDay != today {
+            withAnimation(.smooth(duration: 0.3)) {
+                hasHitOvertime = false
+                isOvertimeRising = false
+                overtimeRiseProgress = 0
+            }
+        }
+        lastWorkDay = today
+    }
 }
 
 // MARK: - Preview
