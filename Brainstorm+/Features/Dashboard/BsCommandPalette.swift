@@ -122,7 +122,7 @@ public struct BsCommandPalette: View {
             .init(id: "admin_audit", name: "审计", systemImage: "doc.text.magnifyingglass", tint: BsColor.inkMuted,
                   category: .admin, requires: nil, adminOnly: true,
                   destination: { AnyView(AdminAuditView(isEmbedded: true)) }),
-            .init(id: "admin_broadcast", name: "广播", systemImage: "dot.radiowaves.left.and.right", tint: BsColor.brandCoral,
+            .init(id: "admin_broadcast", name: "广播", systemImage: "dot.radiowaves.left.and.right", tint: BsColor.adminTint,
                   category: .admin, requires: nil, adminOnly: true,
                   destination: { AnyView(AdminBroadcastView(isEmbedded: true)) }),
             .init(id: "admin_org", name: "组织配置", systemImage: "building.2.fill", tint: BsColor.inkMuted,

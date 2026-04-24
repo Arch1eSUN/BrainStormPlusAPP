@@ -8,6 +8,11 @@ struct BrainStormApp: App {
     @StateObject private var realtimeSync = RealtimeSyncManager.shared
     @State private var minSplashHeld = false
 
+    init() {
+        // v1.2: TabBar badge 全局走 Coral（unreadBadge = brandCoral）
+        UITabBarItem.appearance().badgeColor = UIColor(BsColor.unreadBadge)
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {

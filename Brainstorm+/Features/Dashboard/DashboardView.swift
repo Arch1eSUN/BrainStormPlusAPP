@@ -305,7 +305,7 @@ struct DashboardView: View {
         .accessibilityLabel("个人中心")
     }
 
-    /// Trailing: 通知 bell，未读红点（v1.1 errors 走 iOS 系统 .red）。
+    /// Trailing: 通知 bell，未读 Coral dot + 呼吸脉冲（尊重 Reduce Motion）
     private var notificationButton: some View {
         NavigationLink(destination: ActionItemHelper.destination(for: .notifications)) {
             ZStack(alignment: .topTrailing) {
@@ -313,14 +313,25 @@ struct DashboardView: View {
                     .font(.system(.headline, weight: .semibold))
                     .foregroundStyle(BsColor.ink)
                     .frame(width: 32, height: 32)
-                Circle()
-                    .fill(Color.red)  // v1.1: 错误/紧急走 iOS .red
-                    .frame(width: 7, height: 7)
-                    .offset(x: -6, y: 6)
+
+                // v1.2: Coral 未读 dot + 呼吸脉冲（opacity 0.65-1.0 周期 1.5s）
+                // 目的：把 Coral 分布到 toolbar 持续可见位置，不是只靠"被点击才出现"
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
+                    let t = CGFloat(ctx.date.timeIntervalSinceReferenceDate)
+                    let pulse = reduceMotion ? 1.0 : (0.825 + 0.175 * sin(t * 4.2))
+                    Circle()
+                        .fill(BsColor.unreadBadge)
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(reduceMotion ? 1.0 : (0.94 + 0.06 * sin(t * 4.2)))
+                        .opacity(pulse)
+                        .offset(x: -6, y: 6)
+                }
             }
         }
         .accessibilityLabel("通知")
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // MARK: - Schedule section
 

@@ -81,14 +81,40 @@ public enum BsColor {
     public static let paper     = Color(hex: "#FDFDFC")
     public static let inkStatic = Color(hex: "#1B1B18")
 
-    // ── 语义状态（v1.1: 错误/警告走 iOS semantic，完成走 brandMint）───
-    /// v1.1: 所有"成功/完成"合并到 brandMint，`success` 作为 alias 保留向后兼容
+    // ── 语义状态 v1.2 重新平衡（目标视觉权重 Azure 40 / Mint 25 / Coral 35）───
+    //
+    // v1.2 岗位重定义：
+    //   • Azure  → "我在做什么"（CTA / focus / 主交互 / 进行中）
+    //   • Mint   → "完成了什么"（通过 / 绿灯 / 归档 / 完成）
+    //   • Coral  → "我该看什么"（注意 / 时效 / 热点 / 未读 / 提醒）—— 原 yellow warning 合并至此
+    //   • Ink    → "管理与系统"（admin 身份改用 neutral 深灰而非 Coral）
+    //   • Red    → 真错误 / 删除确认（保留 iOS 系统 red，稀缺使用）
+    //
+    // v1.1 → v1.2 改动：
+    //   • warning (#F59E0B yellow) → brandCoral 合并（simplify 语义）
+    //   • admin 身份 tile tint 从 Coral 改 adminTint (Ink 深灰)
+    //   • unreadBadge 新 alias，指向 Coral（原 iOS system red 迁移）
+
+    /// 所有"成功/完成" — brandMint 别名
     public static let success = brandMint
-    /// v1.1: 警告仍走 iOS 语义橙黄
-    public static let warning = Color(hex: "#F59E0B")
-    /// v1.1: 紧急/错误走 iOS 系统 red（而非品牌 Coral）
+
+    /// v1.2: warning 合并到 brandCoral（原 #F59E0B 黄退役 —— 合并简化注意类语义）
+    public static let warning = brandCoral
+
+    /// 真错误 / 删除确认 — iOS 系统 red
     public static let danger  = Color(hex: "#EF4444")
+
+    /// 信息性高亮 — brandAzure 别名
     public static let info    = brandAzure
+
+    /// v1.2 新增：未读 / TabBar badge / Bell dot 的统一暖色（替代 iOS system red）
+    /// Coral 作"注意"语义的核心曝光点，是 35% 视觉权重的主要实现位置之一。
+    public static let unreadBadge = brandCoral
+
+    /// v1.2 新增：管理员身份 / 后台 tile 的 neutral 深灰（从 Coral 迁来）
+    /// 理由：管理身份应传递"稳重可信"而非"警报"；Coral 释放给日常"注意"场景。
+    /// 对齐 iOS systemGray / UIColor.systemGray。
+    public static let adminTint = dynamic(light: "#3C3C43", dark: "#8E8E93")
 
     // ── Neutral 梯度（静态）──────────────────────────────────────
     public static let neutral50  = Color(hex: "#FAFAFA")
