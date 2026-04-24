@@ -114,7 +114,7 @@ public struct ApprovalCenterView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground
                     .ignoresSafeArea()
                 VStack(spacing: 0) {
                     tabPillBar

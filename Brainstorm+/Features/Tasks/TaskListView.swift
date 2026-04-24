@@ -90,7 +90,7 @@ public struct TaskListView: View {
                     }
                 }
             }
-            .background(BsAmbientBackground())
+            .background(BsColor.pageBackground.ignoresSafeArea())
             .navigationTitle("任务管理")
             .navigationBarTitleDisplayMode(.large)
             .searchable(

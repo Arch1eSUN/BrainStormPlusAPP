@@ -75,8 +75,9 @@ struct MainTabView: View {
                 .tag(Tab.approvals)
 
             // ── 消息 ──
-            // ChatListView 的 init 要求外部传入 VM,与 TaskListView 同构。
-            LazyView(ChatListView(viewModel: ChatListViewModel(client: supabase)))
+            // v1.1: 消息 = 聊天 + 通知 合并（plan §六 Phase 6.3）
+            // 顶部 segmented picker 切换两个 sub-tab，外层 NavStack 由 MessagesView 接管
+            LazyView(MessagesView())
                 .tabItem {
                     Label("消息", systemImage: "bubble.left.and.bubble.right.fill")
                 }

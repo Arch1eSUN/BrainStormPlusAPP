@@ -11,10 +11,8 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Fusion ambient backdrop — same editorial glow used on
-                // Dashboard / Chat, so the Me tab reads as part of the same
-                // surface rather than a utilitarian Settings sheet.
-                BsAmbientBackground()
+                // v1.1: ambient 弥散彻底退出，纯净 pageBackground（neutral gray）承底
+                BsColor.pageBackground.ignoresSafeArea()
 
                 Form {
                     // ── Profile row (tap to edit) ─────────────────────────
@@ -162,15 +160,8 @@ public struct SettingsView: View {
         .padding(.vertical, 20)
     }
 
-    // MARK: - Admin gate
-
-    /// Admin+ 入口：只有 primaryRole ∈ {admin, superadmin} 时显示
-    private var isAdminVisible: Bool {
-        let primaryRole = RBACManager.shared
-            .migrateLegacyRole(sessionManager.currentProfile?.role)
-            .primaryRole
-        return primaryRole == .admin || primaryRole == .superadmin
-    }
+    // v1.1: admin 入口已永久迁到 BsCommandPalette 的"管理"分组。
+    // 原 isAdminVisible 守卫已无消费者，一并移除。
 }
 
 public struct SettingsRowView: View {

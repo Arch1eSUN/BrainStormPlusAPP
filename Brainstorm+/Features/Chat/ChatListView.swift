@@ -6,95 +6,107 @@ public struct ChatListView: View {
     @StateObject private var viewModel: ChatListViewModel
     @State private var showNewConversation: Bool = false
 
-    public init(viewModel: ChatListViewModel) {
+    // Phase 6.3: isEmbedded parameterization
+    // 当 MessagesView（Tab 4）把 ChatListView 作为 sub-tab 内嵌进外层
+    // NavigationStack 时,此处跳过自己的 NavigationStack,避免 nav bar 双层叠。
+    public let isEmbedded: Bool
+
+    public init(viewModel: ChatListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.isEmbedded = isEmbedded
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                // Fusion ambient backdrop — soft diffused glow beneath the list
-                // so the channel rows float above an editorial gradient rather
-                // than a flat system background.
-                BsAmbientBackground()
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
 
-                VStack(spacing: 0) {
-                    Group {
-                        if viewModel.isLoading && viewModel.channels.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                            searchResultsList
-                        } else if viewModel.channels.isEmpty {
-                            BsEmptyState(
-                                title: "暂无消息",
-                                systemImage: "message",
-                                description: "你还没有进行中的会话。"
-                            )
-                        } else {
-                            channelList
-                        }
+    private var coreContent: some View {
+        ZStack {
+            // Fusion ambient backdrop — soft diffused glow beneath the list
+            // so the channel rows float above an editorial gradient rather
+            // than a flat system background.
+            BsAmbientBackground()
+
+            VStack(spacing: 0) {
+                Group {
+                    if viewModel.isLoading && viewModel.channels.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                        searchResultsList
+                    } else if viewModel.channels.isEmpty {
+                        BsEmptyState(
+                            title: "暂无消息",
+                            systemImage: "message",
+                            description: "你还没有进行中的会话。"
+                        )
+                    } else {
+                        channelList
                     }
                 }
             }
-            // Sprint 3.4: value-based navigation. `ChatRoomViewModel` is only
-            // constructed when the destination actually renders, not once per
-            // list row — previous eager pattern was instantiating a Supabase
-            // client + realtime subscriber for every channel in the list just
-            // to prepare the nav link.
-            .navigationDestination(for: ChatChannel.self) { channel in
-                ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
-            }
-            .navigationTitle("消息")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showNewConversation = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(BsColor.brandAzure)
-                            .frame(width: 32, height: 32)
-                            .glassEffect(
-                                .regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(),
-                                in: Circle()
-                            )
-                    }
-                    .accessibilityLabel("新建会话")
+        }
+        // Sprint 3.4: value-based navigation. `ChatRoomViewModel` is only
+        // constructed when the destination actually renders, not once per
+        // list row — previous eager pattern was instantiating a Supabase
+        // client + realtime subscriber for every channel in the list just
+        // to prepare the nav link.
+        .navigationDestination(for: ChatChannel.self) { channel in
+            ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
+        }
+        .navigationTitle("消息")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showNewConversation = true
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(BsColor.brandAzure)
+                        .frame(width: 32, height: 32)
+                        .glassEffect(
+                            .regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(),
+                            in: Circle()
+                        )
                 }
+                .accessibilityLabel("新建会话")
             }
-            .sheet(isPresented: $showNewConversation) {
-                NewConversationSheet(viewModel: viewModel) { _ in
-                    // Channel already inserted at top by the sheet; no extra
-                    // nav needed — the user sees the new row and taps to
-                    // enter.
-                }
+        }
+        .sheet(isPresented: $showNewConversation) {
+            NewConversationSheet(viewModel: viewModel) { _ in
+                // Channel already inserted at top by the sheet; no extra
+                // nav needed — the user sees the new row and taps to
+                // enter.
             }
-            .zyErrorBanner($viewModel.errorMessage)
-            // `.searchable` binds to a Published on the VM so the search UI
-            // survives background re-renders of the navigation stack without
-            // losing the query.
-            .searchable(text: $viewModel.searchQuery, prompt: "搜索消息…")
-            .onChange(of: viewModel.searchQuery) { _, newValue in
-                // Minimal debounce: 250ms of idle before firing. Not using
-                // `.task(id:)` on the view because `searchQuery` mutations
-                // would otherwise cancel mid-typed edits; a raw Task with a
-                // sleep + `Task.isCancelled` check is lighter and mirrors
-                // AsyncStream.debounce.
-                Task {
-                    try? await Task.sleep(nanoseconds: 250_000_000)
-                    guard !Task.isCancelled else { return }
-                    guard viewModel.searchQuery == newValue else { return }
-                    await viewModel.searchMessages(query: newValue)
-                }
+        }
+        .zyErrorBanner($viewModel.errorMessage)
+        // `.searchable` binds to a Published on the VM so the search UI
+        // survives background re-renders of the navigation stack without
+        // losing the query.
+        .searchable(text: $viewModel.searchQuery, prompt: "搜索消息…")
+        .onChange(of: viewModel.searchQuery) { _, newValue in
+            // Minimal debounce: 250ms of idle before firing. Not using
+            // `.task(id:)` on the view because `searchQuery` mutations
+            // would otherwise cancel mid-typed edits; a raw Task with a
+            // sleep + `Task.isCancelled` check is lighter and mirrors
+            // AsyncStream.debounce.
+            Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled else { return }
+                guard viewModel.searchQuery == newValue else { return }
+                await viewModel.searchMessages(query: newValue)
             }
-            .refreshable {
-                await viewModel.fetchChannels()
-            }
-            .task {
-                await viewModel.fetchChannels()
-            }
+        }
+        .refreshable {
+            await viewModel.fetchChannels()
+        }
+        .task {
+            await viewModel.fetchChannels()
         }
     }
 
