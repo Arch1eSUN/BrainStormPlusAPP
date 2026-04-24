@@ -14,6 +14,11 @@ import SwiftUI
 // Subcomponents: BsCardHeader / BsCardTitle / BsCardBody
 // ══════════════════════════════════════════════════════════════════
 
+/// v1.1 legacy —— 优先使用专用 primitive：
+///   • `BsContentCard` 替代 `.flat` / `.elevated`
+///   • `BsHeroCard` 替代 `.glass`（签名瞬间）
+/// 本 variant-switch API 保留至 call-sites 全部迁移完毕后删除。
+@available(*, deprecated, message: "Use BsContentCard for matte; BsHeroCard for Liquid Glass signature. Migration tracked in docs/plans/2026-04-24-ios-polish-audit.md Batch 1.")
 public struct BsCard<Content: View>: View {
     public enum Variant {
         /// Flat white 卡片（iOS 默认）—— hairline border，无阴影
