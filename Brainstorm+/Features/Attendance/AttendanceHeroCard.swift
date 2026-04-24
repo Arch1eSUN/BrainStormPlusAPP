@@ -59,19 +59,34 @@ public struct AttendanceHeroCard: View {
                     let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
 
                     ZStack {
-                        // Layer 0: 外层发光 halo
+                        // Layer 0: 外层发光 halo（state color - 远场身份感）
                         LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .fill(stateColor.opacity(0.55))
                             .blur(radius: 18)
 
-                        // Layer 1: 主体亮渐变
+                        // Layer 1: 主体 3 色温度分层（v1.2 三色液体核心）
+                        //
+                        // 物理类比：深水冷色（Azure/state 主色）→ 中层过渡（Mint）→
+                        //           水面暖色（Coral 反射）。色彩分区有自然合理性，
+                        //           不是并列 3 色条。
+                        //
+                        // 视觉权重（液面满时可见占比）：
+                        //   bottom 60% state color（Azure/Mint/Coral 按状态）
+                        //   middle 25% Mint（永远作过渡层）
+                        //   top    15% Coral（永远作水面暖反射）
+                        //
+                        // 任何状态下 3 色都会出现至少 2 种。打卡中（Azure state）
+                        //   = 全三色；完成（Mint state）= Mint+Coral；加班（Coral
+                        //   state）= Coral+Mint+Coral（橙占比偏多，加班警示感）。
                         LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .fill(
                                 LinearGradient(
-                                    colors: [
-                                        stateColor.opacity(0.85),
-                                        stateColor.opacity(0.65),
-                                        stateColor.opacity(0.45),
+                                    stops: [
+                                        .init(color: stateColor.opacity(0.90), location: 0.00),  // 水最深
+                                        .init(color: stateColor.opacity(0.72), location: 0.25),
+                                        .init(color: BsColor.brandMint.opacity(0.55), location: 0.55), // 中层过渡（永远 Mint）
+                                        .init(color: BsColor.brandMint.opacity(0.42), location: 0.78),
+                                        .init(color: BsColor.brandCoral.opacity(0.38), location: 1.00), // 水面暖反射（永远 Coral）
                                     ],
                                     startPoint: .bottom,
                                     endPoint: .top
@@ -83,24 +98,6 @@ public struct AttendanceHeroCard: View {
                             .stroke(Color.white.opacity(0.82), lineWidth: 1.4)
                             .shadow(color: stateColor.opacity(0.95), radius: 3)
                             .shadow(color: stateColor.opacity(0.55), radius: 9)
-
-                        // Layer 3: v1.2 · Coral 暖色反射层（像火光落在水面）
-                        // 整个液面叠加一层 Coral 横向渐变 opacity 0.18 → 0 → 0.14，
-                        // 两端亮中间透 —— 液体两侧产生暖色反射带。工作中不抢 hero 主色，
-                        // 但肉眼总能在液体大面积内捕捉到 Coral 存在（~30% 液体面积权重）。
-                        LiquidFillShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        BsColor.brandCoral.opacity(0.28),
-                                        BsColor.brandCoral.opacity(0.04),
-                                        BsColor.brandCoral.opacity(0.22),
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .blendMode(.plusLighter)
                     }
                 }
                 // 注入/打卡 瞬间：interpolatingSpring underdamped 有 overshoot
