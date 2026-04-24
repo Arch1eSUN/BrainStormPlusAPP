@@ -1,0 +1,157 @@
+import SwiftUI
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MARK: - BsWeeklyCadenceStrip
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A horizontal 7-dot strip that shows this week's attendance cadence (Mon–Sun).
+// Sits below the Attendance hero on Dashboard. Intentionally NOT wrapped in a
+// card — it's a bare strip (40pt tall) on the page background.
+//
+// Visual model per docs/plans/2026-04-24-ios-full-redesign-plan.md §2.6
+// Signature C:
+//   • Completed past day ........ filled BsColor.brandAzure dot
+//   • Today .................... filled dot + scale 1.3 + glow + pulse
+//   • Future / uncompleted past  stroked ring (brandAzure @ 25%)
+//
+// Long-pressing a column (0.4s) fires `onDayLongPress(day)` with a light
+// haptic, so the Dashboard can surface a quick peek / detail for that day.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+
+// MARK: - Data Model
+
+public struct WeekDayCadence: Identifiable, Hashable, Sendable {
+    public let id: String        // e.g. "Mon" or ISO "2026-04-20"
+    public let shortLabel: String // 1 char Chinese weekday: 一/二/三/四/五/六/日
+    public let isCompleted: Bool // 该日已打卡完成
+    public let isToday: Bool
+    public let isInFuture: Bool  // 本周未到的日
+
+    public init(
+        id: String,
+        shortLabel: String,
+        isCompleted: Bool,
+        isToday: Bool,
+        isInFuture: Bool
+    ) {
+        self.id = id
+        self.shortLabel = shortLabel
+        self.isCompleted = isCompleted
+        self.isToday = isToday
+        self.isInFuture = isInFuture
+    }
+}
+
+// MARK: - View
+
+public struct BsWeeklyCadenceStrip: View {
+    let days: [WeekDayCadence]
+    let onDayLongPress: ((WeekDayCadence) -> Void)?
+
+    public init(
+        days: [WeekDayCadence],
+        onDayLongPress: ((WeekDayCadence) -> Void)? = nil
+    ) {
+        self.days = days
+        self.onDayLongPress = onDayLongPress
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            ForEach(days) { day in
+                VStack(spacing: 4) {
+                    Text(day.shortLabel)
+                        .font(.custom("Inter-Medium", size: 11))
+                        .foregroundStyle(BsColor.inkMuted)
+                    dotView(for: day)
+                        .frame(width: 14, height: 14)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                        Haptic.light()
+                        onDayLongPress?(day)
+                    }
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(
+                    "周\(day.shortLabel)"
+                    + (day.isCompleted ? " 已完成" : " 未完成")
+                    + (day.isToday ? " 今日" : "")
+                )
+            }
+        }
+        .frame(height: 40)
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Dot
+
+    @ViewBuilder
+    private func dotView(for day: WeekDayCadence) -> some View {
+        if day.isCompleted {
+            Circle()
+                .fill(BsColor.brandAzure)
+                .frame(width: 10, height: 10)
+                .scaleEffect(day.isToday ? 1.3 : 1.0)
+                .shadow(
+                    color: day.isToday ? BsColor.brandAzure.opacity(0.6) : .clear,
+                    radius: 4
+                )
+                .modifier(TodayPulse(isToday: day.isToday))
+        } else {
+            Circle()
+                .stroke(BsColor.brandAzure.opacity(0.25), lineWidth: 1.5)
+                .frame(width: 10, height: 10)
+                .scaleEffect(day.isToday ? 1.3 : 1.0)
+                .modifier(TodayPulse(isToday: day.isToday))
+        }
+    }
+}
+
+// MARK: - Today Pulse Modifier
+
+private struct TodayPulse: ViewModifier {
+    let isToday: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse: Bool = false
+
+    func body(content: Content) -> some View {
+        if isToday && !reduceMotion {
+            content
+                .opacity(pulse ? 1.0 : 0.6)
+                .animation(
+                    .easeInOut(duration: 0.7).repeatForever(autoreverses: true),
+                    value: pulse
+                )
+                .onAppear { pulse = true }
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    VStack(spacing: 20) {
+        BsWeeklyCadenceStrip(
+            days: [
+                .init(id: "mon", shortLabel: "一", isCompleted: true,  isToday: false, isInFuture: false),
+                .init(id: "tue", shortLabel: "二", isCompleted: true,  isToday: false, isInFuture: false),
+                .init(id: "wed", shortLabel: "三", isCompleted: true,  isToday: false, isInFuture: false),
+                .init(id: "thu", shortLabel: "四", isCompleted: false, isToday: true,  isInFuture: false),
+                .init(id: "fri", shortLabel: "五", isCompleted: false, isToday: false, isInFuture: true),
+                .init(id: "sat", shortLabel: "六", isCompleted: false, isToday: false, isInFuture: true),
+                .init(id: "sun", shortLabel: "日", isCompleted: false, isToday: false, isInFuture: true),
+            ]
+        ) { day in
+            print("long-pressed \(day.id)")
+        }
+        .padding()
+    }
+    .frame(maxHeight: .infinity)
+    .background(BsColor.pageBackground)
+}
