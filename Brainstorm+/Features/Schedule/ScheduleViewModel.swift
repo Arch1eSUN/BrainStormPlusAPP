@@ -109,6 +109,12 @@ public final class ScheduleViewModel {
             let session = try await supabase.auth.session
             let uid = session.user.id
 
+            #if DEBUG
+            print("[ScheduleVM] ▶ Fetching daily_work_state")
+            print("[ScheduleVM]   uid = \(uid.uuidString)")
+            print("[ScheduleVM]   from = \(fromStr)  to = \(toStr)")
+            #endif
+
             // Web (use-schedule-data.ts:149-156):
             //   .from('daily_work_state')
             //   .select(...)
@@ -123,6 +129,10 @@ public final class ScheduleViewModel {
                 .lte("work_date", value: toStr)
                 .execute()
                 .value
+
+            #if DEBUG
+            print("[ScheduleVM] ✓ Received \(rows.count) rows")
+            #endif
 
             var next: [String: DailyWorkState] = [:]
             for row in rows {

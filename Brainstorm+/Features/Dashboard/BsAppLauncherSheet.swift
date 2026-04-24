@@ -120,6 +120,10 @@ public struct BsAppLauncherSheet: View {
             .init(id: "admin_holidays", name: "公休日历", systemImage: "calendar.badge.plus", tint: BsColor.brandMint,
                   category: .admin, requires: nil, adminOnly: true,
                   destination: { AnyView(AdminHolidaysView()) }),
+            // Phase 0b：新增全员考勤 admin 视图
+            .init(id: "team_attendance", name: "全员考勤", systemImage: "person.3.sequence.fill", tint: BsColor.brandAzure,
+                  category: .admin, requires: nil, adminOnly: true,
+                  destination: { AnyView(TeamAttendanceView()) }),
         ]
     }
 
