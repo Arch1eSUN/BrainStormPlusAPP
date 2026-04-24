@@ -8,6 +8,7 @@ import Supabase
 public struct OKRListView: View {
     @StateObject private var viewModel: OKRListViewModel
     @State private var expanded: Set<UUID> = []
+    @State private var showingCreate: Bool = false
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -42,6 +43,25 @@ public struct OKRListView: View {
         }
         .navigationTitle("OKR 目标管理")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .tint(BsColor.brandAzure)
+                .accessibilityLabel("新建 OKR")
+            }
+        }
+        .sheet(isPresented: $showingCreate) {
+            OKREditSheet(
+                existing: nil,
+                viewModel: viewModel,
+                onDismiss: { showingCreate = false }
+            )
+        }
         .task(id: viewModel.period) {
             await viewModel.fetchObjectives()
         }
@@ -415,7 +435,7 @@ public struct OKRListView: View {
             Text("暂无目标")
                 .font(BsTypography.outfit(16, weight: "SemiBold"))
                 .foregroundColor(BsColor.ink)
-            Text("该季度尚未录入 OKR，可在 Web 端创建。")
+            Text("该季度尚未录入 OKR，点击右上角 + 新建一个。")
                 .font(BsTypography.inter(12, weight: "Regular"))
                 .foregroundColor(BsColor.inkMuted)
                 .multilineTextAlignment(.center)

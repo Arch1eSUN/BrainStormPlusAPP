@@ -165,7 +165,8 @@ private struct RoleQuickActionsSection: View {
                 .init(module: .admin,         title: "系统配置", color: BsColor.ink),
                 .init(module: .aiAnalysis,    title: "AI 分析",  color: BsColor.ink),
                 .init(module: .finance,       title: "财务 AI",  color: BsColor.ink),
-                .init(module: .analytics,     title: "数据分析", color: BsColor.brandAzure),
+                // .analytics QuickLink 移除：iOS 不移植 Web BI 仪表板，
+                // 相关数据分析走 aiAnalysis + finance AI 视图
                 .init(module: .team,          title: "团队",     color: BsColor.brandMint),
                 .init(module: .hiring,        title: "招聘",     color: BsColor.brandCoral),
                 .init(module: .activity,      title: "活动日志", color: BsColor.brandMint),

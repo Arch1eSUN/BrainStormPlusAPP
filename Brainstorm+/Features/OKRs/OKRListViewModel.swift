@@ -135,4 +135,241 @@ public class OKRListViewModel: ObservableObject {
             self.errorMessage = ErrorLocalizer.localize(error)
         }
     }
+
+    // MARK: - Mutations
+    //
+    // Parity with Web `okr.ts` server actions (createObjective,
+    // updateObjective, createKeyResult, updateKeyResult). Web routes through a
+    // service-role admin client after `serverGuard()`; iOS relies on the
+    // authenticated user's Supabase client + RLS (`Owners manage objectives`
+    // policy — owner OR admin/manager via `profiles.role`).
+    //
+    // RLS assumptions this code leans on (backend should verify):
+    //   • `objectives` insert allowed when `owner_id = auth.uid()`
+    //   • `objectives` update allowed when `auth.uid() = owner_id` OR role
+    //     is super_admin/admin/manager
+    //   • `key_results` insert allowed when parent objective is writable
+    //     (Web `004_schema_alignment.sql:160-163` + migrations chain)
+    //   • `org_id` is nullable on `objectives` (confirmed in
+    //     `001_rbac_multi_tenant.sql:37`) — we best-effort populate it from
+    //     the caller's `profiles.org_id` just like Web does.
+
+    /// Create a new objective row. Mirrors Web `createObjective` in
+    /// `okr.ts:152-184`. Returns the inserted row so the caller can route
+    /// to it if needed. List is re-fetched afterwards to refresh the
+    /// published state.
+    public func createObjective(
+        title: String,
+        description: String?,
+        ownerId: UUID? = nil,
+        period: String? = nil
+    ) async throws -> Objective {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "目标名称不能为空"]
+            )
+        }
+
+        // Resolve owner: explicit arg > current authenticated user.
+        let resolvedOwnerId: UUID
+        if let ownerId = ownerId {
+            resolvedOwnerId = ownerId
+        } else {
+            resolvedOwnerId = try await client.auth.session.user.id
+        }
+
+        // Mirror Web: read `profiles.org_id` and pass it through so inserts
+        // scope correctly. Nullable — leave nil if the user has none, RLS
+        // still gates the insert by owner.
+        let orgId = try? await fetchCurrentOrgId(userId: resolvedOwnerId)
+
+        let targetPeriod = period ?? self.period
+
+        let payload = ObjectiveInsert(
+            title: trimmedTitle,
+            description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            period: targetPeriod,
+            owner_id: resolvedOwnerId,
+            assignee_id: nil,
+            org_id: orgId,
+            status: Objective.ObjectiveStatus.active.rawValue,
+            progress: 0
+        )
+
+        let inserted: Objective = try await client
+            .from("objectives")
+            .insert(payload)
+            .select("*, key_results(*)")
+            .single()
+            .execute()
+            .value
+
+        await fetchObjectives()
+        return inserted
+    }
+
+    /// Update an existing objective's editable metadata. Mirrors Web
+    /// `updateObjective` in `okr.ts:188-218` (title / description /
+    /// assignee_id only — status goes through a separate transition API).
+    public func updateObjective(_ objective: Objective) async throws {
+        let trimmedTitle = objective.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "目标名称不能为空"]
+            )
+        }
+
+        let payload = ObjectiveUpdate(
+            title: trimmedTitle,
+            description: objective.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            assignee_id: objective.assigneeId
+        )
+
+        try await client
+            .from("objectives")
+            .update(payload)
+            .eq("id", value: objective.id.uuidString)
+            .execute()
+
+        await fetchObjectives()
+    }
+
+    /// Add a new KR under an existing objective. Mirrors Web
+    /// `createKeyResult` in `okr.ts:259-280`. `current_value` starts at 0.
+    public func addKeyResult(
+        objectiveId: UUID,
+        title: String,
+        target: Double,
+        unit: String?
+    ) async throws -> KeyResult {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "KR 名称不能为空"]
+            )
+        }
+        guard target > 0 else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "目标值必须大于 0"]
+            )
+        }
+
+        let payload = KeyResultInsert(
+            objective_id: objectiveId,
+            title: trimmedTitle,
+            target_value: target,
+            current_value: 0,
+            unit: unit?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        )
+
+        let inserted: KeyResult = try await client
+            .from("key_results")
+            .insert(payload)
+            .select()
+            .single()
+            .execute()
+            .value
+
+        await fetchObjectives()
+        return inserted
+    }
+
+    /// Update a KR's current value (check-in). Mirrors Web
+    /// `updateKeyResult` in `okr.ts:284-317`. The `note` parameter is
+    /// accepted for forward-compat but not yet persisted — Web doesn't
+    /// store check-in notes either, and there's no target table on
+    /// `key_results` for it. TODO: add a `kr_check_ins` log table if the
+    /// product team wants history.
+    public func updateKeyResultProgress(
+        keyResultId: UUID,
+        progress: Double,
+        note: String? = nil
+    ) async throws {
+        guard progress >= 0 else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "进度值不能为负数"]
+            )
+        }
+
+        let payload = KeyResultProgressUpdate(current_value: progress)
+
+        try await client
+            .from("key_results")
+            .update(payload)
+            .eq("id", value: keyResultId.uuidString)
+            .execute()
+
+        _ = note  // reserved for a future `kr_check_ins` table
+        await fetchObjectives()
+    }
+
+    // MARK: - Insert/update payloads
+
+    // Kept nested so these stay local to OKR mutations and don't leak
+    // into the wider Core/Models namespace (those types model DB rows,
+    // not wire payloads).
+
+    private struct ObjectiveInsert: Encodable {
+        let title: String
+        let description: String?
+        let period: String
+        let owner_id: UUID
+        let assignee_id: UUID?
+        let org_id: UUID?
+        let status: String
+        let progress: Int
+    }
+
+    private struct ObjectiveUpdate: Encodable {
+        let title: String
+        let description: String?
+        let assignee_id: UUID?
+    }
+
+    private struct KeyResultInsert: Encodable {
+        let objective_id: UUID
+        let title: String
+        let target_value: Double
+        let current_value: Double
+        let unit: String?
+    }
+
+    private struct KeyResultProgressUpdate: Encodable {
+        let current_value: Double
+    }
+
+    // MARK: - Helpers
+
+    /// Mirrors Web `getCurrentOrgId` in `okr.ts:43-67` (minus the admin
+    /// fallback — iOS doesn't have a service-role client). Reading a
+    /// single `profiles.org_id` row is well within the user's RLS scope.
+    private func fetchCurrentOrgId(userId: UUID) async throws -> UUID? {
+        struct Row: Decodable {
+            let orgId: UUID?
+            enum CodingKeys: String, CodingKey { case orgId = "org_id" }
+        }
+        let rows: [Row] = try await client
+            .from("profiles")
+            .select("org_id")
+            .eq("id", value: userId.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first?.orgId
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
