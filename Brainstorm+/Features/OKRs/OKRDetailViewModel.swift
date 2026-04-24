@@ -21,6 +21,11 @@ public class OKRDetailViewModel: ObservableObject {
 
     private let client: SupabaseClient
 
+    /// Exposed so the view can spin up an `OKRListViewModel` ad-hoc for
+    /// mutations (status transitions, delete, KR meta edits) without
+    /// threading a second VM through every navigation call site.
+    public var supabaseClient: SupabaseClient { client }
+
     public init(client: SupabaseClient, initial: Objective) {
         self.client = client
         self.objective = initial

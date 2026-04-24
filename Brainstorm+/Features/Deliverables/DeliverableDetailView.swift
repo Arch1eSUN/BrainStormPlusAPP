@@ -21,6 +21,9 @@ import Supabase
 
 public struct DeliverableDetailView: View {
     @StateObject private var viewModel: DeliverableDetailViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var showEditSheet: Bool = false
+    @State private var showDeleteConfirm: Bool = false
 
     public init(viewModel: DeliverableDetailViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -63,6 +66,53 @@ public struct DeliverableDetailView: View {
         }
         .navigationTitle("交付物详情")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        Haptic.light()
+                        showEditSheet = true
+                    } label: {
+                        Label("编辑交付物", systemImage: "pencil")
+                    }
+                    .disabled(viewModel.listViewModel == nil)
+
+                    Button(role: .destructive) {
+                        Haptic.light()
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("删除交付物", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("更多操作")
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let list = viewModel.listViewModel {
+                DeliverableEditSheet(
+                    viewModel: list,
+                    deliverable: viewModel.deliverable,
+                    onSaved: { fresh in
+                        viewModel.apply(fresh)
+                    }
+                )
+            }
+        }
+        .confirmationDialog(
+            "删除后该交付物记录无法恢复，确认？",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                Task {
+                    let ok = await viewModel.deleteCurrent()
+                    if ok { dismiss() }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        }
         .task {
             await viewModel.refresh()
         }

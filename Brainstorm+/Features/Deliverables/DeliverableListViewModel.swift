@@ -174,7 +174,7 @@ public final class DeliverableListViewModel: ObservableObject {
         return try await (projectsRes, profilesRes)
     }
 
-    // MARK: - Mutations (status only — list + detail scope)
+    // MARK: - Mutations (status / full update / delete — list + detail scope)
 
     private struct StatusPayload: Encodable {
         let status: String
@@ -185,6 +185,74 @@ public final class DeliverableListViewModel: ObservableObject {
             case status
             case submittedAt = "submitted_at"
             case updatedAt = "updated_at"
+        }
+    }
+
+    /// Partial-update payload for `updateDeliverable`. Each field is
+    /// Optional — `nil` means "leave as-is" so the payload only encodes
+    /// the fields that actually changed (mirrors Web's
+    /// `updates.field !== undefined` gate in deliverables.ts:136-143).
+    ///
+    /// Web treats an empty string as "clear the field" (`|| null`). We
+    /// replicate that by letting the caller pass `""` — the VM trims
+    /// and converts to an explicit `NSNull` before encoding.
+    private struct UpdatePayload: Encodable {
+        let title: String?
+        let description: FieldValue?
+        let url: FieldValue?
+        let projectId: FieldValue?
+        let status: String?
+        let submittedAt: String?
+        let updatedAt: String
+
+        enum CodingKeys: String, CodingKey {
+            case title
+            case description
+            case url
+            case projectId = "project_id"
+            case status
+            case submittedAt = "submitted_at"
+            case updatedAt = "updated_at"
+        }
+
+        /// Tri-state field value:
+        ///   • `.skip` — field absent from payload (no change)
+        ///   • `.null` — field emitted as JSON `null` (clear column)
+        ///   • `.value(x)` — field emitted with encoded value
+        enum FieldValue {
+            case skip
+            case null
+            case stringValue(String)
+            case uuidValue(UUID)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            if let title { try c.encode(title, forKey: .title) }
+            try Self.encodeField(description, forKey: .description, into: &c)
+            try Self.encodeField(url, forKey: .url, into: &c)
+            try Self.encodeField(projectId, forKey: .projectId, into: &c)
+            if let status { try c.encode(status, forKey: .status) }
+            if let submittedAt { try c.encode(submittedAt, forKey: .submittedAt) }
+            try c.encode(updatedAt, forKey: .updatedAt)
+        }
+
+        private static func encodeField(
+            _ value: FieldValue?,
+            forKey key: CodingKeys,
+            into container: inout KeyedEncodingContainer<CodingKeys>
+        ) throws {
+            guard let value else { return }
+            switch value {
+            case .skip:
+                return
+            case .null:
+                try container.encodeNil(forKey: key)
+            case .stringValue(let s):
+                try container.encode(s, forKey: key)
+            case .uuidValue(let u):
+                try container.encode(u, forKey: key)
+            }
         }
     }
 
@@ -359,6 +427,173 @@ public final class DeliverableListViewModel: ObservableObject {
             successMessage = "状态已更新"
             return true
         } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+
+    /// Mirrors Web `updateDeliverable(id, updates)` in deliverables.ts:131-153.
+    ///
+    /// Partial-update semantics:
+    ///   • Any argument passed as `nil` is treated as "do not modify"
+    ///     (matches Web's `updates.field !== undefined` gate).
+    ///   • For string fields (`description`, `url`), a trimmed empty
+    ///     string (`""`) is treated as "clear the column to NULL"
+    ///     (matches Web's `updates.description || null`).
+    ///   • `projectId = nil` argument → no change;  to clear the column
+    ///     callers should use the `updateDeliverable(..., clearProject:)`
+    ///     convenience — but since Web encodes `undefined` vs `null`
+    ///     via the same gate, we expose the behaviour via the sheet that
+    ///     tracks diffs explicitly.
+    ///   • When `status` transitions to `.submitted`, `submitted_at` is
+    ///     stamped to `now()`.
+    ///   • `updated_at` is always bumped.
+    ///
+    /// Activity log: fires `update_deliverable` on success (type `.system`
+    /// because Web's `ActivityType` has no `deliverable` case).
+    @discardableResult
+    public func updateDeliverable(
+        id: UUID,
+        title: String? = nil,
+        description: String? = nil,
+        url: String? = nil,
+        projectId: UUID? = nil,
+        clearProject: Bool = false,
+        status: Deliverable.DeliverableStatus? = nil
+    ) async -> Bool {
+        isMutating = true
+        errorMessage = nil
+        defer { isMutating = false }
+
+        let nowISO = ISO8601DateFormatter().string(from: Date())
+
+        // Title: trim + non-empty guard (Web doesn't allow title clearing).
+        var encodedTitle: String? = nil
+        if let t = title {
+            let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                errorMessage = "标题不能为空。"
+                return false
+            }
+            encodedTitle = trimmed
+        }
+
+        // Description: "" → null, non-empty → value, nil → skip.
+        let descField: UpdatePayload.FieldValue? = {
+            guard let d = description else { return nil }
+            let trimmed = d.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? .null : .stringValue(trimmed)
+        }()
+
+        // URL: "" → null, non-empty → value, nil → skip.
+        let urlField: UpdatePayload.FieldValue? = {
+            guard let u = url else { return nil }
+            let trimmed = u.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? .null : .stringValue(trimmed)
+        }()
+
+        // Project: explicit clearProject flag takes precedence; else
+        // UUID = set; else nil = skip (Web maps `undefined` → skip).
+        let projectField: UpdatePayload.FieldValue? = {
+            if clearProject { return .null }
+            if let pid = projectId { return .uuidValue(pid) }
+            return nil
+        }()
+
+        let submittedStamp: String? = (status == .submitted) ? nowISO : nil
+
+        let payload = UpdatePayload(
+            title: encodedTitle,
+            description: descField,
+            url: urlField,
+            projectId: projectField,
+            status: status?.rawValue,
+            submittedAt: submittedStamp,
+            updatedAt: nowISO
+        )
+
+        // Capture title before mutation for the activity-log copy.
+        let priorTitle = items.first(where: { $0.id == id })?.title ?? "交付物"
+
+        do {
+            // `.select()` with the same joined shape the list uses — so
+            // the newly-updated row slots back in without a full reload.
+            let updated: Deliverable = try await client
+                .from("deliverables")
+                .update(payload)
+                .eq("id", value: id.uuidString)
+                .select(
+                    """
+                    id, title, description, url, status,
+                    project_id, assignee_id, org_id,
+                    due_date, submitted_at, file_url,
+                    created_at, updated_at,
+                    projects:project_id(id, name),
+                    profiles:assignee_id(id, full_name, avatar_url)
+                    """
+                )
+                .single()
+                .execute()
+                .value
+
+            if let idx = items.firstIndex(where: { $0.id == id }) {
+                items[idx] = updated
+            }
+
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "update_deliverable",
+                description: "更新了交付物「\(updated.title.isEmpty ? priorTitle : updated.title)」",
+                entityType: "deliverable",
+                entityId: id
+            )
+
+            Haptic.soft()
+            successMessage = "交付物已更新"
+            return true
+        } catch {
+            Haptic.warning()
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+
+    /// Mirrors Web `deleteDeliverable(id)` in deliverables.ts:157-163.
+    /// Activity log: fires `delete_deliverable` on success.
+    @discardableResult
+    public func deleteDeliverable(id: UUID) async -> Bool {
+        isMutating = true
+        errorMessage = nil
+        defer { isMutating = false }
+
+        // Capture title before row drops out of items — activity log
+        // needs a human-readable label.
+        let priorTitle = items.first(where: { $0.id == id })?.title ?? "交付物"
+
+        do {
+            try await client
+                .from("deliverables")
+                .delete()
+                .eq("id", value: id.uuidString)
+                .execute()
+
+            items.removeAll { $0.id == id }
+
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "delete_deliverable",
+                description: "删除了交付物「\(priorTitle)」",
+                entityType: "deliverable",
+                entityId: id
+            )
+
+            Haptic.rigid()
+            successMessage = "交付物已删除"
+            return true
+        } catch {
+            Haptic.warning()
             errorMessage = ErrorLocalizer.localize(error)
             return false
         }

@@ -314,6 +314,260 @@ public class OKRListViewModel: ObservableObject {
         await fetchObjectives()
     }
 
+    /// Mirrors Web `updateKeyResultMeta` in `okr.ts:321-373`. Updates KR
+    /// `title` / `target_value` / `unit`. Guards parity with Web:
+    ///   • title 非空
+    ///   • target_value > 0
+    ///   • target_value ≥ current_value（不能把门槛降到已有进度以下）
+    ///   • parent objective.status != completed（已完成目标锁定 KR 编辑）
+    /// Writes an activity_log entry on success (non-blocking).
+    public func updateKeyResultMeta(
+        keyResultId: UUID,
+        title: String?,
+        targetValue: Double?,
+        unit: String?
+    ) async throws {
+        // Fetch current KR (need current_value + objective_id).
+        struct KrFetchRow: Decodable {
+            let id: UUID
+            let title: String
+            let current_value: Double
+            let objective_id: UUID
+        }
+        let krRow: KrFetchRow = try await client
+            .from("key_results")
+            .select("id, title, current_value, objective_id")
+            .eq("id", value: keyResultId.uuidString)
+            .single()
+            .execute()
+            .value
+
+        // Fetch parent objective status — Web blocks edits on completed OKRs.
+        struct ObjStatusRow: Decodable {
+            let status: String?
+        }
+        let objRow: ObjStatusRow = try await client
+            .from("objectives")
+            .select("status")
+            .eq("id", value: krRow.objective_id.uuidString)
+            .single()
+            .execute()
+            .value
+        if objRow.status == Objective.ObjectiveStatus.completed.rawValue {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "已完成的目标无法编辑 KR"]
+            )
+        }
+
+        // Build partial payload with per-field validation mirroring Web.
+        var trimmedTitle: String? = nil
+        if let t = title {
+            let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw NSError(
+                    domain: "OKRListViewModel",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "KR 名称不能为空"]
+                )
+            }
+            trimmedTitle = trimmed
+        }
+
+        if let target = targetValue {
+            guard target > 0 else {
+                throw NSError(
+                    domain: "OKRListViewModel",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "目标值必须大于 0"]
+                )
+            }
+            if target < krRow.current_value {
+                throw NSError(
+                    domain: "OKRListViewModel",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "目标值不能小于当前进度 \(formatTrailing(krRow.current_value))"]
+                )
+            }
+        }
+
+        let unitValue: String?? = unit.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        }
+
+        let payload = KeyResultMetaUpdate(
+            title: trimmedTitle,
+            target_value: targetValue,
+            unit: unitValue
+        )
+
+        try await client
+            .from("key_results")
+            .update(payload)
+            .eq("id", value: keyResultId.uuidString)
+            .execute()
+
+        await fetchObjectives()
+
+        let logTitle = trimmedTitle ?? krRow.title
+        await ActivityLogWriter.write(
+            client: client,
+            type: .okr,
+            action: "update_kr_meta",
+            description: "编辑了 KR「\(logTitle)」",
+            entityType: "key_result",
+            entityId: keyResultId
+        )
+    }
+
+    /// Mirrors Web `updateObjectiveStatus` in `okr.ts:229-255`. Fetches
+    /// current status and enforces the `VALID_STATUS_TRANSITIONS` state
+    /// machine:
+    ///   draft      → active | cancelled
+    ///   active     → completed | cancelled
+    ///   completed  → ∅ (terminal)
+    ///   cancelled  → draft (re-open)
+    /// Writes an activity_log entry on success (non-blocking).
+    public func updateObjectiveStatus(
+        objectiveId: UUID,
+        newStatus: Objective.ObjectiveStatus
+    ) async throws {
+        struct ObjRow: Decodable {
+            let status: String?
+            let title: String
+        }
+        let obj: ObjRow = try await client
+            .from("objectives")
+            .select("status, title")
+            .eq("id", value: objectiveId.uuidString)
+            .single()
+            .execute()
+            .value
+
+        let currentRaw = obj.status ?? Objective.ObjectiveStatus.active.rawValue
+        guard let current = Objective.ObjectiveStatus(rawValue: currentRaw) else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "目标状态异常"]
+            )
+        }
+
+        let allowed = Self.validStatusTransitions[current] ?? []
+        guard allowed.contains(newStatus) else {
+            throw NSError(
+                domain: "OKRListViewModel",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "不允许从「\(current.displayLabel)」转到「\(newStatus.displayLabel)」"]
+            )
+        }
+
+        let payload = ObjectiveStatusUpdate(status: newStatus.rawValue)
+        try await client
+            .from("objectives")
+            .update(payload)
+            .eq("id", value: objectiveId.uuidString)
+            .execute()
+
+        await fetchObjectives()
+
+        let verb: String
+        switch newStatus {
+        case .active: verb = "启用"
+        case .completed: verb = "标记为已完成"
+        case .cancelled: verb = "取消"
+        case .draft: verb = "重开为草稿"
+        }
+        await ActivityLogWriter.write(
+            client: client,
+            type: .okr,
+            action: "update_objective_status",
+            description: "将目标「\(obj.title)」\(verb)",
+            entityType: "objective",
+            entityId: objectiveId
+        )
+    }
+
+    /// Mirrors Web `deleteObjective` in `okr.ts:377-383`. DB cascades to
+    /// KRs via FK (see migrations). Writes an activity_log entry.
+    public func deleteObjective(objectiveId: UUID) async throws {
+        // Read title first so the log entry stays readable post-delete.
+        let title = (try? await fetchEntityTitle(
+            table: "objectives",
+            id: objectiveId
+        )) ?? "未命名"
+
+        try await client
+            .from("objectives")
+            .delete()
+            .eq("id", value: objectiveId.uuidString)
+            .execute()
+
+        await fetchObjectives()
+
+        await ActivityLogWriter.write(
+            client: client,
+            type: .okr,
+            action: "delete_objective",
+            description: "删除了目标「\(title)」",
+            entityType: "objective",
+            entityId: objectiveId
+        )
+    }
+
+    /// Mirrors Web `deleteKeyResult` in `okr.ts:387-393`.
+    public func deleteKeyResult(keyResultId: UUID) async throws {
+        let title = (try? await fetchEntityTitle(
+            table: "key_results",
+            id: keyResultId
+        )) ?? "未命名"
+
+        try await client
+            .from("key_results")
+            .delete()
+            .eq("id", value: keyResultId.uuidString)
+            .execute()
+
+        await fetchObjectives()
+
+        await ActivityLogWriter.write(
+            client: client,
+            type: .okr,
+            action: "delete_key_result",
+            description: "删除了 KR「\(title)」",
+            entityType: "key_result",
+            entityId: keyResultId
+        )
+    }
+
+    /// Small helper — reads `title` off any row in a single-column select,
+    /// returning nil-friendly String so we still log on fetch failure.
+    private func fetchEntityTitle(table: String, id: UUID) async throws -> String {
+        struct TitleRow: Decodable { let title: String }
+        let row: TitleRow = try await client
+            .from(table)
+            .select("title")
+            .eq("id", value: id.uuidString)
+            .single()
+            .execute()
+            .value
+        return row.title
+    }
+
+    /// Mirror Web `VALID_STATUS_TRANSITIONS` in `okr.ts:222-227`.
+    public static let validStatusTransitions: [Objective.ObjectiveStatus: [Objective.ObjectiveStatus]] = [
+        .draft: [.active, .cancelled],
+        .active: [.completed, .cancelled],
+        .completed: [],
+        .cancelled: [.draft]
+    ]
+
+    private func formatTrailing(_ v: Double) -> String {
+        if v.truncatingRemainder(dividingBy: 1) == 0 { return String(Int(v)) }
+        return String(format: "%.1f", v)
+    }
+
     // MARK: - Insert/update payloads
 
     // Kept nested so these stay local to OKR mutations and don't leak
@@ -347,6 +601,39 @@ public class OKRListViewModel: ObservableObject {
 
     private struct KeyResultProgressUpdate: Encodable {
         let current_value: Double
+    }
+
+    /// Partial KR meta update. Fields set to `nil` on the wrapper are
+    /// omitted from the request; fields with `Optional<String>.some(nil)`
+    /// explicitly clear the column (used by `unit` to allow removal).
+    private struct KeyResultMetaUpdate: Encodable {
+        let title: String?
+        let target_value: Double?
+        /// Outer nil = omit key; inner nil = explicit null (clear unit).
+        let unit: String??
+
+        enum CodingKeys: String, CodingKey {
+            case title
+            case target_value
+            case unit
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            if let title = title { try c.encode(title, forKey: .title) }
+            if let target = target_value { try c.encode(target, forKey: .target_value) }
+            if let unitOuter = unit {
+                if let unitInner = unitOuter {
+                    try c.encode(unitInner, forKey: .unit)
+                } else {
+                    try c.encodeNil(forKey: .unit)
+                }
+            }
+        }
+    }
+
+    private struct ObjectiveStatusUpdate: Encodable {
+        let status: String
     }
 
     // MARK: - Helpers

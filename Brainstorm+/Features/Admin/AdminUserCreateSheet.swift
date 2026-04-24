@@ -188,7 +188,7 @@ public struct AdminUserCreateSheet: View {
                 throw URLError(.badServerResponse)
             }
             if http.statusCode == 404 {
-                infoText = "Web 端 /api/admin/create-user 尚未上线。请在浏览器 /dashboard/admin 创建用户后，回来编辑配置。"
+                errorText = "创建接口不可达（404），请检查网络或稍后重试。"
                 return
             }
             if http.statusCode >= 400 {

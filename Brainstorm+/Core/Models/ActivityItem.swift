@@ -37,6 +37,8 @@ public struct ActivityItem: Identifiable, Codable, Hashable {
         case project
         case announcement
         case okr
+        case attendance
+        case approval
         case system
 
         public init(from decoder: Decoder) throws {

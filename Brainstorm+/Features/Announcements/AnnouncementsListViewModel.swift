@@ -99,6 +99,16 @@ public final class AnnouncementsListViewModel: ObservableObject {
                 if lhs.pinned != rhs.pinned { return lhs.pinned && !rhs.pinned }
                 return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
             }
+
+            // Activity log — fire-and-await (non-blocking on failure).
+            await ActivityLogWriter.write(
+                client: client,
+                type: .announcement,
+                action: "create_announcement",
+                description: "发布了公告「\(t)」",
+                entityType: "announcement",
+                entityId: saved.id
+            )
             return true
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
@@ -134,6 +144,16 @@ public final class AnnouncementsListViewModel: ObservableObject {
                     return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
                 }
             }
+
+            // Activity log — pin/unpin counts as an update in Web semantics.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .announcement,
+                action: "update_announcement",
+                description: "更新了公告「\(announcement.title)」",
+                entityType: "announcement",
+                entityId: announcement.id
+            )
             return true
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
@@ -151,6 +171,16 @@ public final class AnnouncementsListViewModel: ObservableObject {
                 .eq("id", value: announcement.id.uuidString)
                 .execute()
             items.removeAll { $0.id == announcement.id }
+
+            // Activity log — capture title before the row is gone.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .announcement,
+                action: "delete_announcement",
+                description: "删除了公告「\(announcement.title)」",
+                entityType: "announcement",
+                entityId: announcement.id
+            )
             return true
         } catch {
             errorMessage = ErrorLocalizer.localize(error)

@@ -7,7 +7,24 @@ public struct PayrollListView: View {
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
-    @State private var showAdminCreateSheet: Bool = false
+    /// Editor sheet state — when non-nil the sheet is presented.
+    /// `nil` inside `.create` means new record path; `nil` outer means
+    /// sheet is dismissed. Using an enum avoids the "two bools + one
+    /// optional row" sheet state soup.
+    @State private var editorTarget: EditorTarget? = nil
+    @State private var pendingDelete: PayrollRecord? = nil
+
+    private enum EditorTarget: Identifiable {
+        case create
+        case edit(PayrollRecord)
+
+        var id: String {
+            switch self {
+            case .create: return "create"
+            case .edit(let p): return p.id.uuidString
+            }
+        }
+    }
 
     public init(viewModel: PayrollListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -53,6 +70,17 @@ public struct PayrollListView: View {
                         ForEach(viewModel.payrolls) { payroll in
                             PayrollCardView(payroll: payroll)
                                 .padding(.horizontal)
+                                .modifier(AdminRowActions(
+                                    isEnabled: viewModel.canEdit,
+                                    onEdit: {
+                                        Haptic.light()
+                                        editorTarget = .edit(payroll)
+                                    },
+                                    onDelete: {
+                                        Haptic.light()
+                                        pendingDelete = payroll
+                                    }
+                                ))
                         }
                     }
                     .padding(.vertical)
@@ -62,11 +90,14 @@ public struct PayrollListView: View {
         }
         .navigationTitle("薪资")
         .toolbar {
-            if viewModel.canEdit {
+            // "+" only makes sense when viewing the cross-employee list —
+            // in `.mine` scope finance ops would be creating a row for
+            // themselves, which is almost never the intent.
+            if viewModel.canEdit && viewModel.scope == .all {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Haptic.light()
-                        showAdminCreateSheet = true
+                        editorTarget = .create
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -93,8 +124,52 @@ public struct PayrollListView: View {
                 Text(error)
             }
         }
-        .sheet(isPresented: $showAdminCreateSheet) {
-            adminCreatePlaceholder
+        .sheet(item: $editorTarget) { target in
+            switch target {
+            case .create:
+                PayrollEditSheet(
+                    viewModel: viewModel,
+                    payroll: nil,
+                    onDismiss: { editorTarget = nil }
+                )
+            case .edit(let payroll):
+                PayrollEditSheet(
+                    viewModel: viewModel,
+                    payroll: payroll,
+                    onDismiss: { editorTarget = nil }
+                )
+            }
+        }
+        .confirmationDialog(
+            "删除这条薪资记录？",
+            isPresented: .init(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { payroll in
+            Button("删除", role: .destructive) {
+                let target = payroll
+                pendingDelete = nil
+                Task { @MainActor in
+                    let ok = await viewModel.adminDeletePayroll(
+                        id: target.id,
+                        userId: target.userId,
+                        period: target.period
+                    )
+                    if ok {
+                        Haptic.rigid()
+                    } else {
+                        Haptic.warning()
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: { _ in
+            Text("删除后需重新导入或计算，确认？")
         }
     }
 
@@ -124,33 +199,58 @@ public struct PayrollListView: View {
             : "你还没有任何薪资历史记录。"
     }
 
-    // Placeholder create sheet for admin. Full edit form is a
-    // follow-up — for now we surface a clear TODO so the entry
-    // point is wired end-to-end.
-    private var adminCreatePlaceholder: some View {
-        NavigationStack {
-            VStack(spacing: BsSpacing.lg) {
-                Image(systemName: "hammer.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(BsColor.inkMuted)
-                Text("admin 新建薪资记录 (TODO)")
-                    .font(BsTypography.cardTitle)
-                    .foregroundStyle(BsColor.ink)
-                Text("此界面将在后续版本提供：按员工创建或批量导入薪资条。当前仅打通入口。")
-                    .font(BsTypography.bodySmall)
-                    .foregroundStyle(BsColor.inkMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(BsColor.pageBackground)
-            .navigationTitle("新建薪资")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { showAdminCreateSheet = false }
-                        .tint(BsColor.brandAzure)
+}
+
+// ══════════════════════════════════════════════════════════════════
+// AdminRowActions
+// ──────────────────────────────────────────────────────────────────
+// Attaches admin affordances (edit + delete) to a payroll row for
+// finance_ops / admin viewers. No-op when `isEnabled` is false so
+// ordinary employees see the card as a plain static row.
+//
+// Surfaces:
+//   • `.contextMenu`  — long-press opens edit / delete (works in
+//      `ScrollView + LazyVStack` contexts, which is what this screen uses).
+//   • `.swipeActions` — attached for forward compat if this list ever
+//      moves into a `List`; SwiftUI silently no-ops swipe actions
+//      outside `List`, so keeping the declaration costs nothing.
+// ══════════════════════════════════════════════════════════════════
+
+private struct AdminRowActions: ViewModifier {
+    let isEnabled: Bool
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .contextMenu {
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
                 }
-            }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    .tint(BsColor.brandAzure)
+                }
+        } else {
+            content
         }
     }
 }

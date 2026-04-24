@@ -357,6 +357,12 @@ public final class ReportingViewModel: ObservableObject {
                 .execute()
                 .value
 
+            // Track whether this was an existing row (update) or a new row
+            // so the activity log copy reflects the correct verb.
+            let isUpdate = dailyLogs.contains(where: {
+                Calendar.current.isDate($0.date, inSameDayAs: saved.date)
+            })
+
             // Local cache refresh: replace-or-prepend by date.
             if let idx = dailyLogs.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: saved.date) }) {
                 dailyLogs[idx] = saved
@@ -364,6 +370,16 @@ public final class ReportingViewModel: ObservableObject {
                 dailyLogs.insert(saved, at: 0)
             }
             successMessage = "日志已保存"
+
+            // Activity log — upsert maps to Web "update_daily_log" action.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "update_daily_log",
+                description: "\(isUpdate ? "更新了" : "提交了")\(isoDay(saved.date))的日报",
+                entityType: "daily_log",
+                entityId: saved.id
+            )
             return saved
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
@@ -396,6 +412,16 @@ public final class ReportingViewModel: ObservableObject {
                 .execute()
             dailyLogs.removeAll { $0.id == log.id }
             successMessage = "日志已删除"
+
+            // Activity log — capture date before the row is gone.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "delete_daily_log",
+                description: "删除了\(isoDay(log.date))的日报",
+                entityType: "daily_log",
+                entityId: log.id
+            )
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
         }
@@ -483,6 +509,10 @@ public final class ReportingViewModel: ObservableObject {
                 .execute()
                 .value
 
+            let isUpdate = weeklyReports.contains(where: {
+                Calendar.current.isDate($0.weekStart, inSameDayAs: saved.weekStart)
+            })
+
             if let idx = weeklyReports.firstIndex(where: {
                 Calendar.current.isDate($0.weekStart, inSameDayAs: saved.weekStart)
             }) {
@@ -491,6 +521,17 @@ public final class ReportingViewModel: ObservableObject {
                 weeklyReports.insert(saved, at: 0)
             }
             successMessage = "周报已保存"
+
+            // Activity log — upsert maps to Web "update_weekly_report".
+            let week = isoWeekNumber(saved.weekStart)
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "update_weekly_report",
+                description: "\(isUpdate ? "更新了" : "提交了")第 \(week) 周周报",
+                entityType: "weekly_report",
+                entityId: saved.id
+            )
             return saved
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
@@ -522,6 +563,17 @@ public final class ReportingViewModel: ObservableObject {
                 .execute()
             weeklyReports.removeAll { $0.id == report.id }
             successMessage = "周报已删除"
+
+            // Activity log — capture week number before the row is gone.
+            let week = isoWeekNumber(report.weekStart)
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "delete_weekly_report",
+                description: "删除了第 \(week) 周周报",
+                entityType: "weekly_report",
+                entityId: report.id
+            )
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
         }
@@ -553,6 +605,14 @@ public final class ReportingViewModel: ObservableObject {
         let cal = Calendar.current
         let comps = cal.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", comps.year ?? 1970, comps.month ?? 1, comps.day ?? 1)
+    }
+
+    /// ISO week-of-year for activity log descriptions (Web describes
+    /// weekly reports as "第 N 周周报").
+    private func isoWeekNumber(_ date: Date) -> Int {
+        var cal = Calendar(identifier: .iso8601)
+        cal.timeZone = TimeZone.current
+        return cal.component(.weekOfYear, from: date)
     }
 }
 

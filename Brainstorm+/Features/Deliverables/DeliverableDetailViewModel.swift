@@ -26,8 +26,8 @@ public final class DeliverableDetailViewModel: ObservableObject {
     @Published public var errorMessage: String?
     @Published public var successMessage: String?
 
-    private let client: SupabaseClient
-    private weak var listViewModel: DeliverableListViewModel?
+    public let client: SupabaseClient
+    public weak var listViewModel: DeliverableListViewModel?
 
     public init(
         deliverable: Deliverable,
@@ -37,6 +37,53 @@ public final class DeliverableDetailViewModel: ObservableObject {
         self.deliverable = deliverable
         self.client = client
         self.listViewModel = listViewModel
+    }
+
+    /// Hand-off to `DeliverableListViewModel.deleteDeliverable`. Returns
+    /// `true` on success so the detail view can dismiss itself. Falls
+    /// back to a direct `.delete()` + activity-log write if the detail
+    /// view is opened standalone (no list VM attached).
+    @discardableResult
+    public func deleteCurrent() async -> Bool {
+        isMutating = true
+        errorMessage = nil
+        defer { isMutating = false }
+
+        if let list = listViewModel {
+            let ok = await list.deleteDeliverable(id: deliverable.id)
+            if !ok { self.errorMessage = list.errorMessage }
+            return ok
+        }
+
+        // Standalone path.
+        let priorTitle = deliverable.title
+        do {
+            try await client
+                .from("deliverables")
+                .delete()
+                .eq("id", value: deliverable.id.uuidString)
+                .execute()
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "delete_deliverable",
+                description: "删除了交付物「\(priorTitle)」",
+                entityType: "deliverable",
+                entityId: deliverable.id
+            )
+            Haptic.rigid()
+            successMessage = "交付物已删除"
+            return true
+        } catch {
+            Haptic.warning()
+            errorMessage = ErrorLocalizer.localize(error)
+            return false
+        }
+    }
+
+    /// Adopt a freshly-updated row (e.g. after the edit sheet saves).
+    public func apply(_ fresh: Deliverable) {
+        self.deliverable = fresh
     }
 
     public func refresh() async {

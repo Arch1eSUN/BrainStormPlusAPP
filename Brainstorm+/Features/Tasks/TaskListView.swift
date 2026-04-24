@@ -172,7 +172,7 @@ public struct TaskListView: View {
                 ForEach(Array(visibleTasks.enumerated()), id: \.element.id) { index, task in
                     TaskCardView(task: task) {
                         // Quick-complete entry (Web's `toggleTaskCompletion`).
-                        Task { await viewModel.toggleTaskCompletion(task: task) }
+                        Task { await viewModel.toggleTaskCompletion(task.id) }
                     }
                     .bsAppearStagger(index: index)
                     .listRowBackground(Color.clear)
@@ -185,7 +185,7 @@ public struct TaskListView: View {
                             Label("删除", systemImage: "trash")
                         }
                         Button {
-                            Task { await viewModel.toggleTaskCompletion(task: task) }
+                            Task { await viewModel.toggleTaskCompletion(task.id) }
                         } label: {
                             Label(task.progress >= 100 ? "撤销完成" : "标记完成",
                                   systemImage: task.progress >= 100 ? "arrow.uturn.backward.circle" : "checkmark.circle")
@@ -203,7 +203,7 @@ public struct TaskListView: View {
                         }
                         Divider()
                         Button {
-                            Task { await viewModel.toggleTaskCompletion(task: task) }
+                            Task { await viewModel.toggleTaskCompletion(task.id) }
                         } label: {
                             Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
                         }
@@ -382,7 +382,7 @@ public struct TaskListView: View {
                                 Task { await viewModel.updateTaskStatus(task: task, newStatus: newStatus) }
                             },
                             onToggleComplete: {
-                                Task { await viewModel.toggleTaskCompletion(task: task) }
+                                Task { await viewModel.toggleTaskCompletion(task.id) }
                             },
                             onDelete: {
                                 Task { await viewModel.deleteTask(task: task) }

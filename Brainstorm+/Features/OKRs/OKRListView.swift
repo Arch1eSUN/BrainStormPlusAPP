@@ -9,8 +9,19 @@ public struct OKRListView: View {
     @StateObject private var viewModel: OKRListViewModel
     @State private var expanded: Set<UUID> = []
     @State private var showingCreate: Bool = false
+    // Pending confirmation dialog state for status transitions / deletions.
+    @State private var pendingStatus: PendingStatusChange? = nil
+    @State private var pendingDelete: Objective? = nil
+    @State private var actionError: String? = nil
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
+
+    /// Queued status-transition request waiting on user confirmation.
+    private struct PendingStatusChange: Identifiable {
+        let id = UUID()
+        let objective: Objective
+        let target: Objective.ObjectiveStatus
+    }
 
     public init(viewModel: OKRListViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -63,12 +74,59 @@ public struct OKRListView: View {
                 onDismiss: { showingCreate = false }
             )
         }
+        .confirmationDialog(
+            pendingStatus.map { confirmStatusTitle($0) } ?? "",
+            isPresented: Binding(
+                get: { pendingStatus != nil },
+                set: { if !$0 { pendingStatus = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingStatus
+        ) { change in
+            Button(statusActionLabel(change.target)) {
+                confirmStatusChange(change)
+                pendingStatus = nil
+            }
+            Button("取消", role: .cancel) { pendingStatus = nil }
+        }
+        .confirmationDialog(
+            "删除目标",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { obj in
+            Button("删除", role: .destructive) {
+                confirmDelete(obj)
+                pendingDelete = nil
+            }
+            Button("取消", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("删除后该目标及其 KR 无法恢复，确认？")
+        }
+        .alert(
+            "操作失败",
+            isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )
+        ) {
+            Button("好", role: .cancel) { actionError = nil }
+        } message: {
+            Text(actionError ?? "")
+        }
         .task(id: viewModel.period) {
             await viewModel.fetchObjectives()
         }
         .refreshable {
             await viewModel.fetchObjectives()
         }
+    }
+
+    private func confirmStatusTitle(_ change: PendingStatusChange) -> String {
+        "确认\(statusActionLabel(change.target))？"
     }
 
     // MARK: - Content
@@ -334,6 +392,76 @@ public struct OKRListView: View {
             RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
                 .stroke(BsColor.borderSubtle, lineWidth: 0.5)
         )
+        .contextMenu { objectiveContextMenu(obj) }
+    }
+
+    // MARK: - Context menu / confirmation flows for Objective rows
+
+    @ViewBuilder
+    private func objectiveContextMenu(_ obj: Objective) -> some View {
+        let transitions = OKRListViewModel.validStatusTransitions[obj.status] ?? []
+        ForEach(transitions, id: \.self) { target in
+            Button {
+                Haptic.selection()
+                pendingStatus = PendingStatusChange(objective: obj, target: target)
+            } label: {
+                Label(statusActionLabel(target), systemImage: statusActionIcon(target))
+            }
+        }
+        if !transitions.isEmpty {
+            Divider()
+        }
+        Button(role: .destructive) {
+            Haptic.selection()
+            pendingDelete = obj
+        } label: {
+            Label("删除目标", systemImage: "trash")
+        }
+    }
+
+    private func statusActionLabel(_ target: Objective.ObjectiveStatus) -> String {
+        switch target {
+        case .active: return "启用"
+        case .completed: return "标记为已完成"
+        case .cancelled: return "取消目标"
+        case .draft: return "重开为草稿"
+        }
+    }
+
+    private func statusActionIcon(_ target: Objective.ObjectiveStatus) -> String {
+        switch target {
+        case .active: return "play.fill"
+        case .completed: return "checkmark.seal.fill"
+        case .cancelled: return "xmark.circle.fill"
+        case .draft: return "arrow.uturn.backward"
+        }
+    }
+
+    private func confirmStatusChange(_ change: PendingStatusChange) {
+        Task { @MainActor in
+            do {
+                try await viewModel.updateObjectiveStatus(
+                    objectiveId: change.objective.id,
+                    newStatus: change.target
+                )
+                Haptic.soft()
+            } catch {
+                Haptic.warning()
+                actionError = ErrorLocalizer.localize(error)
+            }
+        }
+    }
+
+    private func confirmDelete(_ obj: Objective) {
+        Task { @MainActor in
+            do {
+                try await viewModel.deleteObjective(objectiveId: obj.id)
+                Haptic.rigid()
+            } catch {
+                Haptic.warning()
+                actionError = ErrorLocalizer.localize(error)
+            }
+        }
     }
 
     private func krRow(_ kr: KeyResult) -> some View {

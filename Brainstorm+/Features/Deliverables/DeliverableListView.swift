@@ -25,6 +25,8 @@ public struct DeliverableListView: View {
     @StateObject private var viewModel: DeliverableListViewModel
     @State private var showFilters: Bool = false
     @State private var showCreateSheet: Bool = false
+    @State private var editTarget: Deliverable? = nil
+    @State private var deleteTarget: Deliverable? = nil
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -76,6 +78,28 @@ public struct DeliverableListView: View {
         }
         .sheet(isPresented: $showCreateSheet) {
             DeliverableCreateSheet(viewModel: viewModel)
+        }
+        .sheet(item: $editTarget) { target in
+            DeliverableEditSheet(viewModel: viewModel, deliverable: target)
+        }
+        .confirmationDialog(
+            "删除后该交付物记录无法恢复，确认？",
+            isPresented: Binding(
+                get: { deleteTarget != nil },
+                set: { if !$0 { deleteTarget = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deleteTarget
+        ) { target in
+            Button("删除", role: .destructive) {
+                Task {
+                    _ = await viewModel.deleteDeliverable(id: target.id)
+                    deleteTarget = nil
+                }
+            }
+            Button("取消", role: .cancel) {
+                deleteTarget = nil
+            }
         }
         .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
         .onSubmit(of: .search) {
@@ -328,6 +352,25 @@ public struct DeliverableListView: View {
                         .padding(.horizontal)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        Haptic.light()
+                        editTarget = d
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        Haptic.light()
+                        deleteTarget = d
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                }
+                // NOTE: Swipe actions require a parent `List` — the list
+                // here is a LazyVStack (matches the Web list's grid
+                // layout), so we ship the same two entry points via
+                // context-menu long-press instead. If the list is later
+                // migrated to `List`, re-add .swipeActions here.
             }
         }
     }

@@ -111,6 +111,24 @@ public class TaskListViewModel: ObservableObject {
         let role: String
     }
 
+    /// Row shape written to `task_participants` during toggleTaskCompletion
+    /// auto-enrolment (Web `tasks.ts:268-281`). Shares the schema with
+    /// `ParticipantInsert` but is a distinct struct so the dedicated
+    /// select("id, user_id, completed_at") shape stays coupled to its read.
+    private struct ParticipantUpsert: Encodable {
+        let task_id: UUID
+        let user_id: UUID
+        let role: String
+    }
+
+    /// Select shape for `task_participants` rows read during toggle.
+    /// Only fields needed for the multi-participant completion recompute.
+    private struct ParticipantRow: Decodable {
+        let id: UUID
+        let user_id: UUID
+        var completed_at: Date?
+    }
+
     /// Create a new task + optional participant rows.
     ///
     /// `participantIds` mirrors Web's `participant_ids` form field. The
@@ -181,6 +199,16 @@ public class TaskListViewModel: ObservableObject {
                 self.errorMessage = ErrorLocalizer.localize(error)
             }
         }
+
+        // Activity log — 1:1 port of Web `writeActivityLog({ action: 'create_task', ... })`.
+        await ActivityLogWriter.write(
+            client: client,
+            type: .task,
+            action: "create_task",
+            description: "创建了任务「\(title)」",
+            entityType: "task",
+            entityId: inserted.id
+        )
 
         await fetchTasks()
     }
@@ -276,6 +304,18 @@ public class TaskListViewModel: ObservableObject {
                 .update(["status": newStatus.rawValue])
                 .eq("id", value: task.id)
                 .execute()
+
+            // Activity log — Web uses a generic `update_task` action for
+            // any metadata mutation. Status change qualifies.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .task,
+                action: "update_task",
+                description: "更新了任务「\(task.title)」",
+                entityType: "task",
+                entityId: task.id
+            )
+
             // Re-fetch to pick up any server-side changes (updated_at, progress
             // auto-bumps triggered by task_participants side-effects, etc.).
             await fetchTasks()
@@ -286,46 +326,156 @@ public class TaskListViewModel: ObservableObject {
         }
     }
 
-    /// Quick progress toggle (0 ↔ 100). Mirrors Web `toggleTaskCompletion`
-    /// in `tasks.ts:252-340`. On iOS we keep it simpler: flip the local
-    /// `progress` optimistically and call `tasks.update` directly rather
-    /// than walking `task_participants` — the server side already handles
-    /// the multi-participant recalculation when needed, and for the
-    /// single-user path this is a 1:1 of Web's visible effect.
+    /// Multi-participant completion toggle — 1:1 port of Web
+    /// `toggleTaskCompletion` in `BrainStorm+-Web/src/lib/actions/tasks.ts:252-340`.
     ///
-    /// NB: this differs from Web's server action, which recomputes progress
-    /// based on participant `completed_at` rows. We flag this in the
-    /// summary — a full port would require a Postgres RPC or multi-step
-    /// client logic that's not justified for batch C.2.
-    public func toggleTaskCompletion(task: TaskModel) async {
+    /// Flow (7 steps, exactly matching Web):
+    ///  1. Fetch all rows from `task_participants` for this task.
+    ///  2. Find the current user's participant row; if missing, insert one
+    ///     with role='member' (auto-enrolment for creators/owners).
+    ///  3. Toggle that row's `completed_at` (null ↔ now()).
+    ///  4. Recompute progress = round(completedCount / total * 100).
+    ///  5. If progress == 100 → tasks.status = 'done'.
+    ///     If uncompleted and current status was 'done' → bump to 'in_progress'.
+    ///  6. Update the `tasks` row (progress + optional status).
+    ///  7. Write an activity_log entry describing the action.
+    ///
+    /// Returns `true` on success. On failure we revert optimistic state,
+    /// emit `errorMessage`, and fire a warning haptic. On success we emit
+    /// a selection haptic (toggle is not a terminal action).
+    @discardableResult
+    public func toggleTaskCompletion(_ taskId: UUID) async -> Bool {
+        // Snapshot the current tasks array so we can revert on error.
+        // If the row isn't in our cache (stale state), we still proceed —
+        // the server is the source of truth.
         let snapshot = tasks
-        let newProgress = task.progress >= 100 ? 0 : 100
-        let newStatus: TaskModel.TaskStatus = {
-            if newProgress == 100 { return .done }
-            // If we just uncompleted a previously-done task, bump to in_progress.
-            if task.status == .done { return .inProgress }
-            return task.status
-        }()
 
-        // Optimistic local update.
-        if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[idx] = mutate(tasks[idx], status: newStatus, progress: newProgress)
-        }
-
-        struct ProgressUpdate: Encodable {
-            let progress: Int
-            let status: String
-        }
         do {
-            try await client
-                .from("tasks")
-                .update(ProgressUpdate(progress: newProgress, status: newStatus.rawValue))
-                .eq("id", value: task.id)
+            let userId = try await client.auth.session.user.id
+
+            // ── Step 1: fetch participants ───────────────────────────
+            var participants: [ParticipantRow] = try await client
+                .from("task_participants")
+                .select("id, user_id, completed_at")
+                .eq("task_id", value: taskId)
                 .execute()
-            await fetchTasks()
+                .value
+
+            // ── Step 2: find / create current user's row ─────────────
+            var userParticipantIndex = participants.firstIndex(where: { $0.user_id == userId })
+            if userParticipantIndex == nil {
+                let inserted: ParticipantRow = try await client
+                    .from("task_participants")
+                    .insert(ParticipantUpsert(
+                        task_id: taskId,
+                        user_id: userId,
+                        role: "member"
+                    ))
+                    .select("id, user_id, completed_at")
+                    .single()
+                    .execute()
+                    .value
+                participants.append(inserted)
+                userParticipantIndex = participants.count - 1
+            }
+            guard let idx = userParticipantIndex else { return false }
+            var userParticipant = participants[idx]
+
+            // ── Step 3: toggle completed_at ──────────────────────────
+            let isCompleted = userParticipant.completed_at != nil
+            let completedAtDate: Date? = isCompleted ? nil : Date()
+            // Pre-format to ISO-8601 for Supabase (matches the pattern
+            // used elsewhere in the app, e.g. ProjectEditViewModel:259).
+            let completedAtString: String? = completedAtDate.map {
+                ISO8601DateFormatter().string(from: $0)
+            }
+
+            struct CompletedAtUpdate: Encodable {
+                let completed_at: String?
+            }
+            try await client
+                .from("task_participants")
+                .update(CompletedAtUpdate(completed_at: completedAtString))
+                .eq("id", value: userParticipant.id)
+                .execute()
+
+            // Mirror local state so the progress calc sees the latest value.
+            userParticipant.completed_at = completedAtDate
+            participants[idx] = userParticipant
+
+            // ── Step 4: recompute progress ───────────────────────────
+            let total = participants.count
+            let completedCount = participants.filter { $0.completed_at != nil }.count
+            let progress = total > 0 ? Int((Double(completedCount) / Double(total) * 100).rounded()) : 0
+
+            // ── Step 5: decide status transition ─────────────────────
+            var newStatus: TaskModel.TaskStatus? = nil
+            if progress == 100 {
+                newStatus = .done
+            } else if completedAtDate == nil {
+                // Just uncompleted — if the task was previously 'done',
+                // roll it back to in_progress. Fetch current status to match
+                // Web semantics (it doesn't trust its local copy either).
+                struct StatusRow: Decodable { let status: String }
+                let current: StatusRow? = try? await client
+                    .from("tasks")
+                    .select("status")
+                    .eq("id", value: taskId)
+                    .single()
+                    .execute()
+                    .value
+                if current?.status == TaskModel.TaskStatus.done.rawValue {
+                    newStatus = .inProgress
+                }
+            }
+
+            // ── Step 6: update tasks row ─────────────────────────────
+            if let newStatus {
+                struct ProgressAndStatus: Encodable {
+                    let progress: Int
+                    let status: String
+                }
+                try await client
+                    .from("tasks")
+                    .update(ProgressAndStatus(progress: progress, status: newStatus.rawValue))
+                    .eq("id", value: taskId)
+                    .execute()
+            } else {
+                struct ProgressOnly: Encodable { let progress: Int }
+                try await client
+                    .from("tasks")
+                    .update(ProgressOnly(progress: progress))
+                    .eq("id", value: taskId)
+                    .execute()
+            }
+
+            // Local patch — avoid full refetch, matching the previous
+            // optimistic-feel of the list/kanban cells.
+            if let rowIdx = tasks.firstIndex(where: { $0.id == taskId }) {
+                let effectiveStatus = newStatus ?? tasks[rowIdx].status
+                tasks[rowIdx] = mutate(tasks[rowIdx], status: effectiveStatus, progress: progress)
+            }
+
+            // ── Step 7: activity_log ─────────────────────────────────
+            let description = (completedAtDate != nil)
+                ? "完成了分配的任务部分"
+                : "撤销了任务完成状态"
+            await ActivityLogWriter.write(
+                client: client,
+                type: .task,
+                action: "task_updated",
+                description: description,
+                entityType: "task",
+                entityId: taskId
+            )
+
+            Haptic.selection()
+            return true
         } catch {
             self.tasks = snapshot
             self.errorMessage = ErrorLocalizer.localize(error)
+            Haptic.warning()
+            return false
         }
     }
 
@@ -339,6 +489,17 @@ public class TaskListViewModel: ObservableObject {
                 .delete()
                 .eq("id", value: task.id)
                 .execute()
+
+            // Activity log — record the delete with the captured title
+            // (the row is gone by now; we can't re-read it).
+            await ActivityLogWriter.write(
+                client: client,
+                type: .task,
+                action: "delete_task",
+                description: "删除了任务「\(task.title)」",
+                entityType: "task",
+                entityId: task.id
+            )
         } catch {
             self.tasks = snapshot
             self.errorMessage = ErrorLocalizer.localize(error)

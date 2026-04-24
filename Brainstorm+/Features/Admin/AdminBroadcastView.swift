@@ -77,6 +77,18 @@ final class AdminBroadcastViewModel: ObservableObject {
             }
             _ = try await client.from("notifications").insert(payloads).execute()
             info = "已推送给 \(payloads.count) 位用户"
+
+            // Activity log — record the broadcast before we clear the form,
+            // so we still have `trimmedTitle` / count for the description.
+            await ActivityLogWriter.write(
+                client: client,
+                type: .system,
+                action: "broadcast",
+                description: "向 \(payloads.count) 人发送了广播：\(trimmedTitle)",
+                entityType: "broadcast",
+                entityId: nil
+            )
+
             title = ""
             body = ""
         } catch {
