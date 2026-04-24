@@ -294,6 +294,8 @@ private enum ActivityTypeMeta {
         case .leave:        return Info(icon: "calendar.badge.minus",    tint: BsColor.warning)
         case .announcement: return Info(icon: "megaphone.fill",          tint: BsColor.brandCoral)
         case .okr:          return Info(icon: "target",                  tint: BsColor.brandAzureDark)
+        case .attendance:   return Info(icon: "clock.badge.checkmark.fill", tint: BsColor.brandAzure)
+        case .approval:     return Info(icon: "checkmark.seal.fill",     tint: BsColor.success)
         case .system:       return Info(icon: "bolt.fill",               tint: BsColor.inkMuted)
         }
     }

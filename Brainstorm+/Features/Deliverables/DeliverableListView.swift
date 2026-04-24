@@ -101,41 +101,7 @@ public struct DeliverableListView: View {
                 deleteTarget = nil
             }
         }
-        .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
-        .onSubmit(of: .search) {
-            Task { await viewModel.reloadItems() }
-        }
-        .onChange(of: viewModel.searchText) { old, new in
-            // Web reloads on every keystroke; we reload on "clear"
-            // (the native x button fires no onSubmit) and keep the
-            // explicit submit for typed-in queries. Matches the
-            // KnowledgeListView pattern.
-            if !old.isEmpty, new.isEmpty {
-                Task { await viewModel.reloadItems() }
-            }
-        }
-        .onChange(of: viewModel.statusFilter) { _, _ in
-            Task { await viewModel.reloadItems() }
-        }
-        .onChange(of: viewModel.projectFilter) { _, _ in
-            Task { await viewModel.reloadItems() }
-        }
-        .onChange(of: viewModel.assigneeFilter) { _, _ in
-            Task { await viewModel.reloadItems() }
-        }
-        .onChange(of: viewModel.dateFrom) { _, _ in
-            Task { await viewModel.reloadItems() }
-        }
-        .onChange(of: viewModel.dateTo) { _, _ in
-            Task { await viewModel.reloadItems() }
-        }
-        .refreshable {
-            await viewModel.loadAll()
-        }
-        .task {
-            await viewModel.loadAll()
-        }
-        .zyErrorBanner($viewModel.errorMessage)
+        .modifier(DeliverableListFiltersModifier(viewModel: viewModel))
     }
 
     // MARK: - Content
@@ -454,5 +420,52 @@ private struct DeliverableRow: View {
                     .foregroundStyle(BsColor.inkFaint)
             }
         }
+    }
+}
+
+// MARK: - ViewModifier · 搜索/onChange/refresh 打包
+// Swift 单 body 里 toolbar + 2 sheet + confirmationDialog + searchable +
+// onSubmit + 7 个 onChange + refreshable + task + zyErrorBanner 一起串联会
+// 触发类型推断超时（xcodebuild 真超时，非 SourceKit 虚警）。抽出筛选/搜索
+// /刷新这一段到独立 ViewModifier 让编译器分块推断即可。
+private struct DeliverableListFiltersModifier: ViewModifier {
+    @ObservedObject var viewModel: DeliverableListViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
+            .onSubmit(of: .search) {
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.searchText) { old, new in
+                // Web reloads on every keystroke; we reload on "clear"
+                // (native x button fires no onSubmit) and keep the
+                // explicit submit for typed-in queries.
+                if !old.isEmpty, new.isEmpty {
+                    Task { await viewModel.reloadItems() }
+                }
+            }
+            .onChange(of: viewModel.statusFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.projectFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.assigneeFilter) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.dateFrom) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .onChange(of: viewModel.dateTo) { _, _ in
+                Task { await viewModel.reloadItems() }
+            }
+            .refreshable {
+                await viewModel.loadAll()
+            }
+            .task {
+                await viewModel.loadAll()
+            }
+            .zyErrorBanner($viewModel.errorMessage)
     }
 }
