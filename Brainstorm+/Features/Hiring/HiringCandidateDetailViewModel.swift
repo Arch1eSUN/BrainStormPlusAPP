@@ -43,7 +43,7 @@ public final class HiringCandidateDetailViewModel: ObservableObject {
         self.candidate?.status = status
         do {
             try await repo.updateCandidateStatus(id: candidate.id, status: status)
-            // TODO(hiring-offer-email-bridge): 已接入 /api/mobile/hiring/offer-email
+            // Offer email 桥：/api/mobile/hiring/offer-email
             // 状态成功切到 .offer 后弹 confirmationDialog（View 侧），用户选择
             // "发送" 时再调用 `sendOfferEmail()`。503 / 失败时文案写入
             // errorMessage 但状态更新本身不回滚。

@@ -1,8 +1,8 @@
 import SwiftUI
 import Supabase
 
-// TODO(announcements-ai-draft-bridge): 已接入 POST /api/mobile/announcements/draft
-// Web equivalent: `generateAnnouncementDraft` server action (summary-actions.ts)。
+// AI 草稿桥：POST /api/mobile/announcements/draft
+// Web 等价实现：`generateAnnouncementDraft` in summary-actions.ts。
 // iOS 端仅透传 Bearer JWT + { topic }，由 Web 路由调用 askAI 生成草稿。
 
 public struct AnnouncementCreateView: View {

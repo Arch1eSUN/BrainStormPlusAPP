@@ -33,6 +33,27 @@ public class OKRListViewModel: ObservableObject {
     /// mirrors Web defaulting to `2026-Q1` in `page.tsx:32`.
     @Published public var period: String
 
+    /// Active employees available as assignee picks for OKR create/edit.
+    /// Loaded on demand from the sheet via `loadAvailableAssignees()`.
+    /// Mirrors the `profiles` select pattern used in
+    /// `DeliverableListViewModel.runFilterOptionsQuery()`.
+    @Published public private(set) var availableAssignees: [AssigneeOption] = []
+
+    /// Minimal profile row used by the assignee picker. Kept local to
+    /// the VM so we don't add a public type to Core/Models for a
+    /// picker-only projection.
+    public struct AssigneeOption: Identifiable, Hashable, Decodable {
+        public let id: UUID
+        public let fullName: String?
+        public let avatarUrl: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case fullName = "full_name"
+            case avatarUrl = "avatar_url"
+        }
+    }
+
     private let client: SupabaseClient
 
     public init(client: SupabaseClient, initialPeriod: String? = nil) {
@@ -162,6 +183,7 @@ public class OKRListViewModel: ObservableObject {
         title: String,
         description: String?,
         ownerId: UUID? = nil,
+        assigneeId: UUID? = nil,
         period: String? = nil
     ) async throws -> Objective {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -193,7 +215,7 @@ public class OKRListViewModel: ObservableObject {
             description: description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             period: targetPeriod,
             owner_id: resolvedOwnerId,
-            assignee_id: nil,
+            assignee_id: assigneeId,
             org_id: orgId,
             status: Objective.ObjectiveStatus.active.rawValue,
             progress: 0
@@ -634,6 +656,30 @@ public class OKRListViewModel: ObservableObject {
 
     private struct ObjectiveStatusUpdate: Encodable {
         let status: String
+    }
+
+    // MARK: - Assignee directory
+
+    /// Loads the active-employee directory for OKREditSheet's assignee
+    /// picker. Mirrors the `profiles` projection used by
+    /// `DeliverableListViewModel.runFilterOptionsQuery()` — read-only,
+    /// cheap, and gated by the same RLS as every other profile read.
+    /// Silently no-ops on error (picker just shows the empty list — the
+    /// user can still save without assigning).
+    public func loadAvailableAssignees() async {
+        do {
+            let rows: [AssigneeOption] = try await client
+                .from("profiles")
+                .select("id, full_name, avatar_url")
+                .eq("status", value: "active")
+                .order("full_name", ascending: true)
+                .execute()
+                .value
+            self.availableAssignees = rows
+        } catch {
+            // Non-fatal: the picker just stays empty.
+            self.availableAssignees = []
+        }
     }
 
     // MARK: - Helpers

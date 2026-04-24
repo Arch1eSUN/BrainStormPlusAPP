@@ -4,9 +4,12 @@ import SwiftUI
 ///
 /// Batch C.3 — multi-view mode mirroring Web
 /// `src/app/dashboard/schedules/` (4 modes: `timeline` / `calendar` /
-/// `list` / `my`). Employee-facing ports first; timeline + calendar
-/// surface a "即将推出" placeholder because the Web versions lean on
-/// heavy chrome (grid virtualization + department joins) that's deferred.
+/// `list` / `my`). iOS ships `my` + `list` as first-class (read + quick
+/// apply); `timeline` and `calendar` stay mobile-deferred because the
+/// Web versions are desktop-only (grid virtualization, multi-department
+/// joins, drag-to-reschedule). Instead of a generic "即将推出" card we
+/// now surface a specific message plus a deep-link to the Web schedule
+/// route so managers know exactly where editing lives.
 ///
 /// Shared model: the `ScheduleViewModel` in-VM cache (`states` map keyed
 /// by YYYY-MM-DD) backs every mode. Pull-to-refresh invalidates and
@@ -112,11 +115,12 @@ public struct ScheduleView: View {
                 .padding(.bottom, BsSpacing.sm)
 
             // Note: previously there was a header-level horizontal date
-            // scrubber here for timeline/calendar stubs. Removed — stubs
-            // render a single "coming soon" placeholder that doesn't need
-            // per-date navigation, and `my` + `list` own their own date
-            // chrome further down. This eliminates the duplicate date
-            // surfaces the user flagged.
+            // scrubber here for timeline/calendar stubs. Removed — the
+            // stubs now render a mobile-deferred notice (today card +
+            // "edit on Web" deep-link) that doesn't need per-date
+            // navigation, and `my` + `list` own their own date chrome
+            // further down. This eliminates the duplicate date surfaces
+            // the user flagged.
         }
         .background(BsColor.surfaceSecondary.opacity(0.95))
         .background(.ultraThinMaterial)
@@ -340,19 +344,53 @@ public struct ScheduleView: View {
                     Image(systemName: mode.systemImage)
                         .font(.system(.largeTitle, weight: .light))
                         .foregroundStyle(BsColor.brandMint)
-                    Text("\(mode.displayLabel) 视图即将推出")
+                    Text("\(mode.displayLabel) 视图仅支持桌面端")
                         .font(Font.custom("Outfit-Medium", size: 16, relativeTo: .body))
                         .foregroundStyle(BsColor.ink)
-                    Text("稍后将支持团队层面的时间线 / 月视图。")
+                        .multilineTextAlignment(.center)
+                    Text("iOS 仅支持查看当日班次与本人 14 天排班。排班编辑、团队时间线请前往 Web 端。")
                         .font(BsTypography.captionSmall)
                         .foregroundStyle(BsColor.inkMuted)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, BsSpacing.md)
+
+                    webLinkButton
+                        .padding(.top, BsSpacing.xs)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(BsSpacing.xl + 4)
             }
         }
     }
+
+    /// Deep-link 到 Web 排班管理页。域名取 `AppEnvironment.webAPIBaseURL`
+    /// 的 host（DEBUG=本地 dev，RELEASE=zyoffice.me），避免硬编码。
+    /// 路由是 Web `src/app/dashboard/schedules/`。
+    @ViewBuilder
+    private var webLinkButton: some View {
+        if let url = Self.webScheduleURL {
+            Link(destination: url) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(.caption, weight: .medium))
+                    Text("打开 Web 排班")
+                        .font(BsTypography.bodySmall)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.sm)
+                .background(BsColor.brandAzure)
+                .clipShape(Capsule())
+            }
+            .accessibilityHint("在默认浏览器中打开 Web 端排班页面")
+        }
+    }
+
+    private static let webScheduleURL: URL? = {
+        // 复用 AppEnvironment 的 host，避免 debug / release 写死不同域名。
+        let base = AppEnvironment.webAPIBaseURL
+        return base.appendingPathComponent("dashboard/schedules")
+    }()
 
     // MARK: - Shared bits
 

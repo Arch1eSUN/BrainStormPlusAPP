@@ -3,9 +3,9 @@ import SwiftUI
 // ══════════════════════════════════════════════════════════════════
 // AdminEvaluationBatchSheet — 批量 AI 评分入口
 //
-// TODO(admin-evaluations-ai-bridge): 已接入 POST /api/mobile/admin/evaluations/trigger
-//   Web 路由内完成 CRON_SECRET / api_keys 解密 + askAI orchestrator + 入库；
-//   iOS 只提交 year_month / user_ids / force_regenerate 并等待 triggered 数。
+// POST /api/mobile/admin/evaluations/trigger —— Web 路由内完成
+// CRON_SECRET / api_keys 解密 + askAI orchestrator + 入库；
+// iOS 只提交 year_month / user_ids / force_regenerate 并等待 triggered 数。
 // ══════════════════════════════════════════════════════════════════
 
 public struct AdminEvaluationBatchSheet: View {

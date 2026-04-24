@@ -111,15 +111,13 @@ public enum AppModule: String, CaseIterable, Identifiable {
     
     public var implementationStatus: AppImplementationStatus {
         switch self {
-        case .tasks, .daily, .weekly, .schedules, .attendance, .chat, .knowledge, .notifications, .payroll, .settings, .leaves, .activity, .announcements, .team, .projects, .deliverables, .okr:
-            // okr (2026-04-24)、deliverables / projects 均已 ship create + edit。
-            // OKR KR add/check-in VM 方法（addKeyResult / updateKeyResultProgress）
-            // 就绪但 UI 暂无 sheet — 属于次级编辑场景，不影响首发 ship 判定。
+        case .tasks, .daily, .weekly, .schedules, .attendance, .chat, .knowledge, .notifications,
+             .payroll, .settings, .leaves, .activity, .announcements, .team, .projects,
+             .deliverables, .okr, .finance:
+            // OKR KR 全部 mutation (meta/status/delete) + Deliverables/Payroll CRUD
+            // 均已 ship (commit 0d3dfad)。Finance submitAIProcess 通过
+            // /api/mobile/finance/ai-process 已接入 Web orchestrator。
             return .implemented
-        case .finance:
-            // Phase 4.3 — read-only viewer for ai_work_records + charts.
-            // Submit/orchestrator wiring deferred (TODO finance-ai-orchestrator-bridge).
-            return .partial
         default:
             return .backlog
         }

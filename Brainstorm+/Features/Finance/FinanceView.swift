@@ -191,10 +191,10 @@ public struct FinanceView: View {
         }
     }
 
-    // MARK: - Input section (接入 /api/mobile/finance/ai-process)
-    // TODO(finance-ai-orchestrator-bridge): 已接入 Web 路由；保留注释以便追溯。
-    // Web equivalents: aiDocumentOrganize / aiReportSummarize / aiDataProcess
-    // in src/lib/actions/finance-ai.ts.
+    // MARK: - Input section
+    // POST /api/mobile/finance/ai-process；Web 等价实现：
+    // aiDocumentOrganize / aiReportSummarize / aiDataProcess in
+    // src/lib/actions/finance-ai.ts.
 
     @ViewBuilder
     private var inputSection: some View {

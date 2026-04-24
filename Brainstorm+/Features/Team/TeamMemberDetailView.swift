@@ -59,8 +59,7 @@ public struct TeamMemberDetailView: View {
                 if !viewModel.isSelf {
                     startChatButton
                 }
-                // TODO(team-detail-evaluation-panel): 已接入 TeamMemberEvaluationPanel
-                // （AI 月度评分面板）。仅对 self / ai_evaluation_access / admin+ 开放。
+                // AI 月度评分面板：仅对 self / ai_evaluation_access / admin+ 开放。
                 if canViewEvaluationPanel {
                     TeamMemberEvaluationPanel(profile: profile)
                 }

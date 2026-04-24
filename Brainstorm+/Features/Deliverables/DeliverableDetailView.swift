@@ -2,21 +2,16 @@ import SwiftUI
 import Supabase
 
 // ══════════════════════════════════════════════════════════════════
-// Phase 2.1 — Deliverable detail view.
+// Deliverable detail view.
 //
-// Surface (matches the row expansion implied by the Web page):
+// Surface:
 //   • Title + owner avatar (join from `profiles:assignee_id`)
 //   • Status chip + status picker (5 primary cases)
 //   • Description body
 //   • External link chip → opens `url` / `file_url` in Safari
 //   • Project pill (nested join `projects:project_id`)
 //   • Submitted / created / updated timestamps
-//
-// Out of scope this pass (mirrors the list view):
-//   • Edit / delete (TODO when the Web CRUD flow gets ported).
-//   • Participants join — Web deliverables row has no participants
-//     table; if one is introduced later, add it here alongside the
-//     owner avatar.
+//   • Toolbar ellipsis menu: 编辑 / 删除（CRUD 于 0d3dfad 上线）
 // ══════════════════════════════════════════════════════════════════
 
 public struct DeliverableDetailView: View {

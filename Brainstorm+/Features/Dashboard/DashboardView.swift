@@ -84,6 +84,10 @@ struct DashboardView: View {
     @State private var wordmarkPulse: Bool = false
     @State private var wordmarkPulseCount: Int = 0
 
+    /// Phase 4c：长按 week strip 某日 → 展示该日摘要 sheet。
+    /// 用 optional DayPeekData 作 `.sheet(item:)` 触发源（非 nil 即显示）。
+    @State private var dayPeek: DayPeekSheetItem?
+
     var body: some View {
         NavigationStack {
             mainList
@@ -102,6 +106,9 @@ struct DashboardView: View {
                 .sheet(isPresented: $showProfileSheet) {
                     NavigationStack { SettingsView() }
                         .presentationDetents([.large])
+                }
+                .sheet(item: $dayPeek) { item in
+                    DayPeekSheet(data: item.data)
                 }
                 .fullScreenCover(isPresented: $showCommandPalette) {
                     BsCommandPalette()
@@ -143,9 +150,10 @@ struct DashboardView: View {
             // —— 2. Weekly Cadence strip（裸 strip，不套卡）——
             Section {
                 BsWeeklyCadenceStrip(days: weekDays) { day in
-                    // TODO(phase-4c): 长按 → 展示该日摘要 popover
+                    // Phase 4c 已接入：长按 → 展示该日摘要 sheet
+                    // （haptic 在长按成功时发一次，sheet 手动 dismiss 不加 haptic）
                     Haptic.light()
-                    _ = day
+                    dayPeek = makeDayPeek(for: day)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: BsSpacing.xs, leading: BsSpacing.lg, bottom: BsSpacing.md, trailing: BsSpacing.lg))
@@ -230,6 +238,29 @@ struct DashboardView: View {
         f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: date)
+    }
+
+    // MARK: - Day peek (long-press on week strip)
+
+    /// 把 `WeekDayCadence` + 本周 attendance map 装成 sheet 可渲染的 `DayPeekData`。
+    /// 从 `attendance.thisWeek[iso]` 查该日打卡行；Date 从 iso 反解回来，
+    /// 避免再算一遍 Monday offset。反解失败 → 退回 Date() 兜底（显示"无数据"）。
+    private func makeDayPeek(for day: WeekDayCadence) -> DayPeekSheetItem {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        let date = f.date(from: day.id) ?? Date()
+        let record = attendance.thisWeek[day.id]
+        return DayPeekSheetItem(
+            data: DayPeekData(
+                date: date,
+                iso: day.id,
+                attendance: record,
+                isInFuture: day.isInFuture
+            )
+        )
     }
 
     // MARK: - NavBar items
@@ -415,6 +446,15 @@ struct DashboardView: View {
         case .employee: return false
         }
     }
+}
+
+// MARK: - Day peek identifiable wrapper
+
+/// `.sheet(item:)` 需要 Identifiable —— 用 iso 字符串作 id 保证同日重复长按
+/// 不会触发重挂载。
+struct DayPeekSheetItem: Identifiable {
+    let data: DayPeekData
+    var id: String { data.iso }
 }
 
 #Preview {

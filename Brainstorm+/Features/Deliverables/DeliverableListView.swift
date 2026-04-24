@@ -188,19 +188,17 @@ public struct DeliverableListView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(viewModel.statusCounts[s] ?? 0)")
-                            .font(.title3.weight(.bold))
-                            .contentTransition(.numericText())
-                        Text(s.displayName)
-                            .font(.caption2)
-                            .foregroundStyle(BsColor.inkMuted)
+                    BsContentCard(padding: .small) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(viewModel.statusCounts[s] ?? 0)")
+                                .font(.title3.weight(.bold))
+                                .contentTransition(.numericText())
+                            Text(s.displayName)
+                                .font(.caption2)
+                                .foregroundStyle(BsColor.inkMuted)
+                        }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    // TODO(batch-1): wrap in BsContentCard
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
             .padding(.horizontal)

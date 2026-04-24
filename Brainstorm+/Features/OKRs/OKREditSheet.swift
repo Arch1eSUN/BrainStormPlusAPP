@@ -18,9 +18,13 @@ public struct OKREditSheet: View {
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var period: String
+    @State private var assigneeId: UUID? = nil
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
     @FocusState private var focusedField: Field?
+
+    // Observe the VM so availableAssignees updates re-render the picker.
+    @ObservedObject private var observedVM: OKRListViewModel
 
     private enum Field: Hashable { case title, description, period }
 
@@ -31,10 +35,12 @@ public struct OKREditSheet: View {
     ) {
         self.existing = existing
         self.viewModel = viewModel
+        _observedVM = ObservedObject(wrappedValue: viewModel)
         self.onDismiss = onDismiss
         // Seed period from either the existing objective or the VM's
         // currently-selected quarter.
         _period = State(initialValue: existing?.period ?? viewModel.period)
+        _assigneeId = State(initialValue: existing?.assigneeId)
     }
 
     private var isEditing: Bool { existing != nil }
@@ -59,11 +65,10 @@ public struct OKREditSheet: View {
                         titleField
                         descriptionField
                         periodField
-                        // Owner field skipped for this first pass —
-                        // objective defaults to the current authenticated
-                        // user. TODO: add owner/assignee picker once the
-                        // profile list endpoint is wired up for OKRs
-                        // (Web's `fetchTeamMembers` equivalent).
+                        // Assignee picker 已接入 —— 负责人默认是当前登录用户，
+                        // assignee 可以单独指派给他人（与 Web
+                        // `createObjective` / `updateObjective` 对齐）。
+                        assigneeField
                         ownerNote
 
                         BsPrimaryButton(
@@ -98,6 +103,11 @@ public struct OKREditSheet: View {
                     description = existing.description ?? ""
                 }
                 focusedField = .title
+            }
+            .task {
+                // Load active-employee list for the assignee picker.
+                // Safe to call every open — VM replaces its array in place.
+                await viewModel.loadAvailableAssignees()
             }
             .alert(
                 "操作失败",
@@ -201,7 +211,7 @@ public struct OKREditSheet: View {
             Image(systemName: "info.circle.fill")
                 .font(.system(.caption))
                 .foregroundColor(BsColor.brandAzure.opacity(0.7))
-            Text("默认负责人为当前登录用户。如需改派他人，请到 Web 端调整。")
+            Text("默认负责人为当前登录用户。可在上方选择一位同事作为协同跟进人（assignee）。")
                 .font(BsTypography.captionSmall)
                 .foregroundColor(BsColor.inkMuted)
         }
@@ -209,6 +219,103 @@ public struct OKREditSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BsColor.brandAzure.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+    }
+
+    // Assignee picker —— 对齐 DeliverableEditSheet 的项目 picker 模式。
+    // 空选项表示不指派，由 owner 负责。
+    private var assigneeField: some View {
+        let selected: OKRListViewModel.AssigneeOption? = {
+            guard let id = assigneeId else { return nil }
+            return observedVM.availableAssignees.first(where: { $0.id == id })
+        }()
+        let label: String = {
+            if let s = selected {
+                return s.fullName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "未命名同事"
+            } else if assigneeId != nil {
+                // ID 存在但 directory 还没把对应人加载出来 —— 显示占位
+                return "已指派"
+            }
+            return "不指派（由负责人跟进）"
+        }()
+
+        return VStack(alignment: .leading, spacing: BsSpacing.xs) {
+            fieldLabel("负责人（assignee）", required: false)
+            Menu {
+                Button {
+                    assigneeId = nil
+                } label: {
+                    Label("不指派（由负责人跟进）", systemImage: assigneeId == nil ? "checkmark" : "person")
+                }
+                if !observedVM.availableAssignees.isEmpty {
+                    Divider()
+                }
+                ForEach(observedVM.availableAssignees) { option in
+                    Button {
+                        assigneeId = option.id
+                    } label: {
+                        HStack {
+                            Text(option.fullName?.nilIfEmpty ?? "未命名同事")
+                            if assigneeId == option.id {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: BsSpacing.sm) {
+                    assigneeAvatar(for: selected)
+                    Text(label)
+                        .font(BsTypography.body)
+                        .foregroundColor(assigneeId == nil ? BsColor.inkMuted : BsColor.ink)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundColor(BsColor.inkMuted)
+                }
+                .padding(BsSpacing.md)
+                .background(BsColor.surfacePrimary)
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                        .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+                )
+                .contentShape(Rectangle())
+            }
+            .disabled(isSubmitting)
+        }
+    }
+
+    @ViewBuilder
+    private func assigneeAvatar(for option: OKRListViewModel.AssigneeOption?) -> some View {
+        let diameter: CGFloat = 24
+        if let option = option,
+           let s = option.avatarUrl, !s.isEmpty,
+           let url = URL(string: s) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .failure, .empty:
+                    assigneeAvatarPlaceholder
+                @unknown default:
+                    assigneeAvatarPlaceholder
+                }
+            }
+            .frame(width: diameter, height: diameter)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(BsColor.brandAzureLight.opacity(0.35), lineWidth: 0.5))
+        } else {
+            assigneeAvatarPlaceholder
+                .frame(width: diameter, height: diameter)
+        }
+    }
+
+    private var assigneeAvatarPlaceholder: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundColor(BsColor.inkMuted.opacity(0.8))
     }
 
     // MARK: - Small building blocks
@@ -253,10 +360,12 @@ public struct OKREditSheet: View {
                 if let existing = existing {
                     // Rebuild the updated objective from form state, keeping
                     // all non-editable fields (id, status, progress, owner,
-                    // assignee, created_at, KRs) as they were.
+                    // created_at, KRs) as they were. Assignee is now editable
+                    // via the in-sheet picker.
                     let updated = existing.withEdits(
                         title: trimmedTitle,
-                        description: description.trimmingCharacters(in: .whitespacesAndNewlines)
+                        description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                        assigneeId: assigneeId
                     )
                     try await viewModel.updateObjective(updated)
                 } else {
@@ -264,6 +373,7 @@ public struct OKREditSheet: View {
                         title: trimmedTitle,
                         description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                         ownerId: nil,
+                        assigneeId: assigneeId,
                         period: period
                     )
                 }
@@ -277,12 +387,16 @@ public struct OKREditSheet: View {
 
 // MARK: - Objective edit helper
 
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 private extension Objective {
     /// Build a new `Objective` carrying the edit-surface fields overridden
     /// while preserving every other DB-backed property. Used by the edit
     /// path so we can round-trip through the model without a ton of
     /// ad-hoc inits.
-    func withEdits(title: String, description: String) -> Objective {
+    func withEdits(title: String, description: String, assigneeId: UUID?) -> Objective {
         // Encode → mutate dictionary → decode avoids writing a memberwise
         // init that would need to be kept in sync with Objective's init.
         let encoder = JSONEncoder()
@@ -295,6 +409,11 @@ private extension Objective {
         }
         dict["title"] = title
         dict["description"] = description.isEmpty ? NSNull() : description
+        if let aid = assigneeId {
+            dict["assignee_id"] = aid.uuidString
+        } else {
+            dict["assignee_id"] = NSNull()
+        }
         guard
             let mutated = try? JSONSerialization.data(withJSONObject: dict),
             let result = try? decoder.decode(Objective.self, from: mutated)

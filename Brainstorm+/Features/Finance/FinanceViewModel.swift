@@ -347,9 +347,8 @@ public final class FinanceViewModel: ObservableObject {
         self.client = client
     }
 
-    // ── Submit bridge（已接入 POST /api/mobile/finance/ai-process）────
-    // TODO(finance-ai-orchestrator-bridge): 已接入，由 Web 路由代理 askAI
-    // orchestrator；iOS 侧只透传 chain + 输入 + 下拉选择。
+    // ── Submit bridge：POST /api/mobile/finance/ai-process ────────────
+    // 由 Web 路由代理 askAI orchestrator；iOS 侧只透传 chain + 输入 + 下拉选择。
     public func submitAIProcess() async -> FinanceAIRecord? {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
