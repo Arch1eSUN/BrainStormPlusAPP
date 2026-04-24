@@ -93,23 +93,6 @@ public struct AttendanceHeroCard: View {
                 )
                 .animation(.interactiveSpring(response: 0.5, dampingFraction: 0.55), value: motion.tiltX)
 
-                // ─── v1.2 右上角 Coral 斜角装饰条（logo 三角尖端呼应）────
-                // 在 hero 卡"尖端"位置放一道 3pt × 36pt Coral 斜线
-                // 目的：让 Coral 在整张液体 hero 里有一个"固定驻点"，不被水
-                // 面流动淹没；同时呼应 logo 三角尖端的品牌 accent 位置。
-                GeometryReader { geo in
-                    Path { path in
-                        let topRight = CGPoint(x: geo.size.width - 14, y: 14)
-                        let start = CGPoint(x: topRight.x - 26, y: topRight.y)
-                        let end = CGPoint(x: topRight.x, y: topRight.y + 26)
-                        path.move(to: start)
-                        path.addLine(to: end)
-                    }
-                    .stroke(BsColor.brandCoral, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .opacity(0.85)
-                }
-                .allowsHitTesting(false)
-
                 // ─── Content overlay ──────────────────────────────────────
                 VStack(alignment: .leading, spacing: 14) {
                     statusPill
