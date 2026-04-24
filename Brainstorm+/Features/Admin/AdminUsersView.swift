@@ -42,11 +42,13 @@ public struct AdminUsersView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptic.light()
                         showCreateSheet = true
                     } label: {
                         Label("创建用户", systemImage: "person.badge.plus")
                     }
                     .disabled(!canAssignPrivileges)
+                    .accessibilityLabel("创建用户")
                 }
             }
             .searchable(text: $viewModel.searchText, prompt: "搜索姓名、邮箱、部门…")
@@ -171,6 +173,7 @@ public struct AdminUsersView: View {
     private func filterChip(title: String, value: String) -> some View {
         let isSelected = viewModel.roleFilter == value
         return Button {
+            Haptic.selection()
             viewModel.roleFilter = value
             Task { await viewModel.load() }
         } label: {
@@ -299,6 +302,7 @@ private struct AdminUserRowView: View {
                 .foregroundStyle(BsColor.brandAzure)
         }
         .frame(width: 40, height: 40)
+        .accessibilityLabel(user.fullName ?? user.displayName ?? "用户")
     }
 
     @ViewBuilder

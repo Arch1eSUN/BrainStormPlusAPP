@@ -355,7 +355,7 @@ public struct AIAnalysisView: View {
                                 )
                             )
                             .frame(width: geo.size.width * CGFloat(max(0, min(100, progress.percent))) / 100.0)
-                            .animation(.easeInOut(duration: 0.4), value: progress.percent)
+                            .animation(BsMotion.Anim.smooth, value: progress.percent)
                     }
                 }
                 .frame(height: 6)
@@ -464,6 +464,9 @@ public struct AIAnalysisView: View {
                             Text("复制").font(.caption)
                         }
                         .foregroundStyle(BsColor.inkMuted)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

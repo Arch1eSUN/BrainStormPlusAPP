@@ -133,7 +133,7 @@ public struct TaskCardView: View {
         .padding(BsSpacing.lg + 4)
         .bsGlassCard(cornerRadius: BsRadius.xl)
         .opacity(isDone ? 0.6 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDone)
+        .animation(BsMotion.Anim.overshoot, value: isDone)
     }
 
     @ViewBuilder

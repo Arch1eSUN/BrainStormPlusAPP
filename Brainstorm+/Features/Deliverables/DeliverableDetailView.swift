@@ -103,6 +103,7 @@ public struct DeliverableDetailView: View {
             Menu {
                 ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
                     Button {
+                        Haptic.selection()
                         Task { await viewModel.updateStatus(s) }
                     } label: {
                         HStack {
@@ -201,6 +202,7 @@ public struct DeliverableDetailView: View {
             }
             .frame(width: 36, height: 36)
             .clipShape(Circle())
+            .accessibilityLabel(assignee.fullName ?? "用户")
 
             Text(assignee.fullName ?? "未命名")
                 .font(.subheadline.weight(.semibold))

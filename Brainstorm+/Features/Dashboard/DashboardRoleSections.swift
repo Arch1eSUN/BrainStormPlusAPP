@@ -216,7 +216,7 @@ private struct QuickActionTile: View {
                     .stroke(BsColor.borderSubtle, lineWidth: 0.5)
             )
             .scaleEffect(isPressed ? 0.97 : 1.0)
-            .animation(BsMotion.Anim.microBounce, value: isPressed)
+            .animation(BsMotion.Anim.overshoot, value: isPressed)
             .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
                 if pressing != isPressed {
                     isPressed = pressing

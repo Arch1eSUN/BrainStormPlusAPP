@@ -124,7 +124,10 @@ public struct TeamDirectoryView: View {
     }
 
     private func chip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
             Text(title)
                 .font(BsTypography.caption)
                 .padding(.horizontal, BsSpacing.md)
@@ -294,6 +297,7 @@ public struct TeamDirectoryView: View {
                 .font(BsTypography.cardSubtitle)
                 .foregroundStyle(BsColor.brandAzure)
         }
+        .accessibilityLabel(name ?? "用户")
     }
 
     private func infoRow(icon: String, text: String) -> some View {

@@ -88,7 +88,7 @@ public struct ScheduleView: View {
                 // Jump to Today
                 Button(action: {
                     Haptic.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(BsMotion.Anim.overshoot) {
                         viewModel.selectedDate = Date()
                     }
                 }) {
@@ -143,7 +143,7 @@ public struct ScheduleView: View {
         let isActive = viewModel.viewMode == mode
         return Button {
             Haptic.light()
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            withAnimation(BsMotion.Anim.overshoot) {
                 viewModel.viewMode = mode
             }
         } label: {
@@ -216,7 +216,7 @@ public struct ScheduleView: View {
                                 isSelected: Calendar.current.isDate(entry.date, inSameDayAs: viewModel.selectedDate),
                                 onSelect: {
                                     Haptic.selection()
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    withAnimation(BsMotion.Anim.overshoot) {
                                         viewModel.selectedDate = entry.date
                                     }
                                 },
@@ -230,7 +230,7 @@ public struct ScheduleView: View {
                     }
                     .onChange(of: viewModel.selectedDate) { _, newDate in
                         let iso = ScheduleViewModel.isoDateString(for: newDate)
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        withAnimation(BsMotion.Anim.overshoot) {
                             proxy.scrollTo(iso, anchor: .center)
                         }
                     }
@@ -516,6 +516,8 @@ private struct MyDayRow: View {
                 .overlay(
                     Circle().stroke(BsColor.borderSubtle, lineWidth: 1)
                 )
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tooltip)

@@ -199,6 +199,7 @@ public struct ApprovalQueueView: View {
             Spacer()
 
             Button {
+                Haptic.success()
                 pendingAction = PendingAction(row: row, decision: .approve)
             } label: {
                 HStack(spacing: 4) {
@@ -218,6 +219,7 @@ public struct ApprovalQueueView: View {
             .disabled(isBusy)
 
             Button {
+                Haptic.warning()
                 pendingAction = PendingAction(row: row, decision: .reject)
             } label: {
                 HStack(spacing: 4) {
@@ -246,6 +248,7 @@ public struct ApprovalQueueView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(BsColor.brandAzure)
         }
+        .accessibilityLabel(profile?.fullName ?? "用户")
     }
 
     @ViewBuilder

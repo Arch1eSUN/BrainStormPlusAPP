@@ -91,7 +91,7 @@ public struct BsFormField<Input: View>: View {
             }
         }
         // spring 曲线更有弹性,取代之前的 standard spring
-        .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isFocused)
+        .animation(BsMotion.Anim.overshoot, value: isFocused)
         .animation(BsMotion.Anim.smooth, value: errorMessage)
     }
 
@@ -320,8 +320,7 @@ public struct BsStaggeredAppear: ViewModifier {
             .opacity(isVisible ? 1 : 0)
             .offset(y: isVisible ? 0 : 12)
             .animation(
-                .spring(response: 0.4, dampingFraction: 0.8)
-                    .delay(Double(index) * baseDelay),
+                BsMotion.Anim.overshoot.delay(Double(index) * baseDelay),
                 value: isVisible
             )
     }

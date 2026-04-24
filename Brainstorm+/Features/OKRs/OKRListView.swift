@@ -46,6 +46,7 @@ public struct OKRListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     showingCreate = true
                 } label: {
                     Image(systemName: "plus")
@@ -108,6 +109,7 @@ public struct OKRListView: View {
                 Menu {
                     ForEach(viewModel.availableYears, id: \.self) { year in
                         Button(String(year)) {
+                            Haptic.selection()
                             viewModel.period = OKRListViewModel.formatPeriod(
                                 year: year, quarter: parsed.quarter
                             )
@@ -133,6 +135,7 @@ public struct OKRListView: View {
                 ForEach(viewModel.availableQuarters, id: \.self) { q in
                     let active = parsed.quarter == q
                     Button {
+                        Haptic.selection()
                         viewModel.period = OKRListViewModel.formatPeriod(
                             year: parsed.year, quarter: q
                         )
@@ -199,6 +202,7 @@ public struct OKRListView: View {
             Text(value)
                 .font(BsTypography.brandTitle)
                 .foregroundColor(valueColor)
+                .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(BsSpacing.md + 2)
@@ -223,6 +227,7 @@ public struct OKRListView: View {
                 Text("\(viewModel.overallProgress)%")
                     .font(BsTypography.sectionTitle.weight(.bold))
                     .foregroundColor(BsColor.ink)
+                    .contentTransition(.numericText())
             }
             progressBar(progress: viewModel.overallProgress, height: 10)
         }
@@ -254,7 +259,7 @@ public struct OKRListView: View {
             // Header row — tap chevron to expand, tap title area to push detail.
             HStack(spacing: BsSpacing.md) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(BsMotion.Anim.smooth) {
                         if isOpen { expanded.remove(obj.id) } else { expanded.insert(obj.id) }
                     }
                 } label: {

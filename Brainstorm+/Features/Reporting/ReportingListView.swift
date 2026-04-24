@@ -40,6 +40,7 @@ public struct ReportingListView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
+                .onChange(of: viewModel.selectedTab) { _, _ in Haptic.selection() }
 
                 if viewModel.isLoading {
                     ProgressView()
@@ -59,6 +60,7 @@ public struct ReportingListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    Haptic.light()
                     switch viewModel.selectedTab {
                     case .daily:  dailyEditTarget = .new
                     case .weekly: weeklyEditTarget = .new
@@ -66,6 +68,7 @@ public struct ReportingListView: View {
                 } label: {
                     Label("新建", systemImage: "plus")
                 }
+                .accessibilityLabel("新建报告")
             }
         }
         .refreshable {

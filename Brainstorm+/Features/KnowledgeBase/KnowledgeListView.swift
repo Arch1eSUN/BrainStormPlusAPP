@@ -70,11 +70,13 @@ public struct KnowledgeListView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
+                            Haptic.light()
                             editTarget = .new
                         } label: {
                             Label("新建文档", systemImage: "square.and.pencil")
                         }
                         Button {
+                            Haptic.light()
                             showUploadSheet = true
                         } label: {
                             Label("上传文件", systemImage: "arrow.up.doc")
@@ -82,6 +84,7 @@ public struct KnowledgeListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("新建")
                 }
             }
         }
@@ -184,7 +187,10 @@ public struct KnowledgeListView: View {
 
     @ViewBuilder
     private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
             Text(label)
                 .font(BsTypography.captionSmall)
                 .padding(.horizontal, BsSpacing.md)

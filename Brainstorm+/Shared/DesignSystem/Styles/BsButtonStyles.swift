@@ -79,7 +79,7 @@ public struct BsPrimaryButtonStyle: ButtonStyle {
         )
         .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
         .opacity(configuration.isPressed ? 0.90 : 1.0)
-        .animation(BsMotion.Anim.microBounce, value: configuration.isPressed)
+        .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
         .onChange(of: configuration.isPressed) { _, pressed in
             if pressed { Haptic.medium() }
         }
@@ -114,7 +114,7 @@ public struct BsSecondaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.90 : 1.0)
-            .animation(BsMotion.Anim.microBounce, value: configuration.isPressed)
+            .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptic.light() }
             }
@@ -145,7 +145,7 @@ public struct BsDestructiveButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.90 : 1.0)
-            .animation(BsMotion.Anim.microBounce, value: configuration.isPressed)
+            .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptic.medium() }
             }
@@ -166,7 +166,7 @@ public struct BsGhostButtonStyle: ButtonStyle {
             .font(size.font)
             .foregroundStyle(BsColor.brandAzure)
             .opacity(configuration.isPressed ? 0.6 : 1.0)
-            .animation(BsMotion.Anim.snappy, value: configuration.isPressed)
+            .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
     }
 }
 

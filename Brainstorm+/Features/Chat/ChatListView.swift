@@ -63,6 +63,7 @@ public struct ChatListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     showNewConversation = true
                 } label: {
                     Image(systemName: "square.and.pencil")

@@ -93,7 +93,10 @@ public struct ActivityFeedView: View {
     }
 
     private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
             Text(label)
                 .font(BsTypography.caption)
                 .padding(.horizontal, BsSpacing.md)

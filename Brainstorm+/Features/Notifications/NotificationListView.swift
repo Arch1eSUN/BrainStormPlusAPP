@@ -110,11 +110,13 @@ public struct NotificationListView: View {
             if unreadCount > 0 {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        Haptic.medium()
                         Task { await viewModel.markAllAsRead() }
                     } label: {
                         Image(systemName: "checkmark.circle.badge.xmark")
                             .foregroundStyle(BsColor.brandCoral)
                     }
+                    .accessibilityLabel("全部已读")
                 }
             }
         }

@@ -28,6 +28,7 @@ public struct HiringCandidatesView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
+                                Haptic.rigid()
                                 Task { await viewModel.delete(c) }
                             } label: {
                                 Label("删除", systemImage: "trash")
@@ -45,10 +46,12 @@ public struct HiringCandidatesView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    Haptic.light()
                     showCreate = true
                 } label: {
                     Label("添加候选人", systemImage: "person.badge.plus")
                 }
+                .accessibilityLabel("添加候选人")
             }
         }
         .sheet(isPresented: $showCreate) {

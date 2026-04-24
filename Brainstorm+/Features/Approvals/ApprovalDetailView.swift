@@ -286,6 +286,7 @@ public struct ApprovalDetailView: View {
                 .font(.headline)
                 .foregroundStyle(BsColor.brandAzure)
         }
+        .accessibilityLabel(profile?.fullName ?? "用户")
     }
 
     @ViewBuilder
@@ -779,6 +780,7 @@ private struct RevokeCompTimeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        Haptic.medium()
                         onSubmit(reason)
                     } label: {
                         if isSubmitting {

@@ -127,6 +127,7 @@ public struct ApprovalCenterView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        Haptic.light()
                         showTypePicker = true
                     } label: {
                         Image(systemName: "plus")
@@ -193,6 +194,7 @@ public struct ApprovalCenterView: View {
     private func pillButton(_ tab: Tab) -> some View {
         let isSelected = tab == selectedTab
         Button {
+            Haptic.selection()
             selectedTab = tab
         } label: {
             HStack(spacing: 6) {
@@ -215,7 +217,7 @@ public struct ApprovalCenterView: View {
             )
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: pendingCounts)
+        .animation(BsMotion.Anim.overshoot, value: pendingCounts)
     }
 
     /// Red 99+-capped badge. Mirrors Web page.tsx:147-158 — min-width

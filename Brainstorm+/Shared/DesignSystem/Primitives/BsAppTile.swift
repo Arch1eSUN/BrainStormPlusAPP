@@ -79,7 +79,7 @@ public struct BsAppTile: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 4)
             .scaleEffect(isPressed ? 0.94 : 1.0)
             .animation(BsMotion.Anim.overshoot, value: isPressed)

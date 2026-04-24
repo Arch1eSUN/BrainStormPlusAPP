@@ -217,6 +217,8 @@ public struct BsCommandPalette: View {
                             .foregroundStyle(BsColor.ink)
                             .frame(width: 28, height: 28)
                             .glassEffect(.regular.interactive(), in: Circle())
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("关闭")
                 }

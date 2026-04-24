@@ -37,14 +37,14 @@ struct LoginView: View {
             contentLayer
         }
         .onAppear {
-            withAnimation(BsMotion.Anim.entrance.delay(0.05)) {
+            withAnimation(BsMotion.Anim.overshoot.delay(0.05)) {
                 didAppear = true
             }
         }
         .onTapGesture {
             focusedField = nil
         }
-        .animation(BsMotion.Anim.standard, value: focusedField)
+        .animation(BsMotion.Anim.overshoot, value: focusedField)
         .animation(BsMotion.Anim.smooth, value: errorMessage)
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
@@ -243,7 +243,7 @@ struct LoginView: View {
                         .padding(-2)
                 )
                 .scaleEffect(isFocused ? 1.008 : 1.0)
-                .animation(.spring(response: 0.32, dampingFraction: 0.72), value: isFocused)
+                .animation(BsMotion.Anim.overshoot, value: isFocused)
         }
     }
 
@@ -290,7 +290,7 @@ struct LoginView: View {
         // BsPrimaryButton 已在 tap 时发 Haptic.medium(),这里不再重复。
         focusedField = nil
         errorMessage = nil
-        withAnimation(BsMotion.Anim.standard) {
+        withAnimation(BsMotion.Anim.overshoot) {
             isLoggingIn = true
         }
 

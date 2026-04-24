@@ -111,6 +111,7 @@ public struct TaskListView: View {
                         Image(systemName: "plus")
                             .font(.system(.headline, weight: .semibold))
                     }
+                    .accessibilityLabel("新建任务")
                 }
             }
             .refreshable {
@@ -269,6 +270,7 @@ public struct TaskListView: View {
                         Text("\(value)")
                             .font(BsTypography.sectionTitle)
                             .foregroundColor(tint)
+                            .contentTransition(.numericText())
                         Text(label)
                             .font(BsTypography.meta)
                             .foregroundColor(BsColor.inkMuted)
@@ -287,6 +289,7 @@ public struct TaskListView: View {
     private var projectFilterMenu: some View {
         Menu {
             Button {
+                Haptic.selection()
                 viewModel.projectFilter = nil
             } label: {
                 Label("全部项目", systemImage: viewModel.projectFilter == nil ? "checkmark" : "folder")
@@ -294,6 +297,7 @@ public struct TaskListView: View {
             Divider()
             ForEach(viewModel.projects) { project in
                 Button {
+                    Haptic.selection()
                     viewModel.projectFilter = project.id
                 } label: {
                     Label(project.name, systemImage: viewModel.projectFilter == project.id ? "checkmark" : "folder")
@@ -303,19 +307,21 @@ public struct TaskListView: View {
             Image(systemName: viewModel.projectFilter == nil ? "folder" : "folder.fill")
                 .font(.system(.headline, weight: .medium))
         }
+        .accessibilityLabel("项目筛选")
     }
 
     /// List/Kanban toggle — single button that flips modes, uses SF symbol to convey state.
     private var viewModeToggleButton: some View {
         Button {
             Haptic.rigid()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            withAnimation(BsMotion.Anim.overshoot) {
                 viewMode = (viewMode == .list) ? .kanban : .list
             }
         } label: {
             Image(systemName: viewMode == .list ? "rectangle.split.3x1" : "list.bullet")
                 .font(.system(.headline, weight: .medium))
         }
+        .accessibilityLabel(viewMode == .list ? "切换看板视图" : "切换列表视图")
     }
 
     // MARK: - Kanban mode body (UNCHANGED logic, only dropped the old header wrapper)
@@ -575,6 +581,7 @@ public struct CreateTaskView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("创建") {
+                        Haptic.medium()
                         submitTask()
                     }
                     .font(Font.custom("Inter-SemiBold", size: 16, relativeTo: .body))

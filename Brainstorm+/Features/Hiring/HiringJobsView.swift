@@ -20,6 +20,7 @@ public struct HiringJobsView: View {
                 List {
                     ForEach(viewModel.positions) { pos in
                         Button {
+                            Haptic.light()
                             editTarget = .edit(pos)
                         } label: {
                             row(pos)
@@ -27,11 +28,13 @@ public struct HiringJobsView: View {
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
+                                Haptic.rigid()
                                 Task { await viewModel.delete(pos) }
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
                             Button {
+                                Haptic.light()
                                 editTarget = .edit(pos)
                             } label: {
                                 Label("编辑", systemImage: "pencil")
@@ -50,10 +53,12 @@ public struct HiringJobsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    Haptic.light()
                     editTarget = .new
                 } label: {
                     Label("新建岗位", systemImage: "plus")
                 }
+                .accessibilityLabel("新建岗位")
             }
         }
         .sheet(item: $editTarget) { target in

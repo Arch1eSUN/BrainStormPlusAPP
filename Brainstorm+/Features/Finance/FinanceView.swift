@@ -74,6 +74,7 @@ public struct FinanceView: View {
             if canAccess {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        Haptic.light()
                         showHistorySheet = true
                     } label: {
                         Image(systemName: "clock.arrow.circlepath")
@@ -152,6 +153,7 @@ public struct FinanceView: View {
             HStack(spacing: 10) {
                 ForEach(FinanceChain.allCases) { chain in
                     Button {
+                        Haptic.selection()
                         viewModel.selectedChain = chain
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
@@ -249,6 +251,7 @@ public struct FinanceView: View {
             }
 
             Button {
+                Haptic.medium()
                 Task {
                     if let record = await viewModel.submitAIProcess() {
                         pushedRecord = record
@@ -416,7 +419,10 @@ public struct FinanceView: View {
                 Text(viewModel.selectedChain.displayName + " · 最近 5 条")
                     .font(.footnote.weight(.semibold))
                 Spacer()
-                Button("全部历史") { showHistorySheet = true }
+                Button("全部历史") {
+                    Haptic.light()
+                    showHistorySheet = true
+                }
                     .font(.caption.weight(.semibold))
             }
             if viewModel.isLoading && viewModel.records.isEmpty {

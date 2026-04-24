@@ -67,7 +67,7 @@ public struct BsWeeklyCadenceStrip: View {
                     dotView(for: day)
                         .frame(width: 14, height: 14)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
@@ -83,7 +83,6 @@ public struct BsWeeklyCadenceStrip: View {
                 )
             }
         }
-        .frame(height: 40)
         .padding(.horizontal, 4)
     }
 

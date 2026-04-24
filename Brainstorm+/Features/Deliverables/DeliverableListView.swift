@@ -53,6 +53,7 @@ public struct DeliverableListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    Haptic.light()
                     showCreateSheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -61,7 +62,8 @@ public struct DeliverableListView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    Haptic.light()
+                    withAnimation(BsMotion.Anim.smooth) {
                         showFilters.toggle()
                     }
                 } label: {
@@ -136,6 +138,7 @@ public struct DeliverableListView: View {
                         // empty state gives users a direct entry into the
                         // create flow without hunting for the toolbar.
                         Button {
+                            Haptic.light()
                             showCreateSheet = true
                         } label: {
                             Label("新建交付物", systemImage: "plus")
@@ -164,6 +167,7 @@ public struct DeliverableListView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(viewModel.statusCounts[s] ?? 0)")
                             .font(.title3.weight(.bold))
+                            .contentTransition(.numericText())
                         Text(s.displayName)
                             .font(.caption2)
                             .foregroundStyle(BsColor.inkMuted)
@@ -331,7 +335,10 @@ public struct DeliverableListView: View {
 
     @ViewBuilder
     private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
             Text(label)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 12)

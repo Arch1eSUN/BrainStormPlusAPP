@@ -58,7 +58,7 @@ public struct ZYErrorBannerModifier: ViewModifier {
                 }
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: message)
+        .animation(BsMotion.Anim.overshoot, value: message)
     }
 }
 

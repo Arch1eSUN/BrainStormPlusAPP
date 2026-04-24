@@ -78,6 +78,7 @@ public struct HiringCenterView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 8)
+            .onChange(of: selectedTab) { _, _ in Haptic.selection() }
 
             switch selectedTab {
             case .candidates:

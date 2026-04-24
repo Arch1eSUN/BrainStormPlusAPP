@@ -31,10 +31,12 @@ public struct AnnouncementsListView: View {
                 if canManage {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
+                            Haptic.light()
                             showCreate = true
                         } label: {
                             Label("发布公告", systemImage: "plus")
                         }
+                        .accessibilityLabel("发布公告")
                     }
                 }
             }
@@ -154,21 +156,29 @@ public struct AnnouncementsListView: View {
                         if canManage {
                             HStack(spacing: BsSpacing.xs) {
                                 Button {
+                                    Haptic.light()
                                     Task { await viewModel.togglePin(item) }
                                 } label: {
                                     Image(systemName: item.pinned ? "pin.slash" : "pin")
                                         .font(BsTypography.caption)
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.borderless)
                                 .help(item.pinned ? "取消置顶" : "置顶")
+                                .accessibilityLabel(item.pinned ? "取消置顶" : "置顶")
 
                                 Button(role: .destructive) {
+                                    Haptic.rigid()
                                     pendingDelete = item
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(BsTypography.caption)
+                                        .frame(minWidth: 44, minHeight: 44)
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.borderless)
+                                .accessibilityLabel("删除")
                             }
                             .foregroundStyle(BsColor.inkMuted)
                         }
@@ -221,6 +231,7 @@ public struct AnnouncementsListView: View {
             }
         }
         .frame(width: 36, height: 36)
+        .accessibilityLabel(item.profiles?.fullName ?? "用户")
     }
 
     @ViewBuilder

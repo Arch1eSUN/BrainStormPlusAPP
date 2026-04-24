@@ -104,6 +104,7 @@ public struct AdminEvaluationsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     showBatchSheet = true
                 } label: {
                     Image(systemName: "bolt.horizontal.circle.fill")
@@ -117,6 +118,7 @@ public struct AdminEvaluationsView: View {
     private var monthControl: some View {
         HStack(spacing: 10) {
             Button {
+                Haptic.light()
                 Task { await vm.shiftMonth(by: -1); syncMonthPickerDate() }
             } label: {
                 Image(systemName: "chevron.left")
@@ -125,6 +127,7 @@ public struct AdminEvaluationsView: View {
                     .background(Circle().fill(BsColor.brandAzure.opacity(0.1)))
                     .foregroundStyle(BsColor.brandAzure)
             }
+            .accessibilityLabel("上一月")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(vm.month)
@@ -155,6 +158,7 @@ public struct AdminEvaluationsView: View {
             }
 
             Button {
+                Haptic.light()
                 Task { await vm.shiftMonth(by: 1); syncMonthPickerDate() }
             } label: {
                 Image(systemName: "chevron.right")
@@ -163,6 +167,7 @@ public struct AdminEvaluationsView: View {
                     .background(Circle().fill(BsColor.brandAzure.opacity(0.1)))
                     .foregroundStyle(BsColor.brandAzure)
             }
+            .accessibilityLabel("下一月")
         }
         .padding(.vertical, 6)
     }
@@ -192,12 +197,16 @@ public struct AdminEvaluationsView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: vm.statusFilter) { _, _ in Haptic.selection() }
         }
         .padding(.vertical, 6)
     }
 
     private func chipButton(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptic.selection()
+            action()
+        } label: {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 12)
@@ -227,6 +236,7 @@ public struct AdminEvaluationsView: View {
             Text("\(value)")
                 .font(.headline.weight(.bold))
                 .foregroundStyle(tint)
+                .contentTransition(.numericText())
             Text(label)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(BsColor.inkMuted)
@@ -291,6 +301,7 @@ public struct AdminEvaluationsView: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(BsColor.brandAzure)
         }
+        .accessibilityLabel(row.displayName)
     }
 
     private func statusBadge(row: MonthlyMatrixRow) -> some View {

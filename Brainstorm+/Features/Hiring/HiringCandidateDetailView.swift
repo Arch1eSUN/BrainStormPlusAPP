@@ -84,7 +84,7 @@ public struct HiringCandidateDetailView: View {
                     }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.toastMessage)
+        .animation(BsMotion.Anim.smooth, value: viewModel.toastMessage)
     }
 
     // MARK: - Sections

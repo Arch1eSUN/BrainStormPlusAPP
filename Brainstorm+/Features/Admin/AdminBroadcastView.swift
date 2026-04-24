@@ -123,6 +123,7 @@ public struct AdminBroadcastView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: vm.type) { _, _ in Haptic.selection() }
             }
 
             if let info = vm.info {
@@ -133,6 +134,7 @@ public struct AdminBroadcastView: View {
 
             Section {
                 Button {
+                    Haptic.medium()
                     Task { await vm.send() }
                 } label: {
                     HStack {

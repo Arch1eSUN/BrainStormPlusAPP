@@ -75,6 +75,7 @@ public struct ProjectListView: View {
             // `createProject` gates on `serverGuard` only, no admin check).
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    Haptic.light()
                     isShowingCreateSheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -247,11 +248,13 @@ public struct ProjectListView: View {
                             // confirmation dialog (see `.confirmationDialog` above).
                             .contextMenu {
                                 Button {
+                                    Haptic.light()
                                     projectBeingEdited = project
                                 } label: {
                                     Label("编辑", systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {
+                                    Haptic.rigid()
                                     projectPendingDelete = project
                                 } label: {
                                     Label("删除", systemImage: "trash")
@@ -269,6 +272,7 @@ public struct ProjectListView: View {
     private var statusFilterMenu: some View {
         Menu {
             Button {
+                Haptic.selection()
                 viewModel.statusFilter = nil
             } label: {
                 Label("全部状态", systemImage: viewModel.statusFilter == nil ? "checkmark" : "")
@@ -276,6 +280,7 @@ public struct ProjectListView: View {
             Divider()
             ForEach(Self.statusOptions, id: \.0) { option in
                 Button {
+                    Haptic.selection()
                     viewModel.statusFilter = option.0
                 } label: {
                     Label(option.1, systemImage: viewModel.statusFilter == option.0 ? "checkmark" : "")
@@ -285,6 +290,7 @@ public struct ProjectListView: View {
             Image(systemName: viewModel.statusFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                 .foregroundColor(BsColor.brandAzure)
         }
+        .accessibilityLabel("筛选状态")
     }
 
     // D.2a: Chinese labels to match Web STATUS_CFG in

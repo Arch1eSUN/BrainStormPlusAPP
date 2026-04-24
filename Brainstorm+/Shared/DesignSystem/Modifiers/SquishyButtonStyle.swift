@@ -12,6 +12,6 @@ public struct SquishyButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? scaleScale : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+            .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
     }
 }
