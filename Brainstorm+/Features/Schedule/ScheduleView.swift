@@ -15,10 +15,6 @@ public struct ScheduleView: View {
     @State private var viewModel = ScheduleViewModel()
     @Namespace private var topAnimation
 
-    // Horizontal date strip dates — unchanged from the original view,
-    // kept for the "today card" mode. `-3…+7` around today.
-    @State private var stripDates: [Date] = []
-
     // Quick-apply sheet state (from "my" view rows).
     @State private var quickApply: QuickApplyRoute?
 
@@ -27,16 +23,6 @@ public struct ScheduleView: View {
 
     public init(isEmbedded: Bool = false) {
         self.isEmbedded = isEmbedded
-    }
-
-    private func setupStripDates() {
-        let calendar = Calendar.current
-        let today = Date()
-        for i in -3...7 {
-            if let date = calendar.date(byAdding: .day, value: i, to: today) {
-                stripDates.append(date)
-            }
-        }
     }
 
     public var body: some View {
@@ -83,9 +69,6 @@ public struct ScheduleView: View {
         .sheet(item: $quickApply) { route in
             quickApplySheet(for: route)
         }
-        .onAppear {
-            if stripDates.isEmpty { setupStripDates() }
-        }
         .task {
             // Web behavior: employees default-land on "my" (see page.tsx:52-56).
             // iOS already defaults to `.my` on VM init; we simply load the
@@ -126,23 +109,14 @@ public struct ScheduleView: View {
             // View-mode switcher — mirrors Web `ViewSwitcher`.
             viewModeSwitcher
                 .padding(.horizontal, BsSpacing.xl)
+                .padding(.bottom, BsSpacing.sm)
 
-            // Horizontal Date strip — retained only for modes that benefit
-            // from a scrubbable "today context" (timeline/calendar stubs).
-            // `my` + `list` render their own date chrome below.
-            if viewModel.viewMode != .my && viewModel.viewMode != .list {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: BsSpacing.md) {
-                        ForEach(stripDates, id: \.self) { date in
-                            datePill(for: date)
-                        }
-                    }
-                    .padding(.horizontal, BsSpacing.xl)
-                    .padding(.bottom, BsSpacing.lg)
-                }
-            } else {
-                Spacer().frame(height: BsSpacing.sm)
-            }
+            // Note: previously there was a header-level horizontal date
+            // scrubber here for timeline/calendar stubs. Removed — stubs
+            // render a single "coming soon" placeholder that doesn't need
+            // per-date navigation, and `my` + `list` own their own date
+            // chrome further down. This eliminates the duplicate date
+            // surfaces the user flagged.
         }
         .background(BsColor.surfaceSecondary.opacity(0.95))
         .background(.ultraThinMaterial)
@@ -196,59 +170,7 @@ public struct ScheduleView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func datePill(for date: Date) -> some View {
-        let calendar = Calendar.current
-        let isSelected = calendar.isDate(date, inSameDayAs: viewModel.selectedDate)
-
-        let dfDay = DateFormatter()
-        dfDay.dateFormat = "EEE"
-        let dayStr = dfDay.string(from: date).uppercased()
-
-        let dfNum = DateFormatter()
-        dfNum.dateFormat = "d"
-        let numStr = dfNum.string(from: date)
-
-        return Button(action: {
-            Haptic.selection()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                viewModel.selectedDate = date
-            }
-        }) {
-            VStack(spacing: BsSpacing.xs) {
-                Text(dayStr)
-                    .font(BsTypography.inter(10, weight: "Medium"))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : BsColor.inkMuted)
-
-                Text(numStr)
-                    .font(BsTypography.outfit(18, weight: "Bold"))
-                    .foregroundStyle(isSelected ? Color.white : BsColor.ink)
-            }
-            .frame(width: 56, height: 72)
-            .background {
-                if isSelected {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                            .fill(BsColor.brandAzure)
-                            .bsShadow(BsShadow.md)
-
-                        RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    }
-                    .matchedGeometryEffect(id: "selectedDateBg", in: topAnimation)
-                } else {
-                    RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                        .fill(BsColor.surfacePrimary)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                                .stroke(BsColor.borderSubtle, lineWidth: 1)
-                        )
-                }
-            }
-        }
-        .buttonStyle(SquishyButtonStyle())
-    }
-
-    // MARK: - My mode (14-day strip w/ quick-apply)
+    // MARK: - My mode (14-day list with quick-apply)
 
     @ViewBuilder
     private var myModeSection: some View {
@@ -263,20 +185,16 @@ public struct ScheduleView: View {
                 errorBanner(error)
             }
 
-            Text("未来 14 天")
-                .font(BsTypography.outfit(18, weight: "SemiBold"))
-                .foregroundStyle(BsColor.ink)
-                .padding(.top, BsSpacing.sm)
-
-            // 14-day horizontal strip for quick day-jumping.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: BsSpacing.sm) {
-                    ForEach(viewModel.upcoming14Days, id: \.iso) { entry in
-                        myStripChip(date: entry.date, iso: entry.iso)
-                    }
-                }
-                .padding(.vertical, 2)
+            HStack(alignment: .firstTextBaseline) {
+                Text("未来 14 天")
+                    .font(BsTypography.outfit(18, weight: "SemiBold"))
+                    .foregroundStyle(BsColor.ink)
+                Spacer()
+                Text(rangeSubtitle)
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
             }
+            .padding(.top, BsSpacing.sm)
 
             if viewModel.isLoading && viewModel.states.isEmpty {
                 VStack(spacing: BsSpacing.sm) {
@@ -296,6 +214,12 @@ public struct ScheduleView: View {
                                 iso: entry.iso,
                                 state: viewModel.states[entry.iso],
                                 isSelected: Calendar.current.isDate(entry.date, inSameDayAs: viewModel.selectedDate),
+                                onSelect: {
+                                    Haptic.selection()
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        viewModel.selectedDate = entry.date
+                                    }
+                                },
                                 onQuickApply: { kind in
                                     Haptic.light()
                                     quickApply = QuickApplyRoute(kind: kind, date: entry.date)
@@ -307,46 +231,12 @@ public struct ScheduleView: View {
                     .onChange(of: viewModel.selectedDate) { _, newDate in
                         let iso = ScheduleViewModel.isoDateString(for: newDate)
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            proxy.scrollTo(iso, anchor: .top)
+                            proxy.scrollTo(iso, anchor: .center)
                         }
                     }
                 }
             }
         }
-    }
-
-    private func myStripChip(date: Date, iso: String) -> some View {
-        let isSelected = Calendar.current.isDate(date, inSameDayAs: viewModel.selectedDate)
-        let dowLabels = ["日", "一", "二", "三", "四", "五", "六"]
-        let dow = Calendar.current.component(.weekday, from: date) - 1
-        let dowStr = dowLabels[max(0, min(6, dow))]
-        let dayStr = "\(Calendar.current.component(.day, from: date))"
-
-        return Button {
-            Haptic.selection()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                viewModel.selectedDate = date
-            }
-        } label: {
-            VStack(spacing: 2) {
-                Text(dowStr)
-                    .font(BsTypography.inter(10, weight: "Medium"))
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : BsColor.inkMuted)
-                Text(dayStr)
-                    .font(BsTypography.outfit(15, weight: "SemiBold"))
-                    .foregroundStyle(isSelected ? Color.white : BsColor.ink)
-            }
-            .frame(width: 42, height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                    .fill(isSelected ? BsColor.brandAzure : BsColor.surfacePrimary)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                    .stroke(BsColor.borderSubtle, lineWidth: 1)
-            )
-        }
-        .buttonStyle(SquishyButtonStyle())
     }
 
     // MARK: - List mode
@@ -540,6 +430,7 @@ private struct MyDayRow: View {
     let iso: String
     let state: DailyWorkState?
     var isSelected: Bool = false
+    let onSelect: () -> Void
     let onQuickApply: (QuickApplyRoute.Kind) -> Void
 
     private static let dowLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
@@ -550,6 +441,15 @@ private struct MyDayRow: View {
         let color = WorkStateColors.color(state: stateStr, expectedStart: state?.expectedStart)
         let label = WorkStateLabels.label(state: stateStr, leaveType: state?.leaveType)
 
+        // Use a tap gesture rather than wrapping in a Button so the nested
+        // quick-apply buttons keep their own hit-testing unambiguously.
+        rowContent(isToday: isToday, color: color, label: label)
+            .contentShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+            .onTapGesture { onSelect() }
+    }
+
+    @ViewBuilder
+    private func rowContent(isToday: Bool, color: Color, label: String) -> some View {
         HStack(spacing: BsSpacing.md + 2) {
             // Date column
             VStack(alignment: .leading, spacing: 2) {

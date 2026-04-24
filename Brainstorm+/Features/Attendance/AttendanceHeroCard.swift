@@ -47,16 +47,19 @@ public struct AttendanceHeroCard: View {
         BsHeroCard(padding: 0) {
             ZStack(alignment: .bottomLeading) {
                 // ─── Liquid fill layer ────────────────────────────────────
+                // LiquidFillShape 内部已做 3 波叠加（不同波长/相位/速度，频率比非整数），
+                // 单层渲染即有真流体表面感，不需要在这里再堆 ZStack 模拟。
                 TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
-                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 1.6
+                    // 主相位速度 0.5 rad/s —— 太快成振荡，太慢不够生动
+                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 0.5
                     LiquidFillShape(
                         progress: progress,
                         phase: phase,
                         tiltX: reduceMotion ? 0 : motion.tiltX,
-                        amplitude: reduceMotion ? 0 : 4,
-                        frequency: 1.5
+                        amplitude: reduceMotion ? 0 : 9,
+                        frequency: 1.6     // 1.6 主频在 400pt 宽度上约 2.5 个主周期，密度舒适
                     )
-                    .fill(stateColor.opacity(0.32))
+                    .fill(stateColor.opacity(0.42))
                     .animation(.smooth(duration: 0.8), value: progress)
                 }
 
