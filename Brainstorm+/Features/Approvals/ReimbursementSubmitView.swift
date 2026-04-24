@@ -50,7 +50,7 @@ public struct ReimbursementSubmitView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 Form {
                 Section("报销项目") {
                     TextField("项目名称", text: $viewModel.itemDescription)
@@ -150,11 +150,7 @@ public struct ReimbursementSubmitView: View {
                     .disabled(!viewModel.canSubmit)
                 }
             }
-            .overlay {
-                if viewModel.isSubmitting {
-                    submittingOverlay
-                }
-            }
+            .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
             .onChange(of: viewModel.category) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.paymentMethod) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
@@ -340,15 +336,6 @@ public struct ReimbursementSubmitView: View {
         }
     }
 
-    private var submittingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25).ignoresSafeArea()
-            ProgressView("提交中…")
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-        }
-    }
 }
 
 #Preview {

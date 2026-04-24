@@ -29,7 +29,7 @@ public struct AttendanceView: View {
             // Ambient 弥散底 —— Azure/Mint blobs 漂在暖米纸底上。
             // AttendanceView 常被作为嵌入视图（Dashboard widget），
             // 但即便嵌入，多一层 ambient 也不会干扰父级（blobs 透明度 ≤ 0.15）。
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
                 .allowsHitTesting(false)
 
             VStack(spacing: BsSpacing.lg + 4) {

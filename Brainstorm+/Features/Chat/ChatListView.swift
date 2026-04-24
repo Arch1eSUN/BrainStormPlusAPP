@@ -29,7 +29,7 @@ public struct ChatListView: View {
             // Fusion ambient backdrop — soft diffused glow beneath the list
             // so the channel rows float above an editorial gradient rather
             // than a flat system background.
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Group {

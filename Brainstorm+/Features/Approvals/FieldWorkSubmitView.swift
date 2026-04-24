@@ -46,7 +46,7 @@ public struct FieldWorkSubmitView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 Form {
                 Section("外勤信息") {
                     DatePicker(
@@ -97,11 +97,7 @@ public struct FieldWorkSubmitView: View {
                     .disabled(!viewModel.canSubmit)
                 }
             }
-            .overlay {
-                if viewModel.isSubmitting {
-                    submittingOverlay
-                }
-            }
+            .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
         }
     }
 
@@ -125,15 +121,6 @@ public struct FieldWorkSubmitView: View {
         }
     }
 
-    private var submittingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25).ignoresSafeArea()
-            ProgressView("提交中…")
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-        }
-    }
 }
 
 #Preview {

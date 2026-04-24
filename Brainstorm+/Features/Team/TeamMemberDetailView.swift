@@ -37,7 +37,7 @@ public struct TeamMemberDetailView: View {
                 )
             }
         }
-        .background(BsAmbientBackground())
+        .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("成员详情")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $chatDestination) { channel in
@@ -120,42 +120,41 @@ public struct TeamMemberDetailView: View {
     }
 
     private func profileCard(_ profile: Profile) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.lg) {
-            HStack(alignment: .top, spacing: BsSpacing.md + 2) {
-                avatar(for: profile)
-                VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                    Text(profile.fullName?.isEmpty == false ? profile.fullName! : "未命名")
-                        .font(BsTypography.sectionTitle)
-                        .foregroundStyle(BsColor.ink)
-                    if let role = profile.role, !role.isEmpty {
-                        Text(roleLabel(role))
-                            .font(BsTypography.bodySmall)
-                            .foregroundStyle(BsColor.inkMuted)
+        BsContentCard(padding: .medium) {
+            VStack(alignment: .leading, spacing: BsSpacing.lg) {
+                HStack(alignment: .top, spacing: BsSpacing.md + 2) {
+                    avatar(for: profile)
+                    VStack(alignment: .leading, spacing: BsSpacing.xs) {
+                        Text(profile.fullName?.isEmpty == false ? profile.fullName! : "未命名")
+                            .font(BsTypography.sectionTitle)
+                            .foregroundStyle(BsColor.ink)
+                        if let role = profile.role, !role.isEmpty {
+                            Text(roleLabel(role))
+                                .font(BsTypography.bodySmall)
+                                .foregroundStyle(BsColor.inkMuted)
+                        }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-            }
 
-            VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
-                if let dept = profile.department, !dept.isEmpty {
-                    detailRow(icon: "building.2", label: "部门", value: dept)
-                }
-                if let position = profile.position, !position.isEmpty {
-                    detailRow(icon: "briefcase", label: "职位", value: position)
-                }
-                if viewModel.canViewPII {
-                    if let email = resolvedEmail(profile), !email.isEmpty {
-                        detailRow(icon: "envelope", label: "邮箱", value: email)
+                VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
+                    if let dept = profile.department, !dept.isEmpty {
+                        detailRow(icon: "building.2", label: "部门", value: dept)
                     }
-                    if let phone = profile.phone, !phone.isEmpty {
-                        detailRow(icon: "phone", label: "电话", value: phone)
+                    if let position = profile.position, !position.isEmpty {
+                        detailRow(icon: "briefcase", label: "职位", value: position)
+                    }
+                    if viewModel.canViewPII {
+                        if let email = resolvedEmail(profile), !email.isEmpty {
+                            detailRow(icon: "envelope", label: "邮箱", value: email)
+                        }
+                        if let phone = profile.phone, !phone.isEmpty {
+                            detailRow(icon: "phone", label: "电话", value: phone)
+                        }
                     }
                 }
             }
         }
-        .padding(BsSpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .bsGlassCard()
     }
 
     private func resolvedEmail(_ profile: Profile) -> String? {

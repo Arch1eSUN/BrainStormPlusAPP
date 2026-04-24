@@ -93,7 +93,7 @@ public struct LeaveSubmitView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 Form {
                 Section("请假类型") {
                     Picker("类型", selection: $viewModel.leaveType) {
@@ -216,11 +216,7 @@ public struct LeaveSubmitView: View {
                     .disabled(!viewModel.canSubmit)
                 }
             }
-            .overlay {
-                if viewModel.isSubmitting {
-                    submittingOverlay
-                }
-            }
+            .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
             .onChange(of: viewModel.leaveType) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.isHalfDay) { _, _ in Haptic.light() }
@@ -368,15 +364,6 @@ public struct LeaveSubmitView: View {
         }
     }
 
-    private var submittingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25).ignoresSafeArea()
-            ProgressView("提交中…")
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-        }
-    }
 }
 
 #Preview {

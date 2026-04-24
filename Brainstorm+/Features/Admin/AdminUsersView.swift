@@ -154,7 +154,7 @@ public struct AdminUsersView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(BsAmbientBackground(includeCoral: true))
+        .background(BsColor.pageBackground.ignoresSafeArea())
     }
 
     private var roleFilterStrip: some View {

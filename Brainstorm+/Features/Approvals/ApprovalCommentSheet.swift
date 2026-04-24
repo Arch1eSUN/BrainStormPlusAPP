@@ -46,7 +46,7 @@ public struct ApprovalCommentSheet: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 16) {
                 if let label = requestLabel, !label.isEmpty {
                     HStack(spacing: 4) {
@@ -109,7 +109,7 @@ public struct ApprovalCommentSheet: View {
                     // 注意：rejectBlocked 时 confirmDisabled=true,按钮本身
                     // 被 .disabled 挡掉,原来的 warning haptic 分支已无触达路径,
                     // 所以此处只需处理正常 submit。
-                    BsBrandButton(size: .regular, isLoading: isBusy) {
+                    BsPrimaryButton(size: .regular, isLoading: isBusy) {
                         Task { await submit() }
                     } label: {
                         HStack(spacing: 6) {

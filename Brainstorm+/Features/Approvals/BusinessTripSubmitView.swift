@@ -60,7 +60,7 @@ public struct BusinessTripSubmitView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 Form {
                 Section("日期") {
                     DatePicker(
@@ -130,11 +130,7 @@ public struct BusinessTripSubmitView: View {
                     .disabled(!viewModel.canSubmit)
                 }
             }
-            .overlay {
-                if viewModel.isSubmitting {
-                    submittingOverlay
-                }
-            }
+            .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
             .onChange(of: viewModel.transportation) { _, _ in Haptic.selection() }
         }
     }
@@ -152,15 +148,6 @@ public struct BusinessTripSubmitView: View {
         }
     }
 
-    private var submittingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25).ignoresSafeArea()
-            ProgressView("提交中…")
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-        }
-    }
 }
 
 #Preview {

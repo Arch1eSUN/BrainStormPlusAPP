@@ -68,31 +68,31 @@ public struct AdminCenterView: View {
             .padding(.horizontal, BsSpacing.lg)
             .padding(.vertical, BsSpacing.md)
         }
-        .background(BsAmbientBackground(includeCoral: true))
+        .background(BsColor.pageBackground.ignoresSafeArea())
     }
 
     private var headerCard: some View {
-        HStack(spacing: BsSpacing.md + 2) {
-            ZStack {
-                RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                    .fill(BsColor.brandAzure.opacity(0.12))
-                    .frame(width: 48, height: 48)
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.title2)
-                    .foregroundStyle(BsColor.brandAzure)
+        BsContentCard(padding: .medium) {
+            HStack(spacing: BsSpacing.md + 2) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                        .fill(BsColor.brandAzure.opacity(0.12))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.title2)
+                        .foregroundStyle(BsColor.brandAzure)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("管理后台")
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(BsColor.ink)
+                    Text("系统管理 · 用户维护 · 权限配置")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                Spacer()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("管理后台")
-                    .font(BsTypography.cardTitle)
-                    .foregroundStyle(BsColor.ink)
-                Text("系统管理 · 用户维护 · 权限配置")
-                    .font(BsTypography.captionSmall)
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-            Spacer()
         }
-        .padding(BsSpacing.md)
-        .bsGlassCard()
     }
 
     private var statsGrid: some View {
@@ -113,26 +113,25 @@ public struct AdminCenterView: View {
     }
 
     private func statCard(icon: String, label: String, value: Int, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
-            ZStack {
-                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                    .fill(color.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(color)
+        BsContentCard(padding: .medium) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                        .fill(color.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(color)
+                }
+                Text(label.uppercased())
+                    .font(BsTypography.meta)
+                    .tracking(1.2)
+                    .foregroundStyle(BsColor.inkMuted)
+                Text("\(value)")
+                    .font(BsTypography.statMedium)
+                    .foregroundStyle(BsColor.ink)
             }
-            Text(label.uppercased())
-                .font(BsTypography.meta)
-                .tracking(1.2)
-                .foregroundStyle(BsColor.inkMuted)
-            Text("\(value)")
-                .font(BsTypography.statMedium)
-                .foregroundStyle(BsColor.ink)
         }
-        .padding(BsSpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .bsGlassCard()
     }
 
     private var modulesList: some View {
@@ -140,7 +139,8 @@ public struct AdminCenterView: View {
             BsSectionHeader("管理模块")
                 .padding(.leading, BsSpacing.sm)
 
-            VStack(spacing: 0) {
+            BsContentCard(padding: .none) {
+                VStack(spacing: 0) {
                 if viewModel.canManagePeople {
                     row(
                         icon: "person.2.fill",
@@ -256,8 +256,8 @@ public struct AdminCenterView: View {
                         AdminAuditView(isEmbedded: true)
                     }
                 }
+                }
             }
-            .bsGlassCard()
         }
     }
 

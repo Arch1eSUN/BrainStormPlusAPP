@@ -52,7 +52,7 @@ public struct ApprovalDetailView: View {
         ZStack {
             // Ambient 弥散底层 —— Azure + Mint blobs 漂在暖米纸底上，
             // 卡片玻璃透出一点氛围光。Fusion 词汇统一。
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             Group {
                 if viewModel.isLoading && viewModel.request == nil {
@@ -246,34 +246,34 @@ public struct ApprovalDetailView: View {
 
     @ViewBuilder
     private func headerCard(_ request: ApprovalRequestDetail) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                avatarCircle(request.requesterProfile)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(request.requesterProfile?.fullName ?? "未知用户")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+        BsContentCard(padding: .none) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    avatarCircle(request.requesterProfile)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(request.requesterProfile?.fullName ?? "未知用户")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
 
-                        typeChip(request.requestType)
+                            typeChip(request.requestType)
 
-                        statusChip(request.status)
+                            statusChip(request.status)
 
-                        if viewModel.isSelf {
-                            selfPill
+                            if viewModel.isSelf {
+                                selfPill
+                            }
                         }
+                        Text(submittedAtText(request))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    Text(submittedAtText(request))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // 招牌玻璃卡：Liquid Glass + inset 高光 + 软阴影
-        .bsGlassCard(cornerRadius: 14)
     }
 
     @ViewBuilder
@@ -687,23 +687,23 @@ private struct Section<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer(minLength: 0)
+        BsContentCard(padding: .none) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: systemImage)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Spacer(minLength: 0)
+                }
+                content()
             }
-            content()
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Glass envelope with brand bevel + soft shadow
-        .bsGlassCard(cornerRadius: 14)
     }
 }
 

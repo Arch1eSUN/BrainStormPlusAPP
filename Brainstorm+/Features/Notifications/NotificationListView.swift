@@ -49,7 +49,7 @@ public struct NotificationListView: View {
     private var coreContent: some View {
         ZStack {
             // Fusion ambient 底层 —— 通知列表需要"airy"感，不是白底。
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             Group {
                 if viewModel.isLoading && viewModel.notifications.isEmpty {

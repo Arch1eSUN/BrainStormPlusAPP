@@ -128,65 +128,66 @@ public struct ApprovalQueueView: View {
 
     @ViewBuilder
     private func queueRow(_ row: ApprovalListRow) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Header: avatar + name + type + priority + status
-            HStack(alignment: .center, spacing: 12) {
-                avatarCircle(row.requesterProfile)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(row.requesterProfile?.fullName ?? "未知用户")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
+        BsContentCard(padding: .none) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Header: avatar + name + type + priority + status
+                HStack(alignment: .center, spacing: 12) {
+                    avatarCircle(row.requesterProfile)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(row.requesterProfile?.fullName ?? "未知用户")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
 
-                        typeChip(row.requestType)
-                        priorityChip(row.priorityByRequester)
+                            typeChip(row.requestType)
+                            priorityChip(row.priorityByRequester)
+                        }
+                        Text(Self.createdAtFormatter.string(from: row.createdAt))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    Text(Self.createdAtFormatter.string(from: row.createdAt))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    statusChip(row.status)
                 }
-                Spacer(minLength: 8)
-                statusChip(row.status)
-            }
 
-            // Leave preview line (for .leave queue rows or any row that
-            // happens to have a leave join — the `expense`/`generic`
-            // queues never do, but the model carries optionals anyway).
-            if row.startDate != nil || row.endDate != nil {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(leaveSpanText(row))
+                // Leave preview line (for .leave queue rows or any row that
+                // happens to have a leave join — the `expense`/`generic`
+                // queues never do, but the model carries optionals anyway).
+                if row.startDate != nil || row.endDate != nil {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(leaveSpanText(row))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let reason = row.businessReason, !reason.isEmpty {
+                    Text(reason)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                // Action buttons — pending only + kind supports writes.
+                // Leave kind surfaces a small hint so the user knows where
+                // to go; no buttons there.
+                if row.status == .pending {
+                    if viewModel.kind.supportsWriteOnIOS {
+                        actionRow(for: row)
+                    } else {
+                        Text("请假审批请在 Web 端完成(涉及请假额度与排班状态同步)")
+                            .font(.caption2)
+                            .foregroundStyle(Color.orange)
+                            .padding(.top, 2)
+                    }
                 }
             }
-
-            if let reason = row.businessReason, !reason.isEmpty {
-                Text(reason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            // Action buttons — pending only + kind supports writes.
-            // Leave kind surfaces a small hint so the user knows where
-            // to go; no buttons there.
-            if row.status == .pending {
-                if viewModel.kind.supportsWriteOnIOS {
-                    actionRow(for: row)
-                } else {
-                    Text("请假审批请在 Web 端完成(涉及请假额度与排班状态同步)")
-                        .font(.caption2)
-                        .foregroundStyle(Color.orange)
-                        .padding(.top, 2)
-                }
-            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
 
     // MARK: - Action buttons

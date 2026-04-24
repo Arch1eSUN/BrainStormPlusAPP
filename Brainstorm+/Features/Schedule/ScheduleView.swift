@@ -35,7 +35,7 @@ public struct ScheduleView: View {
 
     private var coreContent: some View {
         ZStack(alignment: .top) {
-            BsAmbientBackground()
+            BsColor.pageBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 headerSection
@@ -273,14 +273,15 @@ public struct ScheduleView: View {
                         (entry.date, entry.iso, viewModel.states[entry.iso])
                     }
 
-                VStack(spacing: 0) {
-                    listRowHeader
-                    ForEach(sortedRows, id: \.iso) { row in
-                        ListRow(date: row.date, iso: row.iso, state: row.state)
-                        Divider().opacity(0.4)
+                BsContentCard(padding: .medium) {
+                    VStack(spacing: 0) {
+                        listRowHeader
+                        ForEach(sortedRows, id: \.iso) { row in
+                            ListRow(date: row.date, iso: row.iso, state: row.state)
+                            Divider().opacity(0.4)
+                        }
                     }
                 }
-                .bsGlassCard(cornerRadius: BsRadius.lg)
             }
         }
     }
@@ -334,21 +335,22 @@ public struct ScheduleView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            VStack(spacing: BsSpacing.md) {
-                Image(systemName: mode.systemImage)
-                    .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(BsColor.brandMint)
-                Text("\(mode.displayLabel) 视图即将推出")
-                    .font(BsTypography.outfit(16, weight: "Medium"))
-                    .foregroundStyle(BsColor.ink)
-                Text("稍后将支持团队层面的时间线 / 月视图。")
-                    .font(BsTypography.captionSmall)
-                    .foregroundStyle(BsColor.inkMuted)
-                    .multilineTextAlignment(.center)
+            BsContentCard(padding: .none) {
+                VStack(spacing: BsSpacing.md) {
+                    Image(systemName: mode.systemImage)
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(BsColor.brandMint)
+                    Text("\(mode.displayLabel) 视图即将推出")
+                        .font(BsTypography.outfit(16, weight: "Medium"))
+                        .foregroundStyle(BsColor.ink)
+                    Text("稍后将支持团队层面的时间线 / 月视图。")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(BsSpacing.xl + 4)
             }
-            .frame(maxWidth: .infinity)
-            .padding(BsSpacing.xl + 4)
-            .bsGlassCard()
         }
     }
 
@@ -371,28 +373,29 @@ public struct ScheduleView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: BsSpacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(BsColor.brandMint.opacity(0.08))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "calendar")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(BsColor.brandMint)
+        BsContentCard(padding: .none) {
+            VStack(spacing: BsSpacing.lg) {
+                ZStack {
+                    Circle()
+                        .fill(BsColor.brandMint.opacity(0.08))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(BsColor.brandMint)
+                }
+
+                Text("当天无排班记录")
+                    .font(BsTypography.outfit(16, weight: "Medium"))
+                    .foregroundStyle(BsColor.ink)
+
+                Text("请联系管理员或等待 HR 排班")
+                    .font(BsTypography.caption)
+                    .foregroundStyle(BsColor.inkMuted)
+                    .multilineTextAlignment(.center)
             }
-
-            Text("当天无排班记录")
-                .font(BsTypography.outfit(16, weight: "Medium"))
-                .foregroundStyle(BsColor.ink)
-
-            Text("请联系管理员或等待 HR 排班")
-                .font(BsTypography.caption)
-                .foregroundStyle(BsColor.inkMuted)
-                .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .bsGlassCard(cornerRadius: BsRadius.xxl - 4)
     }
 
     // MARK: - Quick-apply sheet wiring

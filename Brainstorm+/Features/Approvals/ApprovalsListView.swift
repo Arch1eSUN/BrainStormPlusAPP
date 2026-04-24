@@ -160,54 +160,55 @@ public struct ApprovalsListView: View {
 
     @ViewBuilder
     private func submissionRow(_ row: ApprovalMySubmissionRow) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.sm) {
-            // Header: type label + status chip + created-at
-            HStack(alignment: .center, spacing: BsSpacing.sm) {
-                Text(row.requestType.displayLabel)
-                    .font(BsTypography.cardSubtitle)
-                    .foregroundStyle(BsColor.ink)
+        BsContentCard(padding: .none) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                // Header: type label + status chip + created-at
+                HStack(alignment: .center, spacing: BsSpacing.sm) {
+                    Text(row.requestType.displayLabel)
+                        .font(BsTypography.cardSubtitle)
+                        .foregroundStyle(BsColor.ink)
 
-                statusChip(row.status)
+                    statusChip(row.status)
 
-                Spacer(minLength: BsSpacing.sm)
+                    Spacer(minLength: BsSpacing.sm)
 
-                Text(Self.createdAtFormatter.string(from: row.createdAt))
-                    .font(BsTypography.captionSmall)
-                    .foregroundStyle(BsColor.inkFaint)
-            }
+                    Text(Self.createdAtFormatter.string(from: row.createdAt))
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkFaint)
+                }
 
-            // Leave-only preview line (Web my-submissions.tsx:145-151)
-            if row.requestType == .leave, let leave = row.leave {
-                Text(leavePreviewText(leave))
-                    .font(BsTypography.caption)
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-
-            if let reason = row.businessReason, !reason.isEmpty {
-                Text(reason)
-                    .font(BsTypography.caption)
-                    .foregroundStyle(BsColor.inkMuted)
-                    .lineLimit(2)
-            }
-
-            if let note = row.reviewerNote, !note.isEmpty {
-                // Web: border-l-2 border-gray-200 pl-2 — mirror with a
-                // Rectangle leading bar so the visual semantics carry
-                // across.
-                HStack(alignment: .top, spacing: BsSpacing.sm) {
-                    Rectangle()
-                        .fill(BsColor.borderSubtle)
-                        .frame(width: 2)
-                    Text("审批意见：\(note)")
+                // Leave-only preview line (Web my-submissions.tsx:145-151)
+                if row.requestType == .leave, let leave = row.leave {
+                    Text(leavePreviewText(leave))
                         .font(BsTypography.caption)
                         .foregroundStyle(BsColor.inkMuted)
-                        .lineLimit(3)
+                }
+
+                if let reason = row.businessReason, !reason.isEmpty {
+                    Text(reason)
+                        .font(BsTypography.caption)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .lineLimit(2)
+                }
+
+                if let note = row.reviewerNote, !note.isEmpty {
+                    // Web: border-l-2 border-gray-200 pl-2 — mirror with a
+                    // Rectangle leading bar so the visual semantics carry
+                    // across.
+                    HStack(alignment: .top, spacing: BsSpacing.sm) {
+                        Rectangle()
+                            .fill(BsColor.borderSubtle)
+                            .frame(width: 2)
+                        Text("审批意见：\(note)")
+                            .font(BsTypography.caption)
+                            .foregroundStyle(BsColor.inkMuted)
+                            .lineLimit(3)
+                    }
                 }
             }
+            .padding(BsSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(BsSpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .bsGlassCard(cornerRadius: BsRadius.lg)
     }
 
     // MARK: - Status chip

@@ -87,7 +87,7 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            backgroundLayer
+            BsBrandAmbientLayer()
 
             VStack(spacing: BsSpacing.xl) {
                 Image("BrandLogo")
@@ -111,27 +111,8 @@ struct SplashView: View {
         }
     }
 
-    private var backgroundLayer: some View {
-        ZStack {
-            BsColor.pageBackground.ignoresSafeArea()
-
-            RadialGradient(
-                colors: [BsColor.brandAzure.opacity(0.22), .clear],
-                center: .topLeading,
-                startRadius: 20,
-                endRadius: 420
-            )
-            .ignoresSafeArea()
-
-            RadialGradient(
-                colors: [BsColor.brandMint.opacity(0.18), .clear],
-                center: .bottomTrailing,
-                startRadius: 20,
-                endRadius: 420
-            )
-            .ignoresSafeArea()
-        }
-    }
+    // 原 backgroundLayer 30 LOC 已抽至 Shared/DesignSystem/Primitives/BsBrandAmbientLayer.swift
+    // 共用 LoginView + Splash 两处（Batch 0 共享 primitive 建设）
 
     // 3 个 dots —— TimelineView 声明式驱动，无需 Timer 也无需 State loop
     private var loadingDots: some View {

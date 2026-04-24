@@ -251,9 +251,9 @@ struct LoginView: View {
 
     private var submitBlock: some View {
         // Phase 20 集中爆发点 —— 登录页唯一一个三色品牌渐变主 CTA。
-        // BsBrandButton 内部已包 Haptic.medium + 按压反馈 + 阴影,
+        // BsPrimaryButton 内部已包 Haptic.medium + 按压反馈 + 阴影,
         // 所以 handleLogin 里原先的 Haptic.medium() 被移除。
-        BsBrandButton(size: .large, isLoading: isLoggingIn) {
+        BsPrimaryButton(size: .large, isLoading: isLoggingIn) {
             handleLogin()
         } label: {
             HStack(spacing: BsSpacing.sm) {
@@ -287,7 +287,7 @@ struct LoginView: View {
             return
         }
 
-        // BsBrandButton 已在 tap 时发 Haptic.medium(),这里不再重复。
+        // BsPrimaryButton 已在 tap 时发 Haptic.medium(),这里不再重复。
         focusedField = nil
         errorMessage = nil
         withAnimation(BsMotion.Anim.standard) {

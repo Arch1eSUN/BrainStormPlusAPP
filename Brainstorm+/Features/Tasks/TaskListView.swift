@@ -264,18 +264,19 @@ public struct TaskListView: View {
         return HStack(spacing: BsSpacing.sm) {
             ForEach(cards.indices, id: \.self) { idx in
                 let (label, value, tint) = cards[idx]
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(value)")
-                        .font(BsTypography.outfit(18, weight: "Bold"))
-                        .foregroundColor(tint)
-                    Text(label)
-                        .font(BsTypography.inter(10, weight: "Regular"))
-                        .foregroundColor(BsColor.inkMuted)
+                BsContentCard(padding: .none) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(value)")
+                            .font(BsTypography.outfit(18, weight: "Bold"))
+                            .foregroundColor(tint)
+                        Text(label)
+                            .font(BsTypography.inter(10, weight: "Regular"))
+                            .foregroundColor(BsColor.inkMuted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, BsSpacing.md - 2)
+                    .padding(.horizontal, BsSpacing.md)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, BsSpacing.md - 2)
-                .padding(.horizontal, BsSpacing.md)
-                .bsGlassCard(cornerRadius: BsRadius.md)
             }
         }
     }
@@ -424,27 +425,28 @@ public struct TaskListView: View {
     // MARK: - Empty state
 
     private var emptyStateView: some View {
-        VStack(spacing: BsSpacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(BsColor.brandMint.opacity(0.18))
-                    .frame(width: 100, height: 100)
-                Image(systemName: "checklist")
-                    .font(.system(size: 40))
-                    .foregroundColor(BsColor.brandAzure)
+        BsContentCard(padding: .none) {
+            VStack(spacing: BsSpacing.lg) {
+                ZStack {
+                    Circle()
+                        .fill(BsColor.brandMint.opacity(0.18))
+                        .frame(width: 100, height: 100)
+                    Image(systemName: "checklist")
+                        .font(.system(size: 40))
+                        .foregroundColor(BsColor.brandAzure)
+                }
+                Text("暂无\(selectedFilter.cnLabel)任务")
+                    .font(BsTypography.sectionTitle)
+                    .foregroundColor(BsColor.ink)
+                Text("点击右上角的「+」按钮来创建第一个任务。")
+                    .font(BsTypography.bodySmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, BsSpacing.xxxl - 8)
             }
-            Text("暂无\(selectedFilter.cnLabel)任务")
-                .font(BsTypography.sectionTitle)
-                .foregroundColor(BsColor.ink)
-            Text("点击右上角的「+」按钮来创建第一个任务。")
-                .font(BsTypography.bodySmall)
-                .foregroundColor(BsColor.inkMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, BsSpacing.xxxl - 8)
+            .padding(.vertical, BsSpacing.xxxl - 8)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.vertical, BsSpacing.xxxl - 8)
-        .frame(maxWidth: .infinity)
-        .bsGlassCard(cornerRadius: BsRadius.xxl)
     }
 }
 

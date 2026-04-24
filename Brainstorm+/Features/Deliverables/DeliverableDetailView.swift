@@ -211,19 +211,17 @@ public struct DeliverableDetailView: View {
 
     @ViewBuilder
     private var timestampsCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let created = viewModel.deliverable.createdAt {
-                timestampRow(label: "创建时间", date: created)
-            }
-            if let updated = viewModel.deliverable.updatedAt,
-               updated != viewModel.deliverable.createdAt {
-                timestampRow(label: "更新时间", date: updated)
+        BsContentCard(padding: .small) {
+            VStack(alignment: .leading, spacing: 6) {
+                if let created = viewModel.deliverable.createdAt {
+                    timestampRow(label: "创建时间", date: created)
+                }
+                if let updated = viewModel.deliverable.updatedAt,
+                   updated != viewModel.deliverable.createdAt {
+                    timestampRow(label: "更新时间", date: updated)
+                }
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder

@@ -36,7 +36,7 @@ public struct ProcurementSubmitView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                BsAmbientBackground()
+                BsColor.pageBackground.ignoresSafeArea()
                 Form {
                 Section("采购项目") {
                     Picker("类型", selection: $viewModel.procurementType) {
@@ -155,11 +155,7 @@ public struct ProcurementSubmitView: View {
                     .disabled(!viewModel.canSubmit)
                 }
             }
-            .overlay {
-                if viewModel.isSubmitting {
-                    submittingOverlay
-                }
-            }
+            .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
             .onChange(of: viewModel.procurementType) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
             .onChange(of: viewModel.budgetAvailable) { _, _ in Haptic.light() }
@@ -198,15 +194,6 @@ public struct ProcurementSubmitView: View {
         }
     }
 
-    private var submittingOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.25).ignoresSafeArea()
-            ProgressView("提交中…")
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-        }
-    }
 }
 
 #Preview {

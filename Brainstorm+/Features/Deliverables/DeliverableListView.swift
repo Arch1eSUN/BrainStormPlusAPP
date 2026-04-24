@@ -170,6 +170,7 @@ public struct DeliverableListView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    // TODO(batch-1): wrap in BsContentCard
                     .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
@@ -349,61 +350,60 @@ private struct DeliverableRow: View {
     let item: Deliverable
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(item.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    if let project = item.project?.name, !project.isEmpty {
-                        Label(project, systemImage: "folder")
-                            .labelStyle(.titleAndIcon)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.blue)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.12))
-                            .clipShape(Capsule())
+        BsContentCard(padding: .small) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        if let project = item.project?.name, !project.isEmpty {
+                            Label(project, systemImage: "folder")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    if let desc = item.description, !desc.isEmpty {
+                        Text(desc)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    HStack(spacing: 8) {
+                        DeliverableStatusChip(status: item.status)
+                        if let urlStr = item.url ?? item.fileUrl,
+                           !urlStr.isEmpty,
+                           let platform = DeliverablePlatform.detect(urlStr) {
+                            Label(platform.label, systemImage: "link")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(platform.color.opacity(0.12))
+                                .foregroundStyle(platform.color)
+                                .clipShape(Capsule())
+                        }
+                        if let submittedAt = item.submittedAt {
+                            Text(submittedAt, style: .date)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        } else if let createdAt = item.createdAt {
+                            Text(createdAt, style: .date)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
-                if let desc = item.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                HStack(spacing: 8) {
-                    DeliverableStatusChip(status: item.status)
-                    if let urlStr = item.url ?? item.fileUrl,
-                       !urlStr.isEmpty,
-                       let platform = DeliverablePlatform.detect(urlStr) {
-                        Label(platform.label, systemImage: "link")
-                            .labelStyle(.titleAndIcon)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(platform.color.opacity(0.12))
-                            .foregroundStyle(platform.color)
-                            .clipShape(Capsule())
-                    }
-                    if let submittedAt = item.submittedAt {
-                        Text(submittedAt, style: .date)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    } else if let createdAt = item.createdAt {
-                        Text(createdAt, style: .date)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
         }
-        .padding(12)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

@@ -46,7 +46,7 @@ public struct TeamDirectoryView: View {
                 content
             }
         }
-        .background(BsAmbientBackground())
+        .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("团队")
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: UUID.self) { userId in
@@ -192,41 +192,40 @@ public struct TeamDirectoryView: View {
 
     private func memberCard(_ m: TeamMember) -> some View {
         NavigationLink(value: m.id) {
-            VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
-                HStack(spacing: BsSpacing.sm + 2) {
-                    avatar(for: m)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(m.fullName?.isEmpty == false ? m.fullName! : "未设置")
-                            .font(BsTypography.cardSubtitle)
-                            .lineLimit(1)
-                            .foregroundStyle(BsColor.ink)
-                        if let role = m.role, !role.isEmpty {
-                            Text(roleLabel(role))
-                                .font(BsTypography.captionSmall)
-                                .padding(.horizontal, BsSpacing.xs + 2)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(BsColor.brandAzure.opacity(0.12)))
-                                .foregroundStyle(BsColor.brandAzure)
+            BsContentCard(padding: .medium) {
+                VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
+                    HStack(spacing: BsSpacing.sm + 2) {
+                        avatar(for: m)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(m.fullName?.isEmpty == false ? m.fullName! : "未设置")
+                                .font(BsTypography.cardSubtitle)
+                                .lineLimit(1)
+                                .foregroundStyle(BsColor.ink)
+                            if let role = m.role, !role.isEmpty {
+                                Text(roleLabel(role))
+                                    .font(BsTypography.captionSmall)
+                                    .padding(.horizontal, BsSpacing.xs + 2)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(BsColor.brandAzure.opacity(0.12)))
+                                    .foregroundStyle(BsColor.brandAzure)
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
-                }
 
-                VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                    if let dept = m.department, !dept.isEmpty {
-                        infoRow(icon: "building.2", text: dept)
-                    }
-                    if let pos = m.position, !pos.isEmpty {
-                        infoRow(icon: "briefcase", text: pos)
-                    }
-                    if viewModel.canViewDetails, let phone = m.phone, !phone.isEmpty {
-                        infoRow(icon: "phone", text: phone)
+                    VStack(alignment: .leading, spacing: BsSpacing.xs) {
+                        if let dept = m.department, !dept.isEmpty {
+                            infoRow(icon: "building.2", text: dept)
+                        }
+                        if let pos = m.position, !pos.isEmpty {
+                            infoRow(icon: "briefcase", text: pos)
+                        }
+                        if viewModel.canViewDetails, let phone = m.phone, !phone.isEmpty {
+                            infoRow(icon: "phone", text: phone)
+                        }
                     }
                 }
             }
-            .padding(BsSpacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .bsGlassCard(cornerRadius: BsRadius.md + 2)
             .bsInteractiveFeel(.card)
         }
         .buttonStyle(.plain)
