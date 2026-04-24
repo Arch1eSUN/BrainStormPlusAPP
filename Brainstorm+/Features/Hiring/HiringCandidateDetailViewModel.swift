@@ -14,12 +14,42 @@ public final class HiringCandidateDetailViewModel: ObservableObject {
     /// 触发状态切到 `.offer` 时，View 侧读这个 flag 弹 confirmationDialog。
     @Published public var pendingOfferConfirmation: Bool = false
 
+    /// AI 简历评分结果（POST /api/mobile/hiring/score 返回）
+    @Published public private(set) var resumeScore: ResumeScoreResult?
+    @Published public private(set) var isScoringResume: Bool = false
+
     public let candidateId: UUID
 
     private let repo = HiringRepository.shared
 
     public init(candidateId: UUID) {
         self.candidateId = candidateId
+    }
+
+    // MARK: - Resume scoring DTO
+
+    /// 结构对齐 Web route `/api/mobile/hiring/score` response.data。
+    /// 见 `BrainStorm+-Web/src/app/api/mobile/hiring/score/route.ts`。
+    public struct ResumeScoreResult: Codable, Hashable {
+        public let candidateId: UUID
+        public let positionId: UUID
+        public let score: Int
+        public let strengths: [String]
+        public let weaknesses: [String]
+        public let recommendation: String
+        public let modelUsed: String?
+        public let generatedAt: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case candidateId = "candidate_id"
+            case positionId = "position_id"
+            case score
+            case strengths
+            case weaknesses
+            case recommendation
+            case modelUsed = "model_used"
+            case generatedAt = "generated_at"
+        }
     }
 
     public func load() async {
@@ -99,5 +129,77 @@ public final class HiringCandidateDetailViewModel: ObservableObject {
             return nil
         }
         return try? JSONDecoder().decode(CandidateAIReview.self, from: data)
+    }
+
+    /// 触发 AI 简历评分。Web 路由内部读 `candidates.resume_url` 或
+    /// `candidates.resume_text`，iOS 侧无需上传 resume 正文 —— 只传 id。
+    /// 结果同时写入服务端 `resume_scores` 历史表 + 更新 `candidates.ai_score`
+    /// / `candidates.ai_summary` 快照，reload 时会看到分数变化。
+    public func scoreResume(positionId: UUID) async {
+        guard !isScoringResume else { return }
+        isScoringResume = true
+        defer { isScoringResume = false }
+
+        do {
+            let session = try await supabase.auth.session
+            let token = session.accessToken
+            let url = AppEnvironment.webAPIBaseURL
+                .appendingPathComponent("api/mobile/hiring/score")
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.timeoutInterval = 60  // AI 生成可能慢，给足时间
+
+            let payload: [String: Any] = [
+                "candidate_id": candidateId.uuidString,
+                "position_id": positionId.uuidString,
+            ]
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else {
+                errorMessage = "AI 评分失败：网络无响应"
+                return
+            }
+
+            if http.statusCode == 503 {
+                errorMessage = "AI 服务暂不可用，请稍后重试"
+                return
+            }
+            if http.statusCode >= 400 {
+                // 尝试从 Web envelope 里取中文 error 字段
+                if let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let msg = envelope["error"] as? String {
+                    errorMessage = "AI 评分失败：\(msg)"
+                } else {
+                    errorMessage = "AI 评分失败（HTTP \(http.statusCode)）"
+                }
+                return
+            }
+
+            // 解析 `{ data: ResumeScoreResult, error: null }` envelope
+            struct Envelope: Decodable {
+                let data: ResumeScoreResult?
+                let error: String?
+            }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let envelope = try decoder.decode(Envelope.self, from: data)
+            if let err = envelope.error {
+                errorMessage = "AI 评分失败：\(err)"
+                return
+            }
+            guard let result = envelope.data else {
+                errorMessage = "AI 评分失败：返回为空"
+                return
+            }
+            self.resumeScore = result
+            self.toastMessage = "AI 评分完成（\(result.score) 分）"
+            // reload 把服务端写入的 ai_score / ai_summary 快照拉回来
+            await load()
+        } catch {
+            errorMessage = "AI 评分失败：\(ErrorLocalizer.localize(error))"
+        }
     }
 }

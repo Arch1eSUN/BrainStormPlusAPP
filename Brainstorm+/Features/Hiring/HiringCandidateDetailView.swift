@@ -4,6 +4,9 @@ public struct HiringCandidateDetailView: View {
     @StateObject private var viewModel: HiringCandidateDetailViewModel
     @State private var showEdit: Bool = false
 
+    /// AI 评分时选的 position（默认用 candidate.positionId；候选人没关联职位时让 HR 手选）
+    @State private var scoringPositionId: UUID?
+
     private let onChanged: () -> Void
 
     public init(candidateId: UUID, onChanged: @escaping () -> Void) {
@@ -20,6 +23,7 @@ public struct HiringCandidateDetailView: View {
                         contactSection(candidate)
                         statusSection(candidate)
                         aiReviewSection(candidate)
+                        resumeScoreSection(candidate)
                         resumeSection(candidate)
                         notesSection(candidate)
                     }
@@ -188,6 +192,124 @@ public struct HiringCandidateDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - AI 简历评分（触发 /api/mobile/hiring/score）
+
+    @ViewBuilder
+    private func resumeScoreSection(_ c: Candidate) -> some View {
+        // 候选人没关联 position 时：Menu 挑一个；已关联则默认用它
+        let defaultPositionId = c.positionId ?? scoringPositionId
+        let effectivePositionId = scoringPositionId ?? c.positionId
+
+        card(title: "AI 简历评分") {
+            VStack(alignment: .leading, spacing: 12) {
+                // Position picker（候选人自带 positionId 时隐藏，减少视觉噪音）
+                if c.positionId == nil {
+                    HStack {
+                        Text("评估职位")
+                            .font(.caption)
+                            .foregroundStyle(BsColor.inkMuted)
+                        Spacer()
+                        Menu {
+                            ForEach(viewModel.positions) { pos in
+                                Button(pos.title) {
+                                    Haptic.selection()
+                                    scoringPositionId = pos.id
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(positionTitle(for: effectivePositionId) ?? "选择职位")
+                                    .font(.subheadline)
+                                    .foregroundStyle(effectivePositionId == nil ? BsColor.inkMuted : BsColor.ink)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(BsColor.inkFaint)
+                            }
+                        }
+                    }
+                }
+
+                // 最近一次评分结果（如果 session 内刚打过分）
+                if let score = viewModel.resumeScore {
+                    VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("\(score.score)")
+                                .font(.system(size: 44, weight: .bold, design: .rounded))
+                                .foregroundStyle(scoreColor(score.score))
+                            Text("/ 100")
+                                .font(.title3)
+                                .foregroundStyle(BsColor.inkFaint)
+                            Spacer()
+                            Text(score.recommendation)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, BsSpacing.sm)
+                                .padding(.vertical, BsSpacing.xs)
+                                .background(
+                                    Capsule()
+                                        .fill(scoreColor(score.score).opacity(0.15))
+                                )
+                                .foregroundStyle(scoreColor(score.score))
+                        }
+                        aiBulletBlock(title: "优势", items: score.strengths, systemImage: "star.fill", tint: BsColor.success)
+                        aiBulletBlock(title: "不足", items: score.weaknesses, systemImage: "exclamationmark.triangle", tint: BsColor.warning)
+                        if let model = score.modelUsed {
+                            Text("模型：\(model)")
+                                .font(.caption2)
+                                .foregroundStyle(BsColor.inkFaint)
+                        }
+                    }
+                }
+
+                // 触发按钮
+                Button {
+                    guard let posId = effectivePositionId else { return }
+                    Haptic.medium()
+                    Task { await viewModel.scoreResume(positionId: posId) }
+                } label: {
+                    HStack(spacing: 6) {
+                        if viewModel.isScoringResume {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                        Text(viewModel.isScoringResume
+                             ? "评分中…"
+                             : (viewModel.resumeScore == nil ? "生成 AI 评分" : "重新评分"))
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, BsSpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: BsRadius.md)
+                            .fill(effectivePositionId == nil
+                                  ? BsColor.inkMuted.opacity(0.3)
+                                  : BsColor.brandAzure)
+                    )
+                    .foregroundStyle(.white)
+                }
+                .disabled(effectivePositionId == nil || viewModel.isScoringResume)
+                .accessibilityLabel(viewModel.resumeScore == nil ? "生成 AI 简历评分" : "重新生成 AI 简历评分")
+
+                if effectivePositionId == nil {
+                    Text("请先为候选人选择评估职位")
+                        .font(.caption2)
+                        .foregroundStyle(BsColor.warning)
+                }
+
+                Text("由 Web AI orchestrator 生成，评分依据候选人简历与所选职位要求匹配度。历史记录写入 resume_scores 表。")
+                    .font(.caption2)
+                    .foregroundStyle(BsColor.inkFaint)
+
+                _ = defaultPositionId  // 保留变量供未来 prefill UX 使用
+            }
+        }
+    }
+
+    private func positionTitle(for id: UUID?) -> String? {
+        guard let id = id else { return nil }
+        return viewModel.positions.first(where: { $0.id == id })?.title
     }
 
     @ViewBuilder
