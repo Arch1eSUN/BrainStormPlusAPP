@@ -78,6 +78,12 @@ struct DashboardView: View {
     /// Phase 5：wordmark / "所有应用" tile 点击打开命令面板（.fullScreenCover）。
     @State private var showCommandPalette = false
 
+    /// Phase 8：onboarding 结束后首次到达 Dashboard，wordmark 发 3 次脉冲
+    /// 提示用户"这里可点"。一次性 @AppStorage 持久化。
+    @AppStorage("bs_has_pulsed_wordmark") private var hasPulsedWordmark: Bool = false
+    @State private var wordmarkPulse: Bool = false
+    @State private var wordmarkPulseCount: Int = 0
+
     var body: some View {
         NavigationStack {
             mainList
@@ -206,10 +212,12 @@ struct DashboardView: View {
     // MARK: - NavBar items
 
     /// Leading: Logo + "BrainStorm+" wordmark（Outfit Bold 18pt per v1.1 §2.3）。
-    /// 点击 = 打开 launcher / 命令面板（Phase 4 临时 sheet，Phase 5 替换为 palette）。
+    /// 点击 = 打开命令面板。首次 onboarding 后 3 次脉冲发光环提示用户"这里可点"。
     private var wordmarkButton: some View {
         Button {
             Haptic.light()
+            // 任何一次手动点击都停止 pulse 提示，算任务达成
+            if !hasPulsedWordmark { hasPulsedWordmark = true }
             showCommandPalette = true
         } label: {
             HStack(spacing: 6) {
@@ -222,8 +230,44 @@ struct DashboardView: View {
                     .foregroundStyle(BsColor.ink)
                     .tracking(-0.2)
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                // Phase 8: onboarding 后 3 次 azure 脉冲发光环
+                // 未 pulse 过：从 0 opacity 涨到 0.55，repeat 3 次后停
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(BsColor.brandAzure, lineWidth: 2)
+                    .opacity(wordmarkPulse ? 0.0 : 0.55)
+                    .scaleEffect(wordmarkPulse ? 1.3 : 1.0)
+                    .allowsHitTesting(false)
+                    .opacity(hasPulsedWordmark ? 0 : 1)
+            )
         }
         .accessibilityLabel("BrainStorm+，点击打开应用面板")
+        .onAppear {
+            guard !hasPulsedWordmark else { return }
+            // 脉冲 3 次后持久化，避免每次回到 Dashboard 都闪
+            wordmarkPulseCount = 0
+            runPulseLoop()
+        }
+    }
+
+    /// 脉冲循环：1s 一次 scale+fade，共 3 次
+    private func runPulseLoop() {
+        withAnimation(.easeOut(duration: 1.0)) {
+            wordmarkPulse = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            wordmarkPulse = false
+            wordmarkPulseCount += 1
+            if wordmarkPulseCount < 3 && !hasPulsedWordmark {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    runPulseLoop()
+                }
+            } else {
+                hasPulsedWordmark = true
+            }
+        }
     }
 
     /// Trailing: 头像入口，点击打开个人设置 sheet。

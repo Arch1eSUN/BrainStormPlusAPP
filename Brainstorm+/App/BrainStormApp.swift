@@ -15,7 +15,7 @@ struct BrainStormApp: App {
                     SplashView()
                         .transition(.opacity)
                 } else if sessionManager.isAuthenticated {
-                    MainTabView()
+                    AuthenticatedRoot()
                         .environment(sessionManager)
                         .environmentObject(realtimeSync)
                         .transition(.opacity)
@@ -43,6 +43,33 @@ struct BrainStormApp: App {
                 }
             }
         }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// AuthenticatedRoot — MainTabView 外壳，负责挂载首次启动 Onboarding
+//
+// Phase 8：@AppStorage("bs_has_seen_onboarding") 默认 false，首次进入
+// 主界面覆盖一层 BsOnboardingOverlay 做 3 步 carousel 介绍（欢迎/液体
+// hero/命令面板），用户选「开始使用」或「跳过」后写 true 持久化，
+// 后续启动不再出现。
+// ──────────────────────────────────────────────────────────────────
+private struct AuthenticatedRoot: View {
+    @AppStorage("bs_has_seen_onboarding") private var hasSeenOnboarding: Bool = false
+
+    var body: some View {
+        MainTabView()
+            .overlay {
+                if !hasSeenOnboarding {
+                    BsOnboardingOverlay {
+                        withAnimation(.easeOut(duration: 0.45)) {
+                            hasSeenOnboarding = true
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(100)
+                }
+            }
     }
 }
 
