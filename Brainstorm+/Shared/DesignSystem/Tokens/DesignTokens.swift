@@ -222,42 +222,47 @@ public enum BsMotion {
 //   • Outfit     —— 品牌印章（Wordmark 18pt + HeroNumber 48pt 唯 2 处）
 //   • Inter      —— Body + Caption（Web DNA 主力）
 //   • SF Pro     —— Large Title / Section Title / 时间数字（.rounded）
+//
+// Phase 7 Dynamic Type：所有 Inter / Outfit 自定义字体都带 `relativeTo:`，
+// 让用户系统字体放大（辅助功能 / 大型文本）时自动跟随缩放；SF Pro 的
+// `Font.system` 和 `.rounded` 天然 scale。关键：Hero 数字 48pt 也应 scale，
+// 但为避免 Attendance 卡布局被挤爆，在卡内部本地用 dynamicTypeSize clamp。
 
 public enum BsTypography {
     // ── 品牌印章 (Outfit) —— v1.1 仅 2 处 ─────────────────────────
     /// NavBar wordmark "BrainStorm+" —— v1.1 16pt → 18pt 更醒目
-    public static let brandWordmark = Font.custom("Outfit-Bold", size: 18)
+    public static let brandWordmark = Font.custom("Outfit-Bold", size: 18, relativeTo: .headline)
     /// Hero 数字（Attendance 液体卡 / 签名瞬间 48pt）
-    public static let heroNumber    = Font.custom("Outfit-Bold", size: 48)
+    public static let heroNumber    = Font.custom("Outfit-Bold", size: 48, relativeTo: .largeTitle)
 
     // ── 页面结构 (SF Pro 原生) ──────────────────────────────────
-    /// iOS 原生 Large Title 34pt bold
-    public static let largeTitle    = Font.system(size: 34, weight: .bold, design: .default)
-    /// 卡标题 / 分区 title 20pt SemiBold
-    public static let sectionTitle  = Font.system(size: 20, weight: .semibold, design: .default)
+    /// iOS 原生 Large Title —— 直接用 SwiftUI .largeTitle，完全 Dynamic Type
+    public static let largeTitle    = Font.system(.largeTitle, design: .default, weight: .bold)
+    /// 卡标题 / 分区 title 20pt SemiBold —— 挂 .title3 栅格（20pt）
+    public static let sectionTitle  = Font.system(.title3, design: .default, weight: .semibold)
 
     // ── Body / Caption (Inter) —— Web DNA 主力 ───────────────────
-    public static let body          = Font.custom("Inter-Regular",   size: 15)
-    public static let bodyMedium    = Font.custom("Inter-Medium",    size: 15)
-    public static let bodySmall     = Font.custom("Inter-Regular",   size: 14)
-    public static let cardTitle     = Font.custom("Inter-SemiBold",  size: 17)
-    public static let cardSubtitle  = Font.custom("Inter-Medium",    size: 15)
-    public static let caption       = Font.custom("Inter-Medium",    size: 12)
-    public static let captionSmall  = Font.custom("Inter-Medium",    size: 11)
+    public static let body          = Font.custom("Inter-Regular",   size: 15, relativeTo: .body)
+    public static let bodyMedium    = Font.custom("Inter-Medium",    size: 15, relativeTo: .body)
+    public static let bodySmall     = Font.custom("Inter-Regular",   size: 14, relativeTo: .subheadline)
+    public static let cardTitle     = Font.custom("Inter-SemiBold",  size: 17, relativeTo: .headline)
+    public static let cardSubtitle  = Font.custom("Inter-Medium",    size: 15, relativeTo: .body)
+    public static let caption       = Font.custom("Inter-Medium",    size: 12, relativeTo: .caption)
+    public static let captionSmall  = Font.custom("Inter-Medium",    size: 11, relativeTo: .caption2)
     /// UPPERCASE label 场景（"WORKSPACE" style，Web DNA）
-    public static let label         = Font.custom("Inter-SemiBold",  size: 11)
-    public static let meta          = Font.custom("Inter-Bold",      size: 10)
+    public static let label         = Font.custom("Inter-SemiBold",  size: 11, relativeTo: .caption2)
+    public static let meta          = Font.custom("Inter-Bold",      size: 10, relativeTo: .caption2)
 
     // ── 时间 / KPI 数字 (SF Pro .rounded + monospaced) ───────────
-    public static let statLarge     = Font.system(size: 34, weight: .bold, design: .rounded)
-    public static let statMedium    = Font.system(size: 26, weight: .bold, design: .rounded)
-    public static let statSmall     = Font.system(size: 18, weight: .semibold, design: .rounded)
+    public static let statLarge     = Font.system(.largeTitle, design: .rounded, weight: .bold)
+    public static let statMedium    = Font.system(.title, design: .rounded, weight: .bold)
+    public static let statSmall     = Font.system(.title3, design: .rounded, weight: .semibold)
 
     // ── 旧命名兼容（deprecated，指向新 token）────────────────────
     /// 登录 / 大 hero —— 指向 heroNumber（48pt）
     public static let brandDisplay  = heroNumber
     /// 旧页面 title —— 指向 largeTitle（34pt）
-    public static let brandTitle    = Font.custom("Outfit-Bold", size: 26)
+    public static let brandTitle    = Font.custom("Outfit-Bold", size: 26, relativeTo: .title)
     /// 旧页面 title —— 指向 SF Pro largeTitle
     public static let pageTitle     = largeTitle
 

@@ -88,6 +88,19 @@ public struct AttendanceHeroCard: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
             lowPowerActive = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
+        // Phase 7: Hero 数字 48pt 在 XXXL+ 会炸布局，clamp 到 xxLarge
+        // （系统 Large Title 放大范围内封顶，辅助功能用户仍能读出所有文字）
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(a11yLabel)
+    }
+
+    /// VoiceOver 一次读出整张卡的核心信息（状态 + 工时 + 提示）
+    private var a11yLabel: String {
+        let status = statusLabel
+        let hrs = Int(progress * 8)
+        let mins = Int(progress * 8 * 60) % 60
+        return "今日打卡：\(status)，已工作 \(hrs) 小时 \(mins) 分，\(heroSubtitle)"
     }
 
     // MARK: - Sub-views
