@@ -47,18 +47,15 @@ public struct AttendanceHeroCard: View {
         BsHeroCard(padding: 0) {
             ZStack(alignment: .bottomLeading) {
                 // ─── Liquid fill layer ────────────────────────────────────
-                // ─── 粘稠发光能量液（Build Driver 风）──────────────────
-                // 参数走 viscous（honey/molten metal）：amp 小 / freq 长 / 慢速
-                // 4 层栈：
+                // ─── 粘稠发光能量液（Build Driver 风，去气泡版）─────────
+                // 3 层：
                 //   Layer 0: outer halo — stateColor 在液体外扩散 neon glow
-                //   Layer 1: body gradient — 亮度推到 0.45–0.85 出能量感
-                //   Layer 2: rising bubbles — Canvas 画 7 个气泡持续升起（ clipped to body）
-                //   Layer 3: neon surface line — 白 stroke + stateColor 双层 shadow glow
+                //   Layer 1: body gradient — 亮度 0.45–0.85 能量感
+                //   Layer 2: neon surface line — 白 stroke + stateColor 双层 shadow glow
                 TimelineView(.animation) { ctx in
-                    let t = ctx.date.timeIntervalSinceReferenceDate
-                    let phase = CGFloat(t) * 1.4          // 粘稠慢速（honey-like）
+                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 1.4
                     let amp: CGFloat = reduceMotion ? 0 : 9
-                    let freq: CGFloat = 1.2               // 长波长（粘性流体）
+                    let freq: CGFloat = 1.2
                     let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
 
                     ZStack {
@@ -81,20 +78,7 @@ public struct AttendanceHeroCard: View {
                                 )
                             )
 
-                        // Layer 2: 上升气泡（Canvas，clipped to liquid body）
-                        if !reduceMotion {
-                            Canvas(rendersAsynchronously: true) { gctx, size in
-                                let liquidRect = CGRect(origin: .zero, size: size)
-                                let liquidPath = LiquidFillShape(
-                                    progress: progress, phase: phase, tiltX: tilt,
-                                    amplitude: amp, frequency: freq
-                                ).path(in: liquidRect)
-                                gctx.clip(to: liquidPath)
-                                Self.drawBubbles(into: gctx, size: size, time: t, progress: progress)
-                            }
-                        }
-
-                        // Layer 3: neon 水面高光线 + 双层 shadow glow
+                        // Layer 2: neon 水面高光线 + 双层 shadow glow
                         LiquidSurfaceLineShape(progress: progress, phase: phase, tiltX: tilt, amplitude: amp, frequency: freq)
                             .stroke(Color.white.opacity(0.82), lineWidth: 1.4)
                             .shadow(color: stateColor.opacity(0.95), radius: 3)
@@ -302,59 +286,6 @@ public struct AttendanceHeroCard: View {
         return f.string(from: date)
     }
 
-    // MARK: - Bubble renderer（上升能量粒子）
-
-    /// 在液体内部画 7 个持续升起的白色气泡粒子（Build Driver 能量感）。
-    /// 每个粒子参数由 index seed 确定：上升速度 / x 抖动 / 半径 / cycle 错相。
-    /// 用 Canvas imperative 画，外层 TimelineView 驱动 time，成本低于 N 个 SwiftUI View。
-    nonisolated fileprivate static func drawBubbles(
-        into ctx: GraphicsContext,
-        size: CGSize,
-        time t: TimeInterval,
-        progress: CGFloat
-    ) {
-        let progressClamped = max(0, min(1, progress))
-        let fillTopY = size.height * (1 - progressClamped)
-        let bubbleBottom = size.height - 4
-        // 液体太浅（< 24pt）就不画气泡，否则挤
-        guard bubbleBottom - fillTopY > 24 else { return }
-
-        let bubbleCount = 7
-        for i in 0..<bubbleCount {
-            let seed = Double(i) * 0.371
-
-            // 每粒气泡周期 2.2 – 4.2 秒（不同速率）
-            let cycle = 2.2 + (1.0 + cos(seed * 2.7)) * 1.0
-            let bubbleT = fmod(t + seed * 5.0, cycle)
-            let rise = bubbleT / cycle   // 0..1 归一化
-
-            // x 位置：7 点均布 + 微幅 x 抖动
-            let xBase = Double(size.width) * (0.1 + Double(i) * 0.117)
-            let xJitter = sin(rise * 3.8 + seed) * 6.0
-            let x = xBase + xJitter
-
-            // y 位置：从底部升到液面
-            let totalRise = Double(bubbleBottom) - Double(fillTopY)
-            let y = Double(bubbleBottom) - rise * totalRise
-
-            // 半径：1.8 – 3.8pt，随 rise 略微膨胀（向上减压）
-            let baseRadius = 1.8 + Double(i % 3) * 0.7
-            let radius = baseRadius * (1.0 + rise * 0.25)
-
-            // alpha：起止 fade in/out
-            let alphaFade: Double
-            if rise < 0.12 { alphaFade = rise / 0.12 }
-            else if rise > 0.82 { alphaFade = max(0, (1.0 - rise) / 0.18) }
-            else { alphaFade = 1.0 }
-            let alpha = 0.55 * alphaFade
-
-            let r = CGFloat(radius)
-            let cx = CGFloat(x)
-            let cy = CGFloat(y)
-            let ellipse = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
-            ctx.fill(ellipse, with: .color(.white.opacity(alpha)))
-        }
-    }
 }
 
 // MARK: - Preview
