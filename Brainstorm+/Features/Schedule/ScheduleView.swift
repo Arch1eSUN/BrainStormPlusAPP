@@ -76,7 +76,10 @@ public struct ScheduleView: View {
                 }
             }
         }
-        .navigationBarHidden(true)
+        // Phase 3 修复：命令面板 push 时 parent NavBar 必须存在以显示返回键。
+        // 走 inline 标题 + 隐藏 custom "日程" big title（见 headerSection）。
+        .navigationTitle("排班")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $quickApply) { route in
             quickApplySheet(for: route)
         }
@@ -95,10 +98,8 @@ public struct ScheduleView: View {
 
     private var headerSection: some View {
         VStack(spacing: BsSpacing.lg) {
+            // 标题"排班"走 NavBar inline（见 coreContent modifier），这里只留"今天"快捷 pill
             HStack {
-                Text("日程")
-                    .font(BsTypography.brandDisplay)
-                    .foregroundStyle(BsColor.ink)
                 Spacer()
 
                 // Jump to Today
@@ -120,7 +121,7 @@ public struct ScheduleView: View {
                 .buttonStyle(SquishyButtonStyle())
             }
             .padding(.horizontal, BsSpacing.xl)
-            .padding(.top, BsSpacing.lg)
+            .padding(.top, BsSpacing.sm)
 
             // View-mode switcher — mirrors Web `ViewSwitcher`.
             viewModeSwitcher
