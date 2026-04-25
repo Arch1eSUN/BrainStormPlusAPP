@@ -67,7 +67,11 @@ public struct TeamAttendanceView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color(.systemGroupedBackground))
-        .searchable(text: $viewModel.searchQuery, prompt: "搜索姓名 / 部门")
+        .searchable(
+            text: $viewModel.searchQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索姓名 / 部门"
+        )
         .refreshable {
             // Haptic removed: 用户反馈滑动场景不应震动
             await viewModel.load()

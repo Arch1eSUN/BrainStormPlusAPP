@@ -60,8 +60,93 @@ public final class ReportingViewModel: ObservableObject {
 
     private let client: SupabaseClient
 
+    /// Iter 8 P1 §B.9 — Realtime cross-device sync. Two separate channel
+    /// subscriptions because daily_logs / weekly_reports are physically
+    /// distinct tables in postgres (reports has both as sub-tabs).
+    private let dailyRealtime: RealtimeListSync
+    private let weeklyRealtime: RealtimeListSync
+
     public init(client: SupabaseClient) {
         self.client = client
+        self.dailyRealtime = RealtimeListSync(client: client, tableName: "daily_logs")
+        self.weeklyRealtime = RealtimeListSync(client: client, tableName: "weekly_reports")
+    }
+
+    // MARK: - Realtime (Iter 8 P1 §B.9)
+
+    public func subscribeRealtime() async {
+        if !dailyRealtime.isActive {
+            await dailyRealtime.start { [weak self] change in
+                guard let self else { return }
+                self.applyDailyChange(change)
+            }
+        }
+        if !weeklyRealtime.isActive {
+            await weeklyRealtime.start { [weak self] change in
+                guard let self else { return }
+                self.applyWeeklyChange(change)
+            }
+        }
+    }
+
+    public func unsubscribeRealtime() async {
+        await dailyRealtime.stop()
+        await weeklyRealtime.stop()
+    }
+
+    /// daily_logs is per-user — RLS already filters foreign rows out.
+    /// Approval status hydration relies on a separate table; we trigger
+    /// a re-fetch on insert/update so the join stays current.
+    private func applyDailyChange(_ change: RealtimeListChange) {
+        switch change {
+        case .insert(let row):
+            guard let log: DailyLog = row.tryDecode(as: DailyLog.self) else {
+                Task { await self.fetchReports() }
+                return
+            }
+            if !dailyLogs.contains(where: { $0.id == log.id }) {
+                dailyLogs.insert(log, at: 0)
+            }
+        case .update(let newRow, _):
+            guard let id = newRow.uuidColumn("id") else { return }
+            if let updated: DailyLog = newRow.tryDecode(as: DailyLog.self),
+               let idx = dailyLogs.firstIndex(where: { $0.id == id }) {
+                var copy = updated
+                copy.approvalStatus = dailyLogs[idx].approvalStatus  // preserve hydrated join
+                dailyLogs[idx] = copy
+            } else {
+                Task { await self.fetchReports() }
+            }
+        case .delete(let oldRow):
+            guard let id = oldRow.uuidColumn("id") else { return }
+            dailyLogs.removeAll { $0.id == id }
+        }
+    }
+
+    private func applyWeeklyChange(_ change: RealtimeListChange) {
+        switch change {
+        case .insert(let row):
+            guard let report: WeeklyReport = row.tryDecode(as: WeeklyReport.self) else {
+                Task { await self.fetchReports() }
+                return
+            }
+            if !weeklyReports.contains(where: { $0.id == report.id }) {
+                weeklyReports.insert(report, at: 0)
+            }
+        case .update(let newRow, _):
+            guard let id = newRow.uuidColumn("id") else { return }
+            if let updated: WeeklyReport = newRow.tryDecode(as: WeeklyReport.self),
+               let idx = weeklyReports.firstIndex(where: { $0.id == id }) {
+                var copy = updated
+                copy.approvalStatus = weeklyReports[idx].approvalStatus
+                weeklyReports[idx] = copy
+            } else {
+                Task { await self.fetchReports() }
+            }
+        case .delete(let oldRow):
+            guard let id = oldRow.uuidColumn("id") else { return }
+            weeklyReports.removeAll { $0.id == id }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -146,7 +231,8 @@ public final class ReportingViewModel: ObservableObject {
             let accomplishments = Self.extractAccomplishments(from: summary)
             return AISummaryResult(summary: summary, accomplishments: accomplishments)
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return nil
         }
     }
@@ -215,7 +301,8 @@ public final class ReportingViewModel: ObservableObject {
             // Historical approval_status join — fail open (non-fatal).
             await hydrateApprovalStatus()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 
@@ -382,7 +469,8 @@ public final class ReportingViewModel: ObservableObject {
             )
             return saved
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return nil
         }
     }
@@ -423,7 +511,8 @@ public final class ReportingViewModel: ObservableObject {
                 entityId: log.id
             )
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 
@@ -534,7 +623,8 @@ public final class ReportingViewModel: ObservableObject {
             )
             return saved
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return nil
         }
     }
@@ -575,7 +665,8 @@ public final class ReportingViewModel: ObservableObject {
                 entityId: report.id
             )
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 

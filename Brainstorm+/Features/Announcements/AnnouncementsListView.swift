@@ -4,9 +4,12 @@ import UIKit
 public struct AnnouncementsListView: View {
     @StateObject private var viewModel: AnnouncementsListViewModel
     @Environment(SessionManager.self) private var sessionManager
+    @EnvironmentObject private var scrollStore: ScrollStateStore
 
     @State private var showCreate: Bool = false
     @State private var pendingDelete: Announcement?
+    /// Iter 8 P2 — preserve scroll across tab swap.
+    @State private var scrollPosition = ScrollPosition()
 
     /// Long-press v3:作者头像长按 → 弹 UserPreviewSheet。
     @State private var profilePreview: UserPreviewData? = nil
@@ -44,10 +47,25 @@ public struct AnnouncementsListView: View {
                     }
                 }
             }
-            .task { await viewModel.load() }
+            .task {
+                await viewModel.load()
+                // Iter 8 P1 §B.9 — realtime cross-device sync (Web ↔ iOS)
+                await viewModel.subscribeRealtime()
+            }
+            .onAppear {
+                // Iter 8 P2 — restore scroll position across tab swaps.
+                if let saved = scrollStore.position(for: ScrollStateStore.Key.announcements) {
+                    scrollPosition = saved
+                }
+            }
+            .onDisappear {
+                Task { await viewModel.unsubscribeRealtime() }
+                scrollStore.save(scrollPosition, for: ScrollStateStore.Key.announcements)
+            }
             .refreshable { await viewModel.load() }
             .sheet(isPresented: $showCreate) {
                 AnnouncementCreateView(viewModel: viewModel)
+                    .bsSheetStyle(.form)
             }
             .sheet(item: $profilePreview) { user in
                 UserPreviewSheet(user: user)
@@ -74,34 +92,71 @@ public struct AnnouncementsListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading && viewModel.items.isEmpty {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.items.isEmpty {
-            ContentUnavailableView(
-                "暂无公告",
-                systemImage: "megaphone",
-                description: Text("还没有发布任何公告")
-            )
-        } else {
-            ScrollView {
-                header
-                    .padding(.horizontal, BsSpacing.lg)
-                    .padding(.top, BsSpacing.sm)
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState. List 在 loading
+        // 状态下也保持挂载,redacted+shimmer 给"骨架屏"语义,empty/error 走
+        // design-system 统一 chrome,不再 swap subview。
+        announcementsList
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: !viewModel.items.isEmpty,
+                errorMessage: nil,                          // banner 走 .zyErrorBanner
+                emptySystemImage: "megaphone",
+                emptyTitle: "暂无公告",
+                emptyDescription: "还没有发布任何公告"
+            ))
+            .animation(.smooth(duration: 0.25), value: viewModel.items.count)
+    }
 
-                LazyVStack(spacing: BsSpacing.md) {
+    @ViewBuilder
+    private var announcementsList: some View {
+        // Iter 8 polish — migrated from ScrollView + LazyVStack to List
+        // so we can add native `.swipeActions`. Visual preservation: the
+        // BsCard row visual + custom Pin overlay are kept intact via
+        // listRowBackground/Separators/Insets stripped to clear.
+        List {
+                Section {
+                    header
+                        .padding(.horizontal, BsSpacing.lg)
+                        .padding(.top, BsSpacing.sm)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                }
+                Section {
                     ForEach(viewModel.items) { item in
                         row(for: item)
                             .padding(.horizontal, BsSpacing.lg)
-                            // Long-press 增强 (longpress-system §3 公告项):
-                            // contextMenu 让公告也具备 iOS 26 list 行的标准长按
-                            // 体感:复制内容 / 置顶 / 删除(管理员)。
+                            .padding(.vertical, BsSpacing.xs)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
                             .contextMenu { announcementContextMenu(for: item) }
+                            // Iter 8 — admin-only swipe (置顶 + 删除).
+                            // Non-admins fall through with no swipe surface
+                            // (matches Web: 只读用户无侧栏动作)。
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if canManage {
+                                    Button(role: .destructive) {
+                                        pendingDelete = item
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                    Button {
+                                        Task { await viewModel.togglePin(item) }
+                                    } label: {
+                                        Label(item.pinned ? "取消置顶" : "置顶",
+                                              systemImage: item.pinned ? "pin.slash" : "pin.fill")
+                                    }
+                                    .tint(BsColor.brandAzure)
+                                }
+                            }
                     }
                 }
-                .padding(.vertical, BsSpacing.md)
             }
-            .background(BsColor.pageBackground.ignoresSafeArea())
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollPosition($scrollPosition)
+        .background(BsColor.pageBackground.ignoresSafeArea())
     }
 
     @ViewBuilder

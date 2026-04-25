@@ -13,7 +13,13 @@ import Foundation
 // 而不是直接抄 `error.localizedDescription`。
 //
 // 精确匹配 + 关键词 fallback 双层；不认识的 key 透传原文（避免掩盖
-// 真实错误信息，宁可英文也好过模糊"未知错误"）。
+// 真实错误信息，宁可英文也好过模糊文案）。
+//
+// Iter 7 §C.3 — 失败文案具象化：
+//   • "网络错误" / "请稍后重试" / "权限不足" / "未知错误" 等模糊词
+//     全部替换成可执行的具体话术（"下拉刷新或检查 Wi-Fi" 等）。
+//   • 401/403/404 通用文案分别映射到 "登录已过期" / "无权操作" /
+//     "内容已删除"。
 // ══════════════════════════════════════════════════════════════════
 
 public enum ErrorLocalizer {
@@ -50,10 +56,12 @@ public enum ErrorLocalizer {
     }
 
     /// 精确匹配优先，命中则返回对应中文。
+    /// Iter 7 §C.3 — 文案改写要求"具体且可执行"，避免"网络错误 / 请稍后重试"
+    /// 一类无法行动的旧文案。
     private static let exactMap: [String: String] = [
         // Supabase Auth
-        "Auth session missing.":        "登录已失效，请重新登录",
-        "Auth session missing!":        "登录已失效，请重新登录",
+        "Auth session missing.":        "登录已过期，请重新登录",
+        "Auth session missing!":        "登录已过期，请重新登录",
         "Invalid login credentials":    "账号或密码错误",
         "Email not confirmed":          "邮箱尚未验证",
         "User already registered":      "该账号已注册",
@@ -65,39 +73,46 @@ public enum ErrorLocalizer {
         "Password should be at least 6 characters": "密码至少 6 位",
         "Signup requires a valid password": "请输入有效密码",
 
-        // URLSession / 网络
-        "The Internet connection appears to be offline.": "当前无网络连接",
-        "The network connection was lost.":               "网络连接中断，请重试",
-        "A server with the specified hostname could not be found.": "无法连接服务器，请检查网络",
-        "Could not connect to the server.":               "无法连接服务器，请检查网络或稍后重试",
-        "The request timed out.":                         "请求超时，请重试",
+        // URLSession / 网络 — 旧文案"网络错误"统一替换成可执行话术。
+        "The Internet connection appears to be offline.": "当前无网络连接，请检查 Wi-Fi 或蜂窝数据",
+        "The network connection was lost.":               "网络连接不稳定，下拉刷新或检查 Wi-Fi",
+        "A server with the specified hostname could not be found.": "无法连接服务器，请检查网络后重试",
+        "Could not connect to the server.":               "无法连接服务器，请检查网络后重试",
+        "The request timed out.":                         "请求超时，请检查网络后重试",
         "cancelled":                                      "请求已取消",
 
-        // PostgREST / RLS
-        "permission denied":             "权限不足",
-        "new row violates row-level security policy":       "无权执行此操作",
+        // PostgREST / RLS — 旧"权限不足"统一具象化。
+        "permission denied":             "你的账号暂无此操作权限，联系管理员开通",
+        "new row violates row-level security policy":       "无权操作",
         "duplicate key value violates unique constraint":   "数据冲突：已存在相同记录",
         "foreign key violation":          "数据关联错误",
     ]
 
     /// 关键词 fallback —— 包含这些子串时返回对应中文。
+    /// Iter 7 §C.3 — "网络异常 / 权限不足 / 未知错误" 等词条具象化。
     private static let keywordMap: [(needle: String, zh: String)] = [
-        ("Auth session",        "登录已失效，请重新登录"),
-        ("session_not_found",   "登录已失效，请重新登录"),
+        ("Auth session",        "登录已过期，请重新登录"),
+        ("session_not_found",   "登录已过期，请重新登录"),
         ("JWT",                 "登录已过期，请重新登录"),
-        ("not authenticated",   "请先登录"),
-        ("row-level security",  "无权执行此操作"),
-        ("permission denied",   "权限不足"),
-        ("network",             "网络异常，请稍后再试"),
-        ("Network",             "网络异常，请稍后再试"),
-        ("offline",             "当前无网络连接"),
-        ("timed out",           "请求超时，请重试"),
-        ("timeout",             "请求超时，请重试"),
-        ("Not Found",           "资源不存在"),
-        ("could not be found",  "资源不存在"),
+        ("not authenticated",   "登录已过期，请重新登录"),
+        ("row-level security",  "无权操作"),
+        ("permission denied",   "你的账号暂无此操作权限，联系管理员开通"),
+        ("network",             "网络连接不稳定，下拉刷新或检查 Wi-Fi"),
+        ("Network",             "网络连接不稳定，下拉刷新或检查 Wi-Fi"),
+        ("offline",             "当前无网络连接，请检查 Wi-Fi 或蜂窝数据"),
+        ("timed out",           "请求超时，请检查网络后重试"),
+        ("timeout",             "请求超时，请检查网络后重试"),
+        ("Not Found",           "内容已删除"),
+        ("could not be found",  "内容已删除"),
+        ("404",                 "内容已删除"),
+        ("403",                 "无权操作"),
+        ("401",                 "登录已过期，请重新登录"),
         ("duplicate key",       "数据冲突：已存在相同记录"),
         ("conflict",            "数据冲突"),
         ("foreign key",         "数据关联错误"),
+        // PostgREST 偶尔抛 generic "server is overloaded" / "rate limit"
+        ("rate limit",          "服务暂时繁忙，30 秒后再试"),
+        ("overloaded",          "服务暂时繁忙，30 秒后再试"),
     ]
 
     /// 把任意 Error 映射成面向用户的中文 errorMessage。
@@ -107,12 +122,12 @@ public enum ErrorLocalizer {
         //    直接对 .code 分支才稳定。
         if let urlErr = error as? URLError {
             switch urlErr.code {
-            case .notConnectedToInternet:        return "当前无网络连接"
-            case .networkConnectionLost:         return "网络连接中断，请重试"
-            case .timedOut:                      return "请求超时，请重试"
+            case .notConnectedToInternet:        return "当前无网络连接，请检查 Wi-Fi 或蜂窝数据"
+            case .networkConnectionLost:         return "网络连接不稳定，下拉刷新或检查 Wi-Fi"
+            case .timedOut:                      return "请求超时，请检查网络后重试"
             case .cannotFindHost,
-                 .dnsLookupFailed:               return "无法连接服务器，请检查网络"
-            case .cannotConnectToHost:           return "无法连接服务器，请检查网络或稍后重试"
+                 .dnsLookupFailed:               return "无法连接服务器，请检查网络后重试"
+            case .cannotConnectToHost:           return "无法连接服务器，请检查网络后重试"
             case .cancelled:                     return "请求已取消"
             case .secureConnectionFailed,
                  .serverCertificateUntrusted,
@@ -126,21 +141,41 @@ public enum ErrorLocalizer {
             }
         }
 
+        // 1. HTTP 状态码短路 —— 对 NSError 里挂 statusCode 的情况做精确分支。
+        //    Supabase Swift SDK 把 PostgREST 的 4xx 包成 PostgrestError,
+        //    NSError(userInfo: ["statusCode": ...]) —— 我们对常见三个走具象。
+        let ns = error as NSError
+        if let status = ns.userInfo["statusCode"] as? Int {
+            switch status {
+            case 401: return "登录已过期，请重新登录"
+            case 403: return "无权操作"
+            case 404: return "内容已删除"
+            case 429: return "服务暂时繁忙，30 秒后再试"
+            case 500...599: return "服务暂时繁忙，30 秒后再试"
+            default: break
+            }
+        }
+
         let raw = error.localizedDescription
 
-        // 1. 精确匹配
+        // 2. 精确匹配
         if let zh = exactMap[raw] { return zh }
 
-        // 2. 去掉尾部标点再试一次
+        // 3. 去掉尾部标点再试一次
         let trimmed = raw.trimmingCharacters(in: CharacterSet(charactersIn: ".!? \n"))
         if let zh = exactMap[trimmed] { return zh }
 
-        // 3. 关键词 fallback
+        // 4. 关键词 fallback
         for entry in keywordMap where raw.localizedCaseInsensitiveContains(entry.needle) {
             return entry.zh
         }
 
-        // 4. 透传原文（最后兜底，不隐藏真实错误）
+        // 5. 透传原文（最后兜底，不隐藏真实错误）
+        //    Iter 7 §C.3 — 旧版 fallback "未知错误" 信息密度太低，已替换成
+        //    引导性兜底（保留原文供 power user 截图给客服）。
+        if raw.isEmpty || raw.count < 3 {
+            return "出了点小问题，可在 设置 → 反馈 联系我们"
+        }
         return raw
     }
 }

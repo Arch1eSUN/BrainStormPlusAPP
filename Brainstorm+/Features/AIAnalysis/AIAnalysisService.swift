@@ -275,6 +275,9 @@ public enum MediaAnalysisParser {
             }
         }
 
-        return .failed("JSON 解析失败 — Schema 不匹配或格式错误")
+        // Iter 7 §C.3 — 失败文案具象化:
+        // 旧版 "Schema 不匹配或格式错误" 用户根本不知道该做什么。改成
+        // 描述底层原因 + 给出可执行的下一步(上传截图)。
+        return .failed("AI 仅收到分享链接，没拿到正文。请上传截图重试。")
     }
 }

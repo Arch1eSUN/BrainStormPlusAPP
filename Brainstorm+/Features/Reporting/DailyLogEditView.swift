@@ -183,6 +183,7 @@ public struct DailyLogEditView: View {
             }
             .sheet(isPresented: $showProjectPicker) {
                 ProjectPickerView(viewModel: pickerVM, selection: $projectId)
+                    .bsSheetStyle(.detail)
             }
             .sheet(isPresented: $showTaskPicker) {
                 TaskMultiSelectView(
@@ -190,6 +191,7 @@ public struct DailyLogEditView: View {
                     projectId: projectId,
                     selection: $taskIds
                 )
+                .bsSheetStyle(.detail)
             }
             .onChange(of: projectId) { _, newValue in
                 // Task scope follows the project. Drop any selected

@@ -116,22 +116,24 @@ public struct ActivityFeedView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading && viewModel.items.isEmpty {
-            skeletonList
-        } else if viewModel.filteredItems.isEmpty {
-            ContentUnavailableView(
-                "暂无动态",
-                systemImage: "bolt.circle",
-                description: Text("还没有任何活动记录")
-            )
-            .padding(.top, BsSpacing.xxxl)
-        } else {
-            VStack(alignment: .leading, spacing: BsSpacing.xl) {
-                ForEach(viewModel.grouped, id: \.label) { group in
-                    groupSection(label: group.label, items: group.items)
-                }
+        // Iter 7 §C.1 — skeleton-first + cache-first stale-while-revalidate
+        // via bsLoadingState. derive() picks loading/stale/error/empty based
+        // on (isLoading, items, errorMessage). Animation gives skeleton →
+        // real fade.
+        VStack(alignment: .leading, spacing: BsSpacing.xl) {
+            ForEach(viewModel.grouped, id: \.label) { group in
+                groupSection(label: group.label, items: group.items)
             }
         }
+        .bsLoadingState(BsLoadingState.derive(
+            isLoading: viewModel.isLoading,
+            hasItems: !viewModel.filteredItems.isEmpty,
+            errorMessage: nil,                          // 红 banner 走 .zyErrorBanner,bsLoadingState 不重复触发
+            emptySystemImage: "bolt.circle",
+            emptyTitle: "暂无动态",
+            emptyDescription: "还没有任何活动记录"
+        ))
+        .animation(.smooth(duration: 0.25), value: viewModel.items.count)
     }
 
     private var skeletonList: some View {

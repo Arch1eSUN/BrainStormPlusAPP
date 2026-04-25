@@ -26,6 +26,10 @@ public struct TeamDirectoryView: View {
     /// Long-press v3:头像/卡片长按 → 弹 UserPreviewSheet 半屏 profile 预览。
     @State private var profilePreview: UserPreviewData? = nil
 
+    /// iOS 18+ zoom transition source namespace — Apple Photos / Mail
+    /// tile→detail morph for member-card → TeamMemberDetailView push.
+    @Namespace private var zoomNamespace
+
     private let gridColumns: [GridItem] = [
         GridItem(.adaptive(minimum: 160), spacing: BsSpacing.md)
     ]
@@ -48,15 +52,19 @@ public struct TeamDirectoryView: View {
     }
 
     private var coreContent: some View {
-        Group {
-            if viewModel.isLoading && viewModel.allMembers.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                content
-            }
-        }
-        .background(BsColor.pageBackground.ignoresSafeArea())
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState。content 始终挂载,
+        // 首屏 redacted+shimmer,empty/error 走 design-system 统一 chrome。
+        content
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: !viewModel.allMembers.isEmpty,
+                errorMessage: viewModel.errorMessage,
+                emptySystemImage: "person.3",
+                emptyTitle: "暂无成员",
+                emptyDescription: "团队列表当前为空，刷新或联系管理员同步组织架构"
+            ))
+            .animation(.smooth(duration: 0.25), value: viewModel.allMembers.count)
+            .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("团队")
         .navigationBarTitleDisplayMode(.large)
         // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 grid 内
@@ -64,6 +72,7 @@ public struct TeamDirectoryView: View {
         // 过敏感 tap 触发。
         .navigationDestination(item: $memberPushTarget) { userId in
             TeamMemberDetailView(userId: userId)
+                .navigationTransition(.zoom(sourceID: userId, in: zoomNamespace))
         }
         .navigationDestination(item: $chatDestination) { channel in
             ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
@@ -73,6 +82,7 @@ public struct TeamDirectoryView: View {
         }
         .zyErrorBanner($chatError)
         .searchable(text: $viewModel.searchText,
+                    placement: .navigationBarDrawer(displayMode: .always),
                     prompt: viewModel.canViewDetails ? "搜索姓名、部门、职位…" : "搜索姓名、部门…")
         .task {
             await viewModel.load(sessionProfile: sessionManager.currentProfile)
@@ -97,14 +107,148 @@ public struct TeamDirectoryView: View {
 
     @ViewBuilder
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: BsSpacing.lg) {
-                header
-                departmentChips
-                memberBody
+        // Iter 8 polish — migrated to List so each member row carries native
+        // `.swipeActions` (leading 发消息 / trailing 查看资料). The
+        // department-grouped path becomes Sections; the flat path becomes a
+        // single section. Header + departmentChips live in a non-clickable
+        // top section with cleared row chrome.
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: BsSpacing.lg) {
+                    header
+                    departmentChips
+                }
+                .padding(.horizontal, BsSpacing.lg)
+                .padding(.vertical, BsSpacing.md)
             }
-            .padding(.horizontal, BsSpacing.lg)
-            .padding(.vertical, BsSpacing.md)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
+
+            memberSections
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private var memberSections: some View {
+        let rows = viewModel.filteredMembers
+        if rows.isEmpty {
+            Section {
+                BsEmptyState(
+                    title: "暂无成员",
+                    systemImage: "person.3",
+                    description: viewModel.searchText.isEmpty ? "没有找到团队成员数据" : "没有匹配的成员"
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, BsSpacing.xxxl)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
+            }
+        } else if viewModel.canViewDetails {
+            ForEach(viewModel.groupedByDepartment, id: \.name) { group in
+                Section {
+                    ForEach(Array(group.members.enumerated()), id: \.element.id) { index, m in
+                        memberRow(m, index: index)
+                    }
+                } header: {
+                    HStack(spacing: BsSpacing.xs + 2) {
+                        Image(systemName: "building.2")
+                            .font(BsTypography.caption)
+                            .foregroundStyle(BsColor.brandAzure)
+                        Text(group.name)
+                            .font(BsTypography.cardSubtitle)
+                            .foregroundStyle(BsColor.ink)
+                        Text("· \(group.members.count) 人")
+                            .font(BsTypography.caption)
+                            .foregroundStyle(BsColor.inkMuted)
+                    }
+                    .textCase(nil)
+                    .padding(.horizontal, BsSpacing.lg)
+                }
+            }
+        } else {
+            Section {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, m in
+                    memberRow(m, index: index)
+                }
+            }
+        }
+    }
+
+    /// Iter 8 — list-row variant of `memberCard` that keeps the same card
+    /// visual but plays nicely with `.swipeActions` semantics. The 2-col
+    /// grid is dropped on this surface for the swipe affordance to be
+    /// reachable; the layout is now single-column. Long-press contextMenu
+    /// stays as the secondary entry surface.
+    @ViewBuilder
+    private func memberRow(_ m: TeamMember, index: Int) -> some View {
+        let isSelf = m.id == sessionManager.currentProfile?.id
+
+        Button {
+            memberPushTarget = m.id
+        } label: {
+            BsContentCard(padding: .medium) {
+                HStack(spacing: BsSpacing.sm + 2) {
+                    avatar(for: m)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(m.fullName?.isEmpty == false ? m.fullName! : "未设置")
+                            .font(BsTypography.cardSubtitle)
+                            .lineLimit(1)
+                            .foregroundStyle(BsColor.ink)
+                        if let role = m.role, !role.isEmpty {
+                            Text(roleLabel(role))
+                                .font(BsTypography.captionSmall)
+                                .padding(.horizontal, BsSpacing.xs + 2)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(BsColor.brandAzure.opacity(0.12)))
+                                .foregroundStyle(BsColor.brandAzure)
+                        }
+                        if let dept = m.department, !dept.isEmpty {
+                            Text(dept)
+                                .font(BsTypography.captionSmall)
+                                .foregroundStyle(BsColor.inkMuted)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if let pos = m.position, !pos.isEmpty {
+                        Text(pos)
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .bsInteractiveFeel(.card)
+            .matchedTransitionSource(id: m.id, in: zoomNamespace)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, BsSpacing.lg)
+        .padding(.vertical, BsSpacing.xs)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets())
+        .bsContextMenu(memberContextMenu(m))
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if !isSelf {
+                Button {
+                    Task { await startChat(with: m.id) }
+                } label: {
+                    Label("发消息", systemImage: "bubble.left.and.bubble.right")
+                }
+                .tint(BsColor.brandAzure)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                profilePreview = makePreview(from: m)
+            } label: {
+                Label("查看资料", systemImage: "person.crop.square.filled.and.at.rectangle")
+            }
+            .tint(BsColor.success)
         }
     }
 
@@ -251,6 +395,7 @@ public struct TeamDirectoryView: View {
                 }
             }
             .bsInteractiveFeel(.card)
+            .matchedTransitionSource(id: m.id, in: zoomNamespace)
         }
         .buttonStyle(.plain)
         .bsContextMenu(memberContextMenu(m))

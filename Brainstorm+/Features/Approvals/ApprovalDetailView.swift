@@ -97,6 +97,7 @@ public struct ApprovalDetailView: View {
         }
         .sheet(isPresented: $showRevokeSheet) {
             revokeSheet
+                .bsSheetStyle(.form)
         }
         .sheet(item: $pendingDecision) { decision in
             ApprovalCommentSheet(

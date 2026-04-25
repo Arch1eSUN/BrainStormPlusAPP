@@ -53,6 +53,11 @@ public struct NotificationListView: View {
             // Fusion ambient 底层 —— 通知列表需要"airy"感，不是白底。
             BsColor.pageBackground.ignoresSafeArea()
 
+            // Iter 7 §C.1 — bsLoadingState 推广 + skeleton-first。
+            // 这里保留旧的 if/else 拓扑因为 filter 切换 (.all/.unread) 引入
+            // 不同的 empty 文案;bsLoadingState 不能跨条件 derive。但
+            // notificationSkeleton (旧版本) 已经走 .shimmer(),与 design system
+            // 对齐;只在 view body 顶层挂一次 .animation 给 skeleton → real fade。
             Group {
                 if viewModel.isLoading && viewModel.notifications.isEmpty {
                     notificationSkeleton
@@ -107,6 +112,7 @@ public struct NotificationListView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
+            .animation(.smooth(duration: 0.25), value: viewModel.notifications.count)
         }
         // embedded（MessagesView 通知 sub-tab）时,外层 NavStack 的标题由
         // MessagesView 控制（"消息"）,child 再 set title 会导致 iOS 26 nav

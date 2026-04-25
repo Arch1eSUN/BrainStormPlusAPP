@@ -50,6 +50,10 @@ public struct KnowledgeListView: View {
     /// Long-press v3:删除走 hoisted confirmationDialog,与 swipe action 共享 state。
     @State private var pendingDelete: KnowledgeArticle? = nil
 
+    /// iOS 18+ zoom transition source namespace — Apple Files / Mail style
+    /// row→detail morph. Pair with `.matchedTransitionSource` + `.navigationTransition(.zoom)`.
+    @Namespace private var zoomNamespace
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -67,14 +71,19 @@ public struct KnowledgeListView: View {
     }
 
     private var coreContent: some View {
-        Group {
-            if viewModel.isLoading && viewModel.articles.isEmpty {
-                ProgressView()
-            } else {
-                content
-            }
-        }
-        .navigationTitle("知识库")
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState。content 始终挂载,
+        // 首屏 redacted+shimmer,empty/error 走 design-system 统一 chrome。
+        content
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: !viewModel.articles.isEmpty,
+                errorMessage: nil,                              // banner 走 zyErrorBanner
+                emptySystemImage: "books.vertical",
+                emptyTitle: "暂无文档",
+                emptyDescription: isAdmin ? "右上角「+」新建文档或上传文件" : "等待管理员上传内容"
+            ))
+            .animation(.smooth(duration: 0.25), value: viewModel.articles.count)
+            .navigationTitle("知识库")
         .toolbar {
             if isAdmin {
                 ToolbarItem(placement: .primaryAction) {
@@ -98,7 +107,11 @@ public struct KnowledgeListView: View {
                 }
             }
         }
-        .searchable(text: $viewModel.searchText, prompt: "搜索文档…")
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索文档…"
+        )
         .onSubmit(of: .search) {
             Task { await viewModel.fetchArticles() }
         }
@@ -126,6 +139,7 @@ public struct KnowledgeListView: View {
                 viewModel: viewModel,
                 existingArticle: target.article
             )
+            .bsSheetStyle(.form)
         }
         // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
         // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
@@ -139,9 +153,11 @@ public struct KnowledgeListView: View {
                     ? { Task { await viewModel.deleteArticle(article) } }
                     : nil
             )
+            .navigationTransition(.zoom(sourceID: article.id, in: zoomNamespace))
         }
         .sheet(isPresented: $showUploadSheet) {
             uploadSheet
+                .bsSheetStyle(.form)
         }
         .fileImporter(
             isPresented: $showFileImporter,
@@ -257,6 +273,7 @@ public struct KnowledgeListView: View {
                 } label: {
                     KnowledgeCardView(article: article)
                         .padding(.horizontal)
+                        .matchedTransitionSource(id: article.id, in: zoomNamespace)
                 }
                 .buttonStyle(.plain)
                 // Long-press v3 (longpress-system §v3 知识库):

@@ -125,20 +125,23 @@ public struct PayrollListView: View {
             }
         }
         .sheet(item: $editorTarget) { target in
-            switch target {
-            case .create:
-                PayrollEditSheet(
-                    viewModel: viewModel,
-                    payroll: nil,
-                    onDismiss: { editorTarget = nil }
-                )
-            case .edit(let payroll):
-                PayrollEditSheet(
-                    viewModel: viewModel,
-                    payroll: payroll,
-                    onDismiss: { editorTarget = nil }
-                )
+            Group {
+                switch target {
+                case .create:
+                    PayrollEditSheet(
+                        viewModel: viewModel,
+                        payroll: nil,
+                        onDismiss: { editorTarget = nil }
+                    )
+                case .edit(let payroll):
+                    PayrollEditSheet(
+                        viewModel: viewModel,
+                        payroll: payroll,
+                        onDismiss: { editorTarget = nil }
+                    )
+                }
             }
+            .bsSheetStyle(.form)
         }
         .confirmationDialog(
             "删除这条薪资记录？",

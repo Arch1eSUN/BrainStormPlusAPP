@@ -22,11 +22,14 @@ import Combine
 /// filter — 1:1 port of `BrainStorm+-Web/src/app/dashboard/tasks/page.tsx`.
 public struct TaskListView: View {
     @StateObject private var viewModel: TaskListViewModel
+    @EnvironmentObject private var scrollStore: ScrollStateStore
     @State private var selectedFilter: TaskFilter = .all
     @State private var isShowingCreateTask = false
     @State private var viewMode: ViewMode = .list
     /// 删除二次确认 —— 长按 / swipe 都打到这个 sheet（docs/longpress-system.md）。
     @State private var pendingDeleteTask: TaskModel? = nil
+    /// Iter 8 P2 — preserve list scroll across tab swaps.
+    @State private var scrollPosition = ScrollPosition()
 
     /// Phase 3 isEmbedded：当父容器（例如 MainTabView tab / ActionItemHelper
     /// NavigationLink destination / Dashboard quick-action tile）已经持有
@@ -93,16 +96,25 @@ public struct TaskListView: View {
 
     @ViewBuilder
     private var coreContent: some View {
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState (list 模式)。
+        // kanban 横向布局,redacted 在横滑里语义不对,保留独立 loading 路径。
         Group {
-            if viewModel.isLoading && viewModel.tasks.isEmpty {
-                loadingView
-            } else if visibleTasks.isEmpty && viewMode == .list {
-                emptyWrapper
-            } else {
-                switch viewMode {
-                case .list:
-                    listBody
-                case .kanban:
+            switch viewMode {
+            case .list:
+                listBody
+                    .bsLoadingState(BsLoadingState.derive(
+                        isLoading: viewModel.isLoading,
+                        hasItems: !visibleTasks.isEmpty,
+                        errorMessage: nil,                              // banner 走 .errorMessage,VM 自己持有
+                        emptySystemImage: "checklist",
+                        emptyTitle: "暂无\(selectedFilter.cnLabel)任务",
+                        emptyDescription: "点击右上角的「+」按钮来创建第一个任务。"
+                    ))
+                    .animation(.smooth(duration: 0.25), value: viewModel.tasks.count)
+            case .kanban:
+                if viewModel.isLoading && viewModel.tasks.isEmpty {
+                    loadingView
+                } else {
                     kanbanBody
                 }
             }
@@ -153,9 +165,26 @@ public struct TaskListView: View {
             await viewModel.fetchTasks()
             await viewModel.fetchProjects()
             await viewModel.fetchMembers()
+            // Iter 8 P1 §B.9 — realtime cross-device sync (Web ↔ iOS)
+            await viewModel.subscribeRealtime()
+        }
+        .onAppear {
+            // Iter 8 P2 — restore the user's prior scroll offset (if any)
+            // so a tab swap-back lands them where they left off.
+            if let saved = scrollStore.position(for: ScrollStateStore.Key.tasks) {
+                scrollPosition = saved
+            }
+        }
+        .onDisappear {
+            // Tear down realtime when the tab is swapped — VM still in
+            // memory (TabView keeps it), but the WebSocket budget is finite.
+            Task { await viewModel.unsubscribeRealtime() }
+            // Iter 8 P2 — park the current scroll offset for the next visit.
+            scrollStore.save(scrollPosition, for: ScrollStateStore.Key.tasks)
         }
         .sheet(isPresented: $isShowingCreateTask) {
             CreateTaskView(viewModel: viewModel)
+                .bsSheetStyle(.form)
         }
         // 单一 destructive confirm —— 长按 / 横滑都打到这个 dialog。
         .confirmationDialog(
@@ -288,6 +317,7 @@ public struct TaskListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollPosition($scrollPosition)
         .environment(\.defaultMinListRowHeight, 0)
     }
 

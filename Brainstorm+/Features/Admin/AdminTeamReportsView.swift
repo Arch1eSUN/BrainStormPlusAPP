@@ -342,49 +342,45 @@ public struct AdminTeamReportsView: View {
                 .padding(.top, BsSpacing.sm)
                 .padding(.bottom, BsSpacing.md)
 
-            if vm.isLoading && currentRowsEmpty {
-                ProgressView()
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if currentRowsEmpty {
-                BsEmptyState(
-                    title: "暂无报告",
-                    systemImage: vm.segment == .daily ? "doc.text" : "calendar",
-                    description: "调整成员或日期范围试试"
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // iter7: 用 List + Section 让 iOS 自带 sticky section header
-                // (用户原话"全员的日报按照每一天和日期分类好")。
-                List {
-                    switch vm.segment {
-                    case .daily:
-                        ForEach(vm.dailyGroups) { group in
-                            Section(group.label) {
-                                ForEach(group.rows) { row in
-                                    dailyCard(row)
-                                        .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
-                                        .listRowSeparator(.hidden)
-                                        .listRowBackground(Color.clear)
-                                }
+            // Iter 7 §C.1 — skeleton-first via bsLoadingState。List 始终挂载,
+            // 首屏 redacted+shimmer 给"骨架屏",empty 走 design-system 统一 chrome。
+            List {
+                switch vm.segment {
+                case .daily:
+                    ForEach(vm.dailyGroups) { group in
+                        Section(group.label) {
+                            ForEach(group.rows) { row in
+                                dailyCard(row)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                             }
                         }
-                    case .weekly:
-                        ForEach(vm.weeklyGroups) { group in
-                            Section(group.label) {
-                                ForEach(group.rows) { row in
-                                    weeklyCard(row)
-                                        .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
-                                        .listRowSeparator(.hidden)
-                                        .listRowBackground(Color.clear)
-                                }
+                    }
+                case .weekly:
+                    ForEach(vm.weeklyGroups) { group in
+                        Section(group.label) {
+                            ForEach(group.rows) { row in
+                                weeklyCard(row)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
+                                    .listRowSeparator(.hidden)
+                                    .listRowBackground(Color.clear)
                             }
                         }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: vm.isLoading,
+                hasItems: !currentRowsEmpty,
+                errorMessage: nil,                              // banner 走 zyErrorBanner
+                emptySystemImage: vm.segment == .daily ? "doc.text" : "calendar",
+                emptyTitle: "暂无报告",
+                emptyDescription: "调整成员或日期范围试试"
+            ))
+            .animation(.smooth(duration: 0.25), value: vm.dailyGroups.count + vm.weeklyGroups.count)
         }
         .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("全员日报 / 周报")

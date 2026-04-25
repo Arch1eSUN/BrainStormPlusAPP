@@ -19,8 +19,84 @@ public final class AnnouncementsListViewModel: ObservableObject {
 
     private let client: SupabaseClient
 
+    /// Iter 8 P1 §B.9 — Realtime cross-device sync. Pin/unpin and new
+    /// broadcasts from Web are reflected in-place without polling.
+    private let realtimeSync: RealtimeListSync
+
     public init(client: SupabaseClient) {
         self.client = client
+        self.realtimeSync = RealtimeListSync(client: client, tableName: "announcements")
+    }
+
+    // MARK: - Realtime (Iter 8 P1 §B.9)
+
+    public func subscribeRealtime() async {
+        guard !realtimeSync.isActive else { return }
+        await realtimeSync.start { [weak self] change in
+            guard let self else { return }
+            switch change {
+            case .insert(let row):
+                self.applyRealtimeInsert(row)
+            case .update(let newRow, _):
+                self.applyRealtimeUpdate(newRow)
+            case .delete(let oldRow):
+                self.applyRealtimeDelete(oldRow)
+            }
+        }
+    }
+
+    public func unsubscribeRealtime() async {
+        await realtimeSync.stop()
+    }
+
+    private func applyRealtimeInsert(_ row: JSONObject) {
+        guard let item: Announcement = row.tryDecode(as: Announcement.self) else {
+            Task { await self.load() }
+            return
+        }
+        guard !items.contains(where: { $0.id == item.id }) else { return }
+        items.insert(item, at: 0)
+        items.sort { lhs, rhs in
+            if lhs.pinned != rhs.pinned { return lhs.pinned && !rhs.pinned }
+            return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
+        }
+        // Backfill the author profile join the WAL payload doesn't carry.
+        if item.profiles == nil {
+            Task { await self.load() }
+        }
+    }
+
+    private func applyRealtimeUpdate(_ row: JSONObject) {
+        guard let id = row.uuidColumn("id") else { return }
+        guard let updated: Announcement = row.tryDecode(as: Announcement.self),
+              let idx = items.firstIndex(where: { $0.id == id }) else {
+            Task { await self.load() }
+            return
+        }
+        let prior = items[idx]
+        let merged = Announcement(
+            id: updated.id,
+            title: updated.title,
+            content: updated.content,
+            priority: updated.priority,
+            pinned: updated.pinned,
+            authorId: updated.authorId,
+            orgId: updated.orgId,
+            createdAt: updated.createdAt,
+            profiles: prior.profiles
+        )
+        items[idx] = merged
+        if prior.pinned != merged.pinned {
+            items.sort { lhs, rhs in
+                if lhs.pinned != rhs.pinned { return lhs.pinned && !rhs.pinned }
+                return (lhs.createdAt ?? .distantPast) > (rhs.createdAt ?? .distantPast)
+            }
+        }
+    }
+
+    private func applyRealtimeDelete(_ row: JSONObject) {
+        guard let id = row.uuidColumn("id") else { return }
+        items.removeAll { $0.id == id }
     }
 
     public func load() async {
@@ -39,7 +115,8 @@ public final class AnnouncementsListViewModel: ObservableObject {
                 .value
             self.items = rows
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -170,7 +247,8 @@ public final class AnnouncementsListViewModel: ObservableObject {
             }
             return true
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }
@@ -215,7 +293,8 @@ public final class AnnouncementsListViewModel: ObservableObject {
             )
             return true
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }
@@ -242,7 +321,8 @@ public final class AnnouncementsListViewModel: ObservableObject {
             )
             return true
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }

@@ -44,8 +44,14 @@ public class TaskListViewModel: ObservableObject {
 
     private let client: SupabaseClient
 
+    // Iter 8 P1 §B.9 — Realtime cross-device sync. Subscribes to
+    // postgres_changes on `tasks`; INSERT/UPDATE/DELETE events are
+    // applied to the local cache without a refetch round-trip.
+    private let realtimeSync: RealtimeListSync
+
     public init(client: SupabaseClient) {
         self.client = client
+        self.realtimeSync = RealtimeListSync(client: client, tableName: "tasks")
     }
 
     // MARK: - Derived / stats
@@ -202,7 +208,9 @@ public class TaskListViewModel: ObservableObject {
                     .execute()
             } catch {
                 // Non-fatal: swallow so the caller still sees a successful task create.
-                self.errorMessage = ErrorLocalizer.localize(error)
+                // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
             }
         }
 
@@ -235,7 +243,9 @@ public class TaskListViewModel: ObservableObject {
                 .execute()
                 .value
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
         isLoading = false
     }
@@ -248,7 +258,9 @@ public class TaskListViewModel: ObservableObject {
                 .execute()
                 .value
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -266,7 +278,9 @@ public class TaskListViewModel: ObservableObject {
                 .value
         } catch {
             // Soft-fail — the picker simply shows an empty list.
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -328,7 +342,9 @@ public class TaskListViewModel: ObservableObject {
         } catch {
             // Rollback to the pre-mutation array so UI stays consistent.
             self.tasks = snapshot
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -479,7 +495,9 @@ public class TaskListViewModel: ObservableObject {
             return true
         } catch {
             self.tasks = snapshot
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
             Haptic.warning()
             return false
         }
@@ -508,7 +526,9 @@ public class TaskListViewModel: ObservableObject {
             )
         } catch {
             self.tasks = snapshot
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
+            // 时 errorMessage 不变,banner 不触发。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -519,6 +539,100 @@ public class TaskListViewModel: ObservableObject {
     /// `status`/`progress` directly. Round-trip through JSON so we stay
     /// decoupled from the init signature, and re-hydrate `participants`
     /// from the source struct (TaskModel.encode omits them).
+    // MARK: - Realtime (Iter 8 P1 §B.9)
+
+    /// Wire the postgres_changes stream for `tasks`. Idempotent — the
+    /// underlying `RealtimeListSync.start` tears down any prior channel
+    /// before re-subscribing, so it's safe to call from `.task` even if
+    /// the view re-appears.
+    public func subscribeRealtime() async {
+        guard !realtimeSync.isActive else { return }
+        await realtimeSync.start { [weak self] change in
+            guard let self else { return }
+            switch change {
+            case .insert(let row):
+                self.applyRealtimeInsert(row)
+            case .update(let newRow, _):
+                self.applyRealtimeUpdate(newRow)
+            case .delete(let oldRow):
+                self.applyRealtimeDelete(oldRow)
+            }
+        }
+    }
+
+    public func unsubscribeRealtime() async {
+        await realtimeSync.stop()
+    }
+
+    /// Realtime INSERT: try to decode the full TaskModel; on failure
+    /// (relational select() in fetchTasks() pulls in `projects:project_id`
+    /// + `task_participants` which the WAL row doesn't include) fall
+    /// through to a fetchTasks() to pick up joins.
+    private func applyRealtimeInsert(_ row: JSONObject) {
+        if let task: TaskModel = row.tryDecode(as: TaskModel.self) {
+            // Dedupe — the local create flow already inserts then
+            // refetches; the realtime echo would otherwise double-add.
+            guard !tasks.contains(where: { $0.id == task.id }) else { return }
+            tasks.insert(task, at: 0)
+        } else {
+            Task { await self.fetchTasks() }
+        }
+    }
+
+    private func applyRealtimeUpdate(_ row: JSONObject) {
+        guard let id = row.uuidColumn("id") else { return }
+        if let updated: TaskModel = row.tryDecode(as: TaskModel.self),
+           let idx = tasks.firstIndex(where: { $0.id == id }) {
+            // Preserve any locally-known relational fields (projects join,
+            // participants list) that the realtime payload doesn't carry.
+            let prior = tasks[idx]
+            tasks[idx] = mergeRealtime(updated, with: prior)
+        } else {
+            Task { await self.fetchTasks() }
+        }
+    }
+
+    private func applyRealtimeDelete(_ row: JSONObject) {
+        guard let id = row.uuidColumn("id") else { return }
+        tasks.removeAll { $0.id == id }
+    }
+
+    /// Splice the realtime payload's scalar fields onto the locally-cached
+    /// row so we don't visually drop the project name / participant list
+    /// (which the WAL row never carries).
+    private func mergeRealtime(_ incoming: TaskModel, with prior: TaskModel) -> TaskModel {
+        // TaskModel is value-typed but its participants are encoded
+        // through a custom path; round-tripping JSON is the simplest
+        // way to preserve the join while overriding scalar columns.
+        do {
+            let encoder = JSONEncoder()
+            let decoder = JSONDecoder()
+            encoder.dateEncodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .iso8601
+            let data = try encoder.encode(incoming)
+            guard var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return incoming
+            }
+            // Re-attach participants from the prior cached row.
+            if !prior.participants.isEmpty {
+                dict["task_participants"] = prior.participants.map { ["user_id": $0.uuidString] }
+            }
+            // Re-attach project join from prior so kanban column doesn't
+            // lose the name on every realtime update tick.
+            if let project = prior.project {
+                var projectDict: [String: Any] = ["name": project.name]
+                if let pid = project.id {
+                    projectDict["id"] = pid.uuidString
+                }
+                dict["projects"] = projectDict
+            }
+            let patched = try JSONSerialization.data(withJSONObject: dict)
+            return try decoder.decode(TaskModel.self, from: patched)
+        } catch {
+            return incoming
+        }
+    }
+
     private func mutate(_ task: TaskModel, status: TaskModel.TaskStatus? = nil, progress: Int? = nil) -> TaskModel {
         do {
             let encoder = JSONEncoder()

@@ -32,7 +32,12 @@ public struct ApprovalCenterView: View {
     // MARK: - State
 
     @Environment(SessionManager.self) private var sessionManager
+    @EnvironmentObject private var scrollStore: ScrollStateStore
     @StateObject private var viewModel: UnifiedApprovalCenterViewModel
+    /// Iter 8 P2 — preserve scroll across tab swap. Single position
+    /// shared across mode/kind switches; the user's reading anchor is
+    /// usually within a list rather than a specific (mode, kind) cell.
+    @State private var scrollPosition = ScrollPosition()
 
     @State private var mode: UnifiedApprovalCenterViewModel.Mode = .queue
     @State private var selectedQueueKind: ApprovalQueueKind?
@@ -126,12 +131,15 @@ public struct ApprovalCenterView: View {
             ApprovalSubmitTypePickerSheet { kind in
                 pendingSubmitKind = kind
             }
+            .bsSheetStyle(.detail)
         }
         .sheet(item: $pendingSubmitKind) { kind in
             submitSheet(for: kind)
+                .bsSheetStyle(.form)
         }
         .sheet(item: $pendingAction) { action in
             commentSheet(for: action)
+                .bsSheetStyle(.form)
         }
         .sheet(item: $profilePreview) { user in
             UserPreviewSheet(user: user)
@@ -142,12 +150,26 @@ public struct ApprovalCenterView: View {
         }
         .task {
             await applyInitialDefaultsIfNeeded()
+            // Iter 8 P1 §B.9 — realtime cross-device sync (Web ↔ iOS)
+            await viewModel.subscribeRealtime()
+        }
+        .onDisappear {
+            // Tear down realtime when the tab is swapped — VM is still
+            // retained by @StateObject, but we don't need a live socket
+            // off-screen.
+            Task { await viewModel.unsubscribeRealtime() }
+            // Iter 8 P2 — park scroll position for next visit.
+            scrollStore.save(scrollPosition, for: ScrollStateStore.Key.approvals)
         }
         .onAppear {
             // Re-entering the tab — refreshIfStale (60s TTL) avoids
             // spinner-flashing for the user; foreground refresh still
             // fires when the cache has gone stale.
             Task { await refreshIfStale() }
+            // Iter 8 P2 — restore scroll position.
+            if let saved = scrollStore.position(for: ScrollStateStore.Key.approvals) {
+                scrollPosition = saved
+            }
         }
     }
 
@@ -309,14 +331,20 @@ public struct ApprovalCenterView: View {
     @ViewBuilder
     private var queueBody: some View {
         if let kind = selectedQueueKind {
+            // Iter 7 §C.1 — skeleton-first via bsLoadingState。
+            // queueSectionedList 始终挂载,bsLoadingState 接管 redacted+shimmer +
+            // empty/error chrome,View 层不再写 if/else 三态。
             let rows = viewModel.queueRowsByKind[kind] ?? []
-            if viewModel.isLoading && rows.isEmpty {
-                skeletonList
-            } else if rows.isEmpty {
-                queueEmptyState(kind)
-            } else {
-                queueSectionedList(rows: rows, kind: kind)
-            }
+            queueSectionedList(rows: rows, kind: kind)
+                .bsLoadingState(BsLoadingState.derive(
+                    isLoading: viewModel.isLoading,
+                    hasItems: !rows.isEmpty,
+                    errorMessage: nil,
+                    emptySystemImage: "checkmark.seal",
+                    emptyTitle: "暂无\(kind.displayLabel)审批",
+                    emptyDescription: "队列已清空。下拉可刷新。"
+                ))
+                .animation(.smooth(duration: 0.25), value: rows.count)
         } else {
             // No approval caps — nothing to show in queue mode.
             BsEmptyState(
@@ -382,6 +410,7 @@ public struct ApprovalCenterView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollPosition($scrollPosition)
         .background(Color.clear)
     }
 
@@ -460,20 +489,20 @@ public struct ApprovalCenterView: View {
             return viewModel.mineRows.filter { $0.requestType == f }
         }()
 
-        if viewModel.isLoading && viewModel.mineRows.isEmpty {
-            skeletonList
-        } else if filtered.isEmpty {
-            BsEmptyState(
-                title: selectedMineType == nil ? "暂无提交记录" : "暂无\(selectedMineType!.displayLabel)记录",
-                systemImage: "tray",
-                description: selectedMineType == nil
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState。 mineSectionedList
+        // 始终挂载,bsLoadingState 接管 redacted+shimmer + empty chrome。
+        mineSectionedList(rows: filtered)
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: !filtered.isEmpty,
+                errorMessage: nil,
+                emptySystemImage: "tray",
+                emptyTitle: selectedMineType == nil ? "暂无提交记录" : "暂无\(selectedMineType!.displayLabel)记录",
+                emptyDescription: selectedMineType == nil
                     ? "你还没有提交过审批申请。点击右上角「+」新建一条。"
                     : "切换到「全部」查看其他类型,或新建一条。"
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            mineSectionedList(rows: filtered)
-        }
+            ))
+            .animation(.smooth(duration: 0.25), value: filtered.count)
     }
 
     @ViewBuilder

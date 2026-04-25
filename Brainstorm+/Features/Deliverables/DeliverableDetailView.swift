@@ -103,6 +103,7 @@ public struct DeliverableDetailView: View {
                         viewModel.apply(fresh)
                     }
                 )
+                .bsSheetStyle(.form)
             }
         }
         .confirmationDialog(

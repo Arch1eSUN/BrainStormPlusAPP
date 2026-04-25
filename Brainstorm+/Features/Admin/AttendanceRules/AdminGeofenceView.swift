@@ -79,11 +79,13 @@ public struct AdminGeofenceView: View {
             AdminGeofenceEditSheet(initial: fence) { updated in
                 vm.update(updated)
             }
+            .bsSheetStyle(.form)
         }
         .sheet(isPresented: $showingAdd) {
             AdminGeofenceEditSheet(initial: Geofence()) { new in
                 vm.update(new)
             }
+            .bsSheetStyle(.form)
         }
         .task { await vm.load() }
         .refreshable { await vm.load() }

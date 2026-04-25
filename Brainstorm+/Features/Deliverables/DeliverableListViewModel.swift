@@ -97,7 +97,8 @@ public final class DeliverableListViewModel: ObservableObject {
             self.members = opts.profiles
             self.currentUserId = try await sessionTask
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -108,7 +109,8 @@ public final class DeliverableListViewModel: ObservableObject {
         do {
             self.items = try await runItemsQuery()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -375,7 +377,8 @@ public final class DeliverableListViewModel: ObservableObject {
             successMessage = "交付物已创建"
             return true
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }
@@ -427,7 +430,8 @@ public final class DeliverableListViewModel: ObservableObject {
             successMessage = "状态已更新"
             return true
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }
@@ -554,7 +558,8 @@ public final class DeliverableListViewModel: ObservableObject {
             return true
         } catch {
             Haptic.warning()
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }
@@ -594,7 +599,8 @@ public final class DeliverableListViewModel: ObservableObject {
             return true
         } catch {
             Haptic.warning()
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return false
         }
     }

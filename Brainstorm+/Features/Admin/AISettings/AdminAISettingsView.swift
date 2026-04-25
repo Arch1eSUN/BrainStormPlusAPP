@@ -50,6 +50,7 @@ public struct AdminAISettingsView: View {
             NavigationStack {
                 AdminAIProviderEditSheet(provider: provider, viewModel: vm)
             }
+            .bsSheetStyle(.form)
         }
         .confirmationDialog(
             pendingDelete.map { "删除供应商 \($0.providerName)？此操作不可撤销。" } ?? "",

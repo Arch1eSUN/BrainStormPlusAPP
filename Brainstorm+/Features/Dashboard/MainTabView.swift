@@ -48,6 +48,12 @@ struct MainTabView: View {
     // realtime 累积的未读数立即反映到 tab bar / home icon。
     @Environment(\.scenePhase) private var scenePhase
 
+    // iOS 17+ symbolEffect bounce trigger — increments whenever the
+    // approval / messages badge count rises, bouncing the corresponding
+    // tabItem icon to draw the eye to a new pending item.
+    @State private var approvalBounce: Int = 0
+    @State private var messagesBounce: Int = 0
+
     enum Tab: Hashable {
         case dashboard, tasks, approvals, chat, me
     }
@@ -77,7 +83,12 @@ struct MainTabView: View {
             // 内部 @StateObject 自行持有 MySubmissionsViewModel。
             LazyView(ApprovalCenterView())
                 .tabItem {
-                    Label("审批", systemImage: "checkmark.seal.fill")
+                    Label {
+                        Text("审批")
+                    } icon: {
+                        Image(systemName: "checkmark.seal.fill")
+                            .symbolEffect(.bounce, value: approvalBounce)
+                    }
                 }
                 .badge(badgeCoordinator.approvalBadgeText)
                 .tag(Tab.approvals)
@@ -87,7 +98,12 @@ struct MainTabView: View {
             // 顶部 segmented picker 切换两个 sub-tab，外层 NavStack 由 MessagesView 接管
             LazyView(MessagesView())
                 .tabItem {
-                    Label("消息", systemImage: "bubble.left.and.bubble.right.fill")
+                    Label {
+                        Text("消息")
+                    } icon: {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .symbolEffect(.bounce, value: messagesBounce)
+                    }
                 }
                 .badge(badgeCoordinator.messagesBadgeText)
                 .tag(Tab.chat)
@@ -116,6 +132,17 @@ struct MainTabView: View {
             // 让用户在 home screen 看到的未读数在重新进入时立即对齐 DB
             guard newPhase == .active else { return }
             Task { await badgeCoordinator.refreshAll() }
+        }
+        // iOS 18 NavigationTransition / symbolEffect 风格统一:tab badge 数字
+        // 一旦递增就给对应 tabItem 触发一次 .bounce —— 用户在其他 tab 时也能
+        // 在 tab bar 看到 "新审批 / 新消息" 的视觉反馈,跟原生 Apple Mail
+        // / Messages 的 inbox bounce 行为一致。仅在递增时触发,避免读完
+        // 数减少也跳。
+        .onChange(of: badgeCoordinator.approvalPending) { oldValue, newValue in
+            if newValue > oldValue { approvalBounce &+= 1 }
+        }
+        .onChange(of: badgeCoordinator.messagesUnread) { oldValue, newValue in
+            if newValue > oldValue { messagesBounce &+= 1 }
         }
     }
 }

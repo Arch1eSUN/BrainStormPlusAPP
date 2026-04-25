@@ -3,6 +3,11 @@ import SwiftUI
 public struct HiringCandidatesView: View {
     @StateObject private var viewModel = HiringCandidatesViewModel()
     @State private var showCreate: Bool = false
+    @State private var pushTarget: Candidate? = nil
+
+    /// iOS 18+ zoom transition source namespace — Apple Mail / Photos
+    /// row→detail morph.
+    @Namespace private var zoomNamespace
 
     public init() {}
 
@@ -24,13 +29,13 @@ public struct HiringCandidatesView: View {
             } else {
                 List {
                     ForEach(viewModel.candidates) { c in
-                        NavigationLink {
-                            HiringCandidateDetailView(candidateId: c.id) {
-                                Task { await viewModel.load() }
-                            }
+                        Button {
+                            pushTarget = c
                         } label: {
                             row(c)
+                                .matchedTransitionSource(id: c.id, in: zoomNamespace)
                         }
+                        .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 // Haptic removed: swipe action 系统自带反馈
@@ -44,7 +49,17 @@ public struct HiringCandidatesView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .searchable(text: $viewModel.searchText, prompt: "搜索姓名/邮箱")
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索姓名/邮箱"
+        )
+        .navigationDestination(item: $pushTarget) { c in
+            HiringCandidateDetailView(candidateId: c.id) {
+                Task { await viewModel.load() }
+            }
+            .navigationTransition(.zoom(sourceID: c.id, in: zoomNamespace))
+        }
         .onChange(of: viewModel.searchText) { _, _ in
             Task { await viewModel.load() }
         }
@@ -66,6 +81,7 @@ public struct HiringCandidatesView: View {
             ) {
                 Task { await viewModel.load() }
             }
+            .bsSheetStyle(.form)
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }

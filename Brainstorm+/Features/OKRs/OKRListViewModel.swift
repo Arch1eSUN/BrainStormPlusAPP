@@ -153,7 +153,8 @@ public class OKRListViewModel: ObservableObject {
                 .value
             self.objectives = rows
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 

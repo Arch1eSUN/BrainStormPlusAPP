@@ -102,6 +102,7 @@ public struct AdminAttendanceExemptionView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             exemptionSheet
+                .bsSheetStyle(.form)
         }
         .task { await vm.load() }
         .refreshable { await vm.load() }

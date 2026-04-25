@@ -111,6 +111,7 @@ public struct OKRDetailView: View {
                 },
                 onDismiss: { editingKr = nil }
             )
+            .bsSheetStyle(.form)
         }
         .alert(
             "操作失败",

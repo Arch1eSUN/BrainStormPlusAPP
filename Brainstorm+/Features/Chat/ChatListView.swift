@@ -32,23 +32,26 @@ public struct ChatListView: View {
             BsColor.pageBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Group {
-                    if viewModel.isLoading && viewModel.channels.isEmpty {
-                        // Skeleton 行匹配 channelRow 实际高度，比 ProgressView 更少抖动
-                        channelSkeleton
-                    } else if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
-                        searchResultsList
-                    } else if viewModel.channels.isEmpty {
-                        BsEmptyState(
-                            title: "还没有会话",
-                            systemImage: "message",
-                            description: "点击右上角的笔图标，开始一段对话"
-                        )
-                    } else {
-                        channelList
-                    }
+                // Iter 7 §C.1 — skeleton-first via bsLoadingState。
+                // search 模式仍单独走 searchResultsList(语义不同);默认路径
+                // 把 channelList 始终挂载,首屏 loading 通过 bsLoadingState 自动
+                // redacted+shimmer,empty 走 design-system 统一 chrome。
+                if !viewModel.searchQuery.trimmingCharacters(in: .whitespaces).isEmpty {
+                    searchResultsList
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    channelList
+                        .bsLoadingState(BsLoadingState.derive(
+                            isLoading: viewModel.isLoading,
+                            hasItems: !viewModel.channels.isEmpty,
+                            errorMessage: nil,                              // banner 走 zyErrorBanner
+                            emptySystemImage: "message",
+                            emptyTitle: "还没有会话",
+                            emptyDescription: "点击右上角的笔图标，开始一段对话"
+                        ))
+                        .animation(.smooth(duration: 0.25), value: viewModel.channels.count)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -99,12 +102,17 @@ public struct ChatListView: View {
                 // nav needed — the user sees the new row and taps to
                 // enter.
             }
+            .bsSheetStyle(.detail)
         }
         .zyErrorBanner($viewModel.errorMessage)
         // `.searchable` binds to a Published on the VM so the search UI
         // survives background re-renders of the navigation stack without
         // losing the query.
-        .searchable(text: $viewModel.searchQuery, prompt: "搜索消息…")
+        .searchable(
+            text: $viewModel.searchQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索消息…"
+        )
         .onChange(of: viewModel.searchQuery) { _, newValue in
             // Minimal debounce: 250ms of idle before firing. Iter 7 Phase 1.2:
             // routes through FTS RPC (chat_search_messages) for proper full-text
@@ -158,25 +166,120 @@ public struct ChatListView: View {
 
     // MARK: - Channel list
 
+    /// Iter 8 polish — partition the channel list into pinned + others so
+    /// the section pinned-at-top affordance reads like Slack/Telegram. Sort
+    /// is preserved within each bucket (already by lastMessageAt desc per
+    /// applySort in the VM).
+    private var pinnedChannels: [ChatChannel] {
+        viewModel.channels.filter { (viewModel.memberships[$0.id]?.pinnedAt) != nil }
+    }
+    private var unpinnedChannels: [ChatChannel] {
+        viewModel.channels.filter { (viewModel.memberships[$0.id]?.pinnedAt) == nil }
+    }
+
     @ViewBuilder
     private var channelList: some View {
         List {
-            ForEach(Array(viewModel.channels.enumerated()), id: \.element.id) { index, channel in
-                NavigationLink(value: channel) {
-                    channelRow(channel)
+            if !pinnedChannels.isEmpty {
+                Section {
+                    ForEach(Array(pinnedChannels.enumerated()), id: \.element.id) { index, channel in
+                        channelListRow(channel: channel, index: index)
+                    }
+                } header: {
+                    sectionHeader(title: "置顶", systemImage: "pin.fill")
                 }
-                .bsAppearStagger(index: index)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 4, leading: BsSpacing.lg, bottom: 4, trailing: BsSpacing.lg))
-                .buttonStyle(.plain)
-                .contextMenu { channelContextMenu(channel) }
+            }
+
+            Section {
+                ForEach(Array(unpinnedChannels.enumerated()), id: \.element.id) { index, channel in
+                    channelListRow(channel: channel, index: index)
+                }
+            } header: {
+                if !pinnedChannels.isEmpty {
+                    sectionHeader(title: "全部会话", systemImage: "tray")
+                } else {
+                    EmptyView()
+                }
             }
         }
         .listStyle(.plain)
         // Fusion: kill the list's opaque backdrop so the page background shows
         // through behind each row.
         .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private func sectionHeader(title: String, systemImage: String) -> some View {
+        HStack(spacing: BsSpacing.xs) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(BsColor.brandAzure)
+            Text(title)
+                .font(BsTypography.captionSmall)
+                .foregroundStyle(BsColor.inkMuted)
+                .textCase(nil)
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// Per-row builder. Hosts NavigationLink + swipe actions + contextMenu so
+    /// the pinned and unpinned sections share identical surfaces.
+    @ViewBuilder
+    private func channelListRow(channel: ChatChannel, index: Int) -> some View {
+        let isPinned = (viewModel.memberships[channel.id]?.pinnedAt) != nil
+        let isMuted = viewModel.memberships[channel.id]?.isCurrentlyMuted == true
+
+        NavigationLink(value: channel) {
+            channelRow(channel)
+        }
+        .bsAppearStagger(index: index)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: BsSpacing.lg, bottom: 4, trailing: BsSpacing.lg))
+        .buttonStyle(.plain)
+        .contextMenu { channelContextMenu(channel) }
+        // Iter 8 polish — leading "标已读" (per swipe-actions-system.md):
+        // azure tint, no Haptic at button-press, mutation only.
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Task { await viewModel.markChannelRead(channelId: channel.id) }
+            } label: {
+                Label("标已读", systemImage: "envelope.open.fill")
+            }
+            .tint(BsColor.brandAzure)
+        }
+        // Trailing — 静音/取消静音 + 置顶/取消置顶 (we route the swipe to the
+        // most useful destructive-adjacent actions; chat_channels has no
+        // hard-delete path on Web either, so "删除" is dropped here. Doc
+        // explicitly says "≤ 2 buttons per side; rest go to contextMenu".)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                if isMuted {
+                    Task { await viewModel.setMuted(channelId: channel.id, until: nil) }
+                } else {
+                    // Default 8 hours when swipe-toggled; user can pick a
+                    // different preset via long-press.
+                    Task {
+                        await viewModel.setMuted(
+                            channelId: channel.id,
+                            until: MutePreset.eightHours.resolve()
+                        )
+                    }
+                }
+            } label: {
+                Label(isMuted ? "取消静音" : "静音",
+                      systemImage: isMuted ? "bell" : "bell.slash")
+            }
+            .tint(isMuted ? BsColor.brandAzure : BsColor.warning)
+
+            Button {
+                Task { await viewModel.setPinned(channelId: channel.id, pinned: !isPinned) }
+            } label: {
+                Label(isPinned ? "取消置顶" : "置顶",
+                      systemImage: isPinned ? "pin.slash" : "pin.fill")
+            }
+            .tint(BsColor.brandAzure)
+        }
     }
 
     /// Iter 7 Phase 1.2 — long-press on channel row.

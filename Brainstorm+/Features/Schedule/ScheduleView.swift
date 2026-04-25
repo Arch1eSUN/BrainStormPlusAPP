@@ -69,6 +69,7 @@ public struct ScheduleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $quickApply) { route in
             quickApplySheet(for: route)
+                .bsSheetStyle(.form)
         }
         .task {
             // Web behavior: employees default-land on "my" (see page.tsx:52-56).
@@ -208,8 +209,16 @@ public struct ScheduleView: View {
                     }
                 }
             } else {
+                // Iter 8 polish — migrated VStack → List so MyDayRow can
+                // surface native `.swipeActions` (leading 请假 + 外勤). The
+                // outer ScrollView in `coreContent` still owns vertical
+                // scroll, so we wrap the List with a fixed height computed
+                // from the row count to avoid nested scroll conflicts.
+                // ScrollViewReader still works on Lists; .id(entry.iso)
+                // remains valid as scroll target.
                 ScrollViewReader { proxy in
-                    VStack(spacing: BsSpacing.sm) {
+                    let rowCount = viewModel.upcoming14Days.count
+                    List {
                         ForEach(viewModel.upcoming14Days, id: \.iso) { entry in
                             MyDayRow(
                                 date: entry.date,
@@ -217,19 +226,38 @@ public struct ScheduleView: View {
                                 state: viewModel.states[entry.iso],
                                 isSelected: Calendar.current.isDate(entry.date, inSameDayAs: viewModel.selectedDate),
                                 onSelect: {
-                                    // Haptic removed: 用户反馈列表行选择过密震动
                                     withAnimation(BsMotion.Anim.overshoot) {
                                         viewModel.selectedDate = entry.date
                                     }
                                 },
                                 onQuickApply: { kind in
-                                    // Haptic removed: 用户反馈列表辅助按钮过密震动
                                     quickApply = QuickApplyRoute(kind: kind, date: entry.date)
                                 }
                             )
                             .id(entry.iso)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: BsSpacing.xs, leading: 0, bottom: BsSpacing.xs, trailing: 0))
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    quickApply = QuickApplyRoute(kind: .leave, date: entry.date)
+                                } label: {
+                                    Label("请假", systemImage: "calendar.badge.minus")
+                                }
+                                .tint(BsColor.brandAzure)
+                                Button {
+                                    quickApply = QuickApplyRoute(kind: .fieldWork, date: entry.date)
+                                } label: {
+                                    Label("外勤", systemImage: "figure.walk")
+                                }
+                                .tint(BsColor.success)
+                            }
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true) // outer ScrollView owns vertical scroll
+                    .frame(height: CGFloat(rowCount) * 80) // approximate row height; see MyDayRow padding
                     .onChange(of: viewModel.selectedDate) { _, newDate in
                         let iso = ScheduleViewModel.isoDateString(for: newDate)
                         withAnimation(BsMotion.Anim.overshoot) {

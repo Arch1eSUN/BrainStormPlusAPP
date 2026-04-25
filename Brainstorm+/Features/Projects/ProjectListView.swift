@@ -31,6 +31,11 @@ public struct ProjectListView: View {
     /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
     @State private var pushTarget: Project? = nil
 
+    /// iOS 18+ zoom transition source namespace — used by Apple Photos /
+    /// Mail / Maps for tile→detail morph. Pair with `.matchedTransitionSource`
+    /// on row + `.navigationTransition(.zoom)` on destination.
+    @Namespace private var zoomNamespace
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -129,6 +134,7 @@ public struct ProjectListView: View {
                     Task { await reload() }
                 }
             )
+            .bsSheetStyle(.form)
         }
         // D.2a: create sheet. Presents when the "+" toolbar button is tapped. The sheet
         // calls `onCreated` with the fresh row; we reload the list so membership-scoped
@@ -141,6 +147,7 @@ public struct ProjectListView: View {
                     Task { await reload() }
                 }
             )
+            .bsSheetStyle(.form)
         }
         // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
         // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
@@ -157,6 +164,7 @@ public struct ProjectListView: View {
                     viewModel.removeProjectLocally(id: id)
                 }
             )
+            .navigationTransition(.zoom(sourceID: project.id, in: zoomNamespace))
         }
         // 2.0: row-level delete confirmation. Mirrors Web `confirm('确定删除这个项目吗？')`
         // semantics via the native `.confirmationDialog` + `Button(role: .destructive)`
@@ -230,51 +238,70 @@ public struct ProjectListView: View {
             if rows.isEmpty {
                 filteredEmptyStateView
             } else {
-                ScrollView {
-                    LazyVStack(spacing: BsSpacing.lg) {
-                        ForEach(rows) { project in
-                            // Bug-fix(滑动判定为点击 + 震动): 用 Button + pushTarget 替代
-                                // NavigationLink。Button 在 ScrollView 里正确处理 tap-vs-drag。
+                // Iter 8 polish — migrated from ScrollView + LazyVStack to
+                // List so we can attach native `.swipeActions`. ProjectCardView
+                // visual is preserved (it stays the row body); listRowInsets +
+                // background go clear so the card's own layout owns spacing.
+                List {
+                    ForEach(rows) { project in
+                        Button {
+                            pushTarget = project
+                        } label: {
+                            ProjectCardView(
+                                project: project,
+                                owner: project.ownerId.flatMap { viewModel.ownersById[$0] },
+                                taskCount: viewModel.taskCountsByProject[project.id]
+                            )
+                                .padding(.horizontal, BsSpacing.lg + 4)
+                                .matchedTransitionSource(id: project.id, in: zoomNamespace)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: BsSpacing.xs, leading: 0, bottom: BsSpacing.xs, trailing: 0))
+                        .contextMenu {
+                            Button {
+                                projectBeingEdited = project
+                            } label: {
+                                Label("编辑", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                projectPendingDelete = project
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        }
+                        // Iter 8 — leading "查看" jumps into the project (its
+                        // detail view is the single surface that hosts the
+                        // tasks list). Keeps swipe spec ("跳任务") meaningful
+                        // even though there's no separate per-project tasks
+                        // route on iOS yet.
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button {
                                 pushTarget = project
                             } label: {
-                                ProjectCardView(
-                                    project: project,
-                                    // 1.7: feed the batched owner lookup into the card so it can
-                                    // show `full_name` when available (mirrors Web's nested
-                                    // `profiles:owner_id(full_name, avatar_url)` join).
-                                    owner: project.ownerId.flatMap { viewModel.ownersById[$0] },
-                                    // 2.1: feed the batched task count aggregate into the card.
-                                    // `nil` when the count isn't yet fetched or failed; card
-                                    // hides the count label rather than showing a stale value.
-                                    taskCount: viewModel.taskCountsByProject[project.id]
-                                )
-                                    .padding(.horizontal, BsSpacing.lg + 4)
+                                Label("查看", systemImage: "list.bullet.rectangle")
                             }
-                            .buttonStyle(.plain)
-                            // 1.9: secondary edit entry. Long-press the row to surface the
-                            // same edit sheet used from the detail toolbar.
-                            // 2.0: secondary delete entry with destructive role + its own
-                            // confirmation dialog (see `.confirmationDialog` above).
-                            .contextMenu {
+                            .tint(BsColor.brandAzure)
+                        }
+                        // Trailing — 归档 (mutation, azure) only when not
+                        // already archived. Delete stays in contextMenu (it
+                        // requires confirmation + RPC and is rare enough to
+                        // not warrant swipe).
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if project.status != .archived {
                                 Button {
-                                    // Haptic removed: contextMenu 选项过密震动
-                                    projectBeingEdited = project
+                                    Task { await viewModel.archiveProject(id: project.id) }
                                 } label: {
-                                    Label("编辑", systemImage: "pencil")
+                                    Label("归档", systemImage: "archivebox.fill")
                                 }
-                                Button(role: .destructive) {
-                                    // Haptic removed: 菜单选项；真删确认时由 confirmationDialog 处理
-                                    projectPendingDelete = project
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
+                                .tint(BsColor.warning)
                             }
                         }
-                        Spacer().frame(height: 24)
                     }
-                    .padding(.top, 8)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }

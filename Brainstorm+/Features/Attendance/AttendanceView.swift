@@ -78,8 +78,7 @@ public struct AttendanceView: View {
         }
         .sheet(item: $selectedDay) { day in
             AttendanceDayDetailSheet(day: day)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                .bsSheetStyle(.detail)
         }
         .sheet(item: $fixTargetDay) { day in
             AttendanceCorrectionSubmitSheet(seed: day) {
@@ -87,6 +86,7 @@ public struct AttendanceView: View {
                 // pending 状态(后续 admin 审批后再回写 timeline)。
                 Task { await viewModel.loadRange(viewModel.selectedRange) }
             }
+            .bsSheetStyle(.form)
         }
     }
 

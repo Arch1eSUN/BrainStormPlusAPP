@@ -34,6 +34,10 @@ public struct DeliverableListView: View {
     /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap),
     /// 滑动不再误触。
     @State private var pushTarget: Deliverable? = nil
+
+    /// iOS 18+ zoom transition source namespace — Apple Mail / Maps tile→detail morph.
+    @Namespace private var zoomNamespace
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -51,14 +55,19 @@ public struct DeliverableListView: View {
     }
 
     private var coreContent: some View {
-        Group {
-            if viewModel.isLoading && viewModel.items.isEmpty {
-                ProgressView()
-            } else {
-                content
-            }
-        }
-        .navigationTitle("交付物")
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState。content 始终挂载,
+        // empty/error 走 design-system 统一 chrome,首屏 redacted+shimmer。
+        content
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: !viewModel.items.isEmpty,
+                errorMessage: viewModel.errorMessage,
+                emptySystemImage: "doc.badge.arrow.up",
+                emptyTitle: "暂无交付物",
+                emptyDescription: "右上角「+」新建一条记录"
+            ))
+            .animation(.smooth(duration: 0.25), value: viewModel.items.count)
+            .navigationTitle("交付物")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -85,9 +94,11 @@ public struct DeliverableListView: View {
         }
         .sheet(isPresented: $showCreateSheet) {
             DeliverableCreateSheet(viewModel: viewModel)
+                .bsSheetStyle(.form)
         }
         .sheet(item: $editTarget) { target in
             DeliverableEditSheet(viewModel: viewModel, deliverable: target)
+                .bsSheetStyle(.form)
         }
         // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
         // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
@@ -99,6 +110,7 @@ public struct DeliverableListView: View {
                     listViewModel: viewModel
                 )
             )
+            .navigationTransition(.zoom(sourceID: target.id, in: zoomNamespace))
         }
         .confirmationDialog(
             "删除后该交付物记录无法恢复，确认？",
@@ -338,6 +350,7 @@ public struct DeliverableListView: View {
                 } label: {
                     DeliverableRow(item: d)
                         .padding(.horizontal, BsSpacing.lg)
+                        .matchedTransitionSource(id: d.id, in: zoomNamespace)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -459,7 +472,11 @@ private struct DeliverableListFiltersModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .searchable(text: $viewModel.searchText, prompt: "搜索交付物…")
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "搜索交付物…"
+            )
             .onSubmit(of: .search) {
                 Task { await viewModel.reloadItems() }
             }

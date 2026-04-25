@@ -12,6 +12,10 @@ struct BrainStormApp: App {
 
     @State private var sessionManager = SessionManager()
     @StateObject private var realtimeSync = RealtimeSyncManager.shared
+    /// Iter 8 P2 — cross-tab scroll preservation store. Hosted at app
+    /// root so any list view in the tree can save/restore offsets via
+    /// @EnvironmentObject.
+    @StateObject private var scrollStateStore = ScrollStateStore()
     @State private var minSplashHeld = false
 
     init() {
@@ -29,6 +33,7 @@ struct BrainStormApp: App {
                     AuthenticatedRoot()
                         .environment(sessionManager)
                         .environmentObject(realtimeSync)
+                        .environmentObject(scrollStateStore)
                         .transition(.opacity)
                 } else {
                     LoginView()

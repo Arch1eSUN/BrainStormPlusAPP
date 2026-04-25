@@ -75,6 +75,7 @@ public struct LeavesView: View {
             LeaveSubmitView(client: client) { _ in
                 isSubmitPresented = false
             }
+            .bsSheetStyle(.form)
         }
     }
 

@@ -106,10 +106,15 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @StateObject private var widgets = DashboardWidgetsViewModel()
     @StateObject private var attendance = AttendanceViewModel()
+    @EnvironmentObject private var scrollStore: ScrollStateStore
     @Environment(\.colorScheme) private var colorScheme
     @State private var showProfileSheet = false
     /// Phase 5：wordmark / "所有应用" tile 点击打开命令面板（.fullScreenCover）。
     @State private var showCommandPalette = false
+    /// Iter 8 P1 §B.3 — global ⌘K-style search sheet trigger.
+    @State private var showGlobalSearch = false
+    /// Iter 8 P2 — preserve scroll across tab swap.
+    @State private var scrollPosition = ScrollPosition()
 
     /// Phase 28: programmatic NavigationStack path —— 把所有 dashboard push 都
     /// 走 value-based 路由,杜绝 List-row 链式 NavigationLink 触发。
@@ -129,6 +134,7 @@ struct DashboardView: View {
         NavigationStack(path: $navPath) {
             mainList
                 .scrollContentBackground(.hidden)
+                .scrollPosition($scrollPosition)
                 .background(BsColor.pageBackground.ignoresSafeArea())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -136,6 +142,14 @@ struct DashboardView: View {
                         wordmarkButton
                     }
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        // Iter 8 P1 §B.3 — ⌘K-style global search.
+                        Button {
+                            showGlobalSearch = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(.headline, weight: .semibold))
+                        }
+                        .accessibilityLabel("全局搜索")
                         notificationButton
                         avatarButton
                     }
@@ -150,13 +164,17 @@ struct DashboardView: View {
                 }
                 .sheet(isPresented: $showProfileSheet) {
                     NavigationStack { SettingsView() }
-                        .presentationDetents([.large])
+                        .bsSheetStyle(.form)
                 }
                 .sheet(item: $dayPeek) { item in
                     DayPeekSheet(data: item.data)
                 }
                 .fullScreenCover(isPresented: $showCommandPalette) {
                     BsCommandPalette()
+                }
+                .sheet(isPresented: $showGlobalSearch) {
+                    // Iter 8 P1 §B.3 — global search sheet.
+                    GlobalSearchSheet()
                 }
                 .refreshable {
                     // Haptic removed: 用户反馈滑动场景不应震动
@@ -170,6 +188,15 @@ struct DashboardView: View {
             await viewModel.loadData()
             await widgets.fetchAll(isManager: isManagerTier)
             await attendance.loadThisWeek()
+        }
+        .onAppear {
+            // Iter 8 P2 — restore prior dashboard scroll across tab swap.
+            if let saved = scrollStore.position(for: ScrollStateStore.Key.dashboard) {
+                scrollPosition = saved
+            }
+        }
+        .onDisappear {
+            scrollStore.save(scrollPosition, for: ScrollStateStore.Key.dashboard)
         }
     }
 

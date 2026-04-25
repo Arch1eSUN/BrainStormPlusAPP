@@ -338,6 +338,41 @@ public class ProjectListViewModel: ObservableObject {
         self.projects.removeAll { $0.id == id }
     }
 
+    /// Iter 8 polish — archive a project from the list-row swipe action.
+    /// Mirrors Web's status switcher behavior; flips status='archived' on the
+    /// projects table. Optimistic local patch so the row visually
+    /// disappears (or moves to the archived bucket) without a full refetch.
+    public func archiveProject(id: UUID) async {
+        do {
+            _ = try await client
+                .from("projects")
+                .update(["status": "archived"])
+                .eq("id", value: id)
+                .execute()
+            // Optimistic patch — Project is value-typed with a `let status`,
+            // so we rebuild the row with status flipped to archived. The
+            // statusFilter-aware filter will then make it visually disappear
+            // (or move into the archived bucket if the filter is set).
+            if let idx = projects.firstIndex(where: { $0.id == id }) {
+                let old = projects[idx]
+                projects[idx] = Project(
+                    id: old.id,
+                    name: old.name,
+                    description: old.description,
+                    status: .archived,
+                    ownerId: old.ownerId,
+                    startDate: old.startDate,
+                    endDate: old.endDate,
+                    progress: old.progress,
+                    createdAt: old.createdAt,
+                    updatedAt: old.updatedAt
+                )
+            }
+        } catch {
+            deleteErrorMessage = "归档失败: \(ErrorLocalizer.localize(error))"
+        }
+    }
+
     // MARK: - Display helper
 
     /// Thin, defensive display-layer filter.

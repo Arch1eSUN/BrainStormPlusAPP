@@ -74,6 +74,7 @@ public struct AIAnalysisView: View {
                         }
                     }
             }
+            .bsSheetStyle(.detail)
         }
         .task {
             if hasAccess && viewModel.provider == nil {
@@ -923,7 +924,9 @@ public struct AIAnalysisView: View {
 
 // MARK: - Intel Report Subviews
 
-private struct IntelReportView: View {
+// Made internal (was private) so AIAnalysisHistoryDetailView in
+// AIAnalysisHistoryView.swift can reuse the same schema-card layout.
+struct IntelReportView: View {
     let result: MediaAnalysisResult
 
     var body: some View {

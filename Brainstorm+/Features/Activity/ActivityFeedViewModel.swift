@@ -51,7 +51,8 @@ public final class ActivityFeedViewModel: ObservableObject {
                 .value
             self.items = rows
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError tier; banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
         isLoading = false
     }

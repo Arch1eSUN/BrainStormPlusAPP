@@ -143,7 +143,7 @@ public struct FinanceView: View {
                         }
                     }
             }
-            .presentationDragIndicator(.visible)
+            .bsSheetStyle(.detail)
         }
     }
 

@@ -19,6 +19,11 @@ public struct OKRListView: View {
     /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
     /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
     @State private var pushTarget: Objective? = nil
+
+    /// iOS 18+ zoom transition source namespace — Apple Photos / Maps
+    /// tile→detail morph. Pair with `.matchedTransitionSource` + `.navigationTransition(.zoom)`.
+    @Namespace private var zoomNamespace
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -46,17 +51,19 @@ public struct OKRListView: View {
         ZStack {
             BsColor.surfaceSecondary.ignoresSafeArea()
 
-            Group {
-                if viewModel.isLoading && viewModel.objectives.isEmpty {
-                    ProgressView()
-                        .scaleEffect(1.3)
-                        .tint(BsColor.brandAzure)
-                } else if let error = viewModel.errorMessage, viewModel.objectives.isEmpty {
-                    errorState(message: error)
-                } else {
-                    content
-                }
-            }
+            // Iter 7 §C.1 — skeleton-first via bsLoadingState。content view 在
+            // loading/empty/error 状态下都保持挂载,设计系统 modifier 决定
+            // chrome (redacted+shimmer / banner / ContentUnavailableView)。
+            content
+                .bsLoadingState(BsLoadingState.derive(
+                    isLoading: viewModel.isLoading,
+                    hasItems: !viewModel.objectives.isEmpty,
+                    errorMessage: viewModel.errorMessage,
+                    emptySystemImage: "target",
+                    emptyTitle: "暂无 OKR",
+                    emptyDescription: "切换到「+」新建一个目标，AI 会帮你拆 key results"
+                ))
+                .animation(.smooth(duration: 0.25), value: viewModel.objectives.count)
         }
         .navigationTitle("OKR 目标管理")
         .navigationBarTitleDisplayMode(.large)
@@ -79,6 +86,7 @@ public struct OKRListView: View {
                 viewModel: viewModel,
                 onDismiss: { showingCreate = false }
             )
+            .bsSheetStyle(.form)
         }
         // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
         // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
@@ -86,6 +94,7 @@ public struct OKRListView: View {
             OKRDetailView(
                 viewModel: OKRDetailViewModel(client: supabase, initial: obj)
             )
+            .navigationTransition(.zoom(sourceID: obj.id, in: zoomNamespace))
         }
         .confirmationDialog(
             pendingStatus.map { confirmStatusTitle($0) } ?? "",
@@ -365,6 +374,7 @@ public struct OKRListView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .matchedTransitionSource(id: obj.id, in: zoomNamespace)
                 }
                 .buttonStyle(.plain)
 

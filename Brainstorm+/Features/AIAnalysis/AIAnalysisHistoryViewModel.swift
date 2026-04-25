@@ -140,7 +140,8 @@ public final class AIAnalysisHistoryViewModel: ObservableObject {
             hasMore = rows.count == pageSize
             errorMessage = nil
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 
@@ -165,7 +166,8 @@ public final class AIAnalysisHistoryViewModel: ObservableObject {
             items.append(contentsOf: rows.filter { !known.contains($0.id) })
             hasMore = rows.count == pageSize
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 
@@ -183,7 +185,8 @@ public final class AIAnalysisHistoryViewModel: ObservableObject {
                 .execute()
         } catch {
             items = snapshot
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 }

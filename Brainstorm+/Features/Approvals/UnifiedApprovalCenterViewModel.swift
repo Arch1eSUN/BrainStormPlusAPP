@@ -73,8 +73,78 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
 
     private let client: SupabaseClient
 
+    /// Iter 8 P1 §B.9 — Realtime cross-device sync. Watches the parent
+    /// `approval_requests` table; on any INSERT/UPDATE/DELETE we
+    /// derive the affected ApprovalQueueKind from the row's
+    /// `request_type` and re-fetch that kind's slice (the live row
+    /// needs the requester profile join we'd lose otherwise).
+    private let realtimeSync: RealtimeListSync
+
     public init(client: SupabaseClient) {
         self.client = client
+        self.realtimeSync = RealtimeListSync(client: client, tableName: "approval_requests")
+    }
+
+    // MARK: - Realtime (Iter 8 P1 §B.9)
+
+    public func subscribeRealtime() async {
+        guard !realtimeSync.isActive else { return }
+        await realtimeSync.start { [weak self] change in
+            guard let self else { return }
+            self.handleRealtime(change)
+        }
+    }
+
+    public func unsubscribeRealtime() async {
+        await realtimeSync.stop()
+    }
+
+    private func handleRealtime(_ change: RealtimeListChange) {
+        // Approval rows carry per-leaf joins (leave details, requester
+        // profile) that the WAL payload doesn't include — so on every
+        // event we reload the affected kind's slice in the background
+        // rather than trying to splice the partial payload in-place.
+        let payload: JSONObject
+        switch change {
+        case .insert(let row): payload = row
+        case .update(let newRow, _): payload = newRow
+        case .delete(let oldRow): payload = oldRow
+        }
+
+        let kind: ApprovalQueueKind? = kindForPayload(payload)
+
+        // Mine view: refresh if it's the current user's submission.
+        Task { [weak self] in
+            guard let self else { return }
+            if let uid = try? await self.client.auth.session.user.id,
+               let requesterId = payload.uuidColumn("requester_id"),
+               requesterId == uid {
+                await self.refresh(mode: .mine, kind: nil)
+            }
+            if let kind {
+                await self.refresh(mode: .queue, kind: kind)
+                await self.refreshPendingCounts(for: [kind])
+            } else {
+                // Couldn't decode kind — refresh all loaded queues.
+                let active = Array(self.queueRowsByKind.keys)
+                for k in active {
+                    await self.refresh(mode: .queue, kind: k)
+                }
+                if !active.isEmpty {
+                    await self.refreshPendingCounts(for: active)
+                }
+            }
+        }
+    }
+
+    private func kindForPayload(_ payload: JSONObject) -> ApprovalQueueKind? {
+        guard let raw = payload["request_type"] else { return nil }
+        let rawString: String
+        switch raw {
+        case .string(let s): rawString = s
+        default: return nil
+        }
+        return ApprovalQueueKind.allCases.first { $0.requestTypes.contains(rawString) }
     }
 
     // MARK: - Public API
@@ -313,7 +383,8 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
         ]
         let shouldShowBanner = userFacingKeywords.contains { raw.localizedCaseInsensitiveContains($0) }
         if shouldShowBanner {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         } else {
             #if DEBUG
             print("[UnifiedApprovalCenterViewModel] silent error: \(raw)")

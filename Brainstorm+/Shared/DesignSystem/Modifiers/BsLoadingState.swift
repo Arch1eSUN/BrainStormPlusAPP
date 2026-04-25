@@ -129,3 +129,67 @@ public extension View {
         modifier(BsLoadingStateModifier(state: state))
     }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// MARK: - Iter 7 §C 推广 helpers
+//
+// 大多数 VM 已经持有 `isLoading: Bool`、`items: [T]`、`errorMessage: String?`
+// 这套常见组合。`BsLoadingState.derive(...)` 把这些散字段折成一个 enum，
+// VM 不必新增 `loadingState` published —— View 在调用站点里直接 derive。
+//
+// 不在 VM 里 cache `BsLoadingState` 是有意为之：enum 关联值 (.empty 的
+// systemImage/title) 通常依赖 view 层的语境（"暂无任务" vs "暂无项目"），
+// 放 VM 里反而要传 RawRepresentable，复杂度跳一档。
+// ══════════════════════════════════════════════════════════════════
+
+public extension BsLoadingState {
+    /// VM-friendly derivation. Hand it the four typical published fields
+    /// + an empty-state spec; it returns the right `BsLoadingState`:
+    ///
+    ///   • items 空 + isLoading + 无 error → .loading
+    ///   • items 非空 + isLoading           → .stale
+    ///   • errorMessage != nil              → .error(msg)
+    ///   • items 空 + 已加载                → .empty(...)
+    ///   • 其它                             → .idle
+    ///
+    /// 用法（典型 list view body 顶层）：
+    /// ```
+    /// List(items) { ... }
+    ///   .bsLoadingState(BsLoadingState.derive(
+    ///     isLoading: vm.isLoading,
+    ///     hasItems: !vm.items.isEmpty,
+    ///     errorMessage: vm.errorMessage,
+    ///     emptySystemImage: "tray",
+    ///     emptyTitle: "暂无任务",
+    ///     emptyDescription: "下拉刷新或点击右上角新建"
+    ///   ))
+    /// ```
+    static func derive(
+        isLoading: Bool,
+        hasItems: Bool,
+        errorMessage: String?,
+        emptySystemImage: String,
+        emptyTitle: String,
+        emptyDescription: String? = nil
+    ) -> BsLoadingState {
+        // error 优先级最高 —— 用户看到红色 banner 就知道要重试，不该被
+        // skeleton/empty 把错误信息盖住。
+        if let msg = errorMessage, !msg.isEmpty {
+            return .error(msg)
+        }
+        if isLoading && !hasItems {
+            return .loading
+        }
+        if isLoading && hasItems {
+            return .stale
+        }
+        if !hasItems {
+            return .empty(
+                systemImage: emptySystemImage,
+                title: emptyTitle,
+                description: emptyDescription
+            )
+        }
+        return .idle
+    }
+}

@@ -122,7 +122,8 @@ public final class TeamDirectoryViewModel: ObservableObject {
             self.allMembers = try await membersTask
             self.departments = (try? await deptsTask) ?? []
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 

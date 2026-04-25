@@ -1,7 +1,8 @@
 import Foundation
+import SwiftUI
 
 // ══════════════════════════════════════════════════════════════════
-// ErrorPresenter — 错误展示分级 (iter6 §B.2)
+// ErrorPresenter — 错误展示分级 (iter6 §B.2 / iter7 §C.强化 全 app 推广)
 //
 // 把 raw Error 映射成一个 ErrorTier + 一段面向用户的中文文案。
 // VM 层根据 tier 决定 UI 通道：
@@ -10,10 +11,9 @@ import Foundation
 //   • banner     — 顶部 toast / .zyErrorBanner（默认通道）
 //   • fullscreen — modal（auth required / 关键流程被打断）
 //
-// 渐进迁移策略：先在 TeamAttendanceVM / ApprovalQueueVM / ChatRoomVM
-// 三个高频 VM 落地。其余 VM 仍用 ErrorLocalizer.localize；后续 iter
-// 再统一替换。这一层薄到不引入额外抽象 —— 所有判定都基于已有的
-// ErrorLocalizer.isCancellation + URLError / NSError 类型化短路。
+// Iter 7 §C 推广：所有 VM 的 catch 块都用 ErrorPresenter.userFacingMessage,
+// silent tier 自动返回 nil（cancellation 不再 banner 闪屏）；fullscreen tier
+// 上层通过 ErrorFullscreenView 触发"重新登录"再走 SessionManager.signOut。
 // ══════════════════════════════════════════════════════════════════
 
 public enum ErrorTier: Equatable {
@@ -52,6 +52,12 @@ public struct ErrorPresenter {
     }
 
     /// 转换成面向用户的文案；silent tier 返回 nil。
+    /// 这是 VM `catch` 块推广 (iter7 §C) 的核心入口：
+    /// ```
+    /// if let msg = ErrorPresenter.userFacingMessage(error) {
+    ///     self.errorMessage = msg
+    /// }
+    /// ```
     public static func userFacingMessage(_ error: Error) -> String? {
         if ErrorLocalizer.isCancellation(error) { return nil }
         return ErrorLocalizer.localize(error)
@@ -63,5 +69,105 @@ public struct ErrorPresenter {
         let t = tier(for: error)
         if t == .silent { return (.silent, nil) }
         return (t, ErrorLocalizer.localize(error))
+    }
+
+    /// fullscreen tier 判定 —— View 层用它决定要不要弹"重新登录"模态。
+    public static func isFullscreen(_ error: Error) -> Bool {
+        return tier(for: error) == .fullscreen
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MARK: - ErrorFullscreenView (auth-required modal)
+// ══════════════════════════════════════════════════════════════════
+
+/// fullscreen tier 错误的标准 modal：标题 + 文案 + 重新登录按钮。
+/// 上层用 `.errorFullscreen($vm.fullscreenError, signOut: { ... })`
+/// 把 VM 的 fullscreen error 投到这个 modal。
+public struct ErrorFullscreenView: View {
+    let message: String
+    let onReauthenticate: () -> Void
+    let onDismiss: () -> Void
+
+    public init(
+        message: String,
+        onReauthenticate: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.message = message
+        self.onReauthenticate = onReauthenticate
+        self.onDismiss = onDismiss
+    }
+
+    public var body: some View {
+        VStack(spacing: BsSpacing.lg) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(BsColor.brandAzure)
+                .padding(.top, BsSpacing.xl)
+
+            Text("登录已过期")
+                .font(BsTypography.sectionTitle)
+                .foregroundStyle(BsColor.ink)
+
+            Text(message)
+                .font(BsTypography.bodySmall)
+                .foregroundStyle(BsColor.inkMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, BsSpacing.xl)
+
+            Spacer()
+
+            VStack(spacing: BsSpacing.sm) {
+                Button {
+                    onReauthenticate()
+                } label: {
+                    Text("重新登录")
+                        .font(BsTypography.bodyMedium)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, BsSpacing.md)
+                        .background(BsColor.brandAzure)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button("取消") {
+                    onDismiss()
+                }
+                .font(BsTypography.bodySmall)
+                .foregroundStyle(BsColor.inkMuted)
+            }
+            .padding(.horizontal, BsSpacing.xl)
+            .padding(.bottom, BsSpacing.xl)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BsColor.pageBackground.ignoresSafeArea())
+    }
+}
+
+public extension View {
+    /// VM 暴露 `@Published var fullscreenError: String?`，View 在 root
+    /// 上挂 `.errorFullscreen($vm.fullscreenError) { signOut() }` 即可。
+    func errorFullscreen(
+        _ message: Binding<String?>,
+        onReauthenticate: @escaping () -> Void
+    ) -> some View {
+        let isPresented = Binding<Bool>(
+            get: { message.wrappedValue != nil },
+            set: { if !$0 { message.wrappedValue = nil } }
+        )
+        return self.fullScreenCover(isPresented: isPresented) {
+            ErrorFullscreenView(
+                message: message.wrappedValue ?? "登录已过期，请重新登录",
+                onReauthenticate: {
+                    message.wrappedValue = nil
+                    onReauthenticate()
+                },
+                onDismiss: {
+                    message.wrappedValue = nil
+                }
+            )
+        }
     }
 }

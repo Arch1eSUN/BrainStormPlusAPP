@@ -48,6 +48,7 @@ struct LoginView: View {
         .animation(BsMotion.Anim.smooth, value: errorMessage)
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordView()
+                .bsSheetStyle(.form)
         }
     }
 

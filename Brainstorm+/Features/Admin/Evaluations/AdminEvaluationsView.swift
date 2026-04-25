@@ -55,6 +55,7 @@ public struct AdminEvaluationsView: View {
                     await vm.triggerBatch(userIds: ids, forceRegenerate: force)?.triggeredCount
                 }
             )
+            .bsSheetStyle(.form)
         }
     }
 

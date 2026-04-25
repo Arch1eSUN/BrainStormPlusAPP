@@ -90,7 +90,8 @@ public final class KnowledgeListViewModel: ObservableObject {
             self.articles = try await fetchedArticles
             self.categories = try await fetchedCategories
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -232,7 +233,8 @@ public final class KnowledgeListViewModel: ObservableObject {
             successMessage = "文档已发布"
             return saved
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return nil
         }
     }
@@ -323,7 +325,8 @@ public final class KnowledgeListViewModel: ObservableObject {
             successMessage = "文档已更新"
             return saved
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             return nil
         }
     }
@@ -343,7 +346,8 @@ public final class KnowledgeListViewModel: ObservableObject {
             articles.removeAll { $0.id == article.id }
             successMessage = "文档已删除"
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 

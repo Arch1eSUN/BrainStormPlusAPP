@@ -304,7 +304,8 @@ public class ChatListViewModel: ObservableObject {
                 return ChatSearchResult(message: msg, channel: ch)
             }
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError; nil 时不触发 banner。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
             searchResults = []
         }
     }
@@ -429,6 +430,52 @@ public class ChatListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Iter 8 polish: 标已读 (mark-channel-as-read swipe action)
+    //
+    // Iter 7 added bubble-level mark-read via chat_mark_read RPC. The list
+    // swipe action wants the same effect for the entire channel: bump
+    // last_read_at to now() so the unread badge clears without opening the
+    // room. We piggy-back on the existing RPC by passing
+    // p_last_message_id = NIL — server falls back to "now" semantics.
+    public func markChannelRead(channelId: UUID) async {
+        guard let me = currentUserId else { return }
+        struct Params: Encodable {
+            let p_channel_id: String
+            let p_last_message_id: String?
+        }
+        do {
+            try await client
+                .rpc("chat_mark_read",
+                     params: Params(
+                        p_channel_id: channelId.uuidString,
+                        p_last_message_id: nil
+                     ))
+                .execute()
+            // Optimistic — patch the local membership row's last_read_at so
+            // the UI's unread state clears immediately. Real value comes back
+            // on next fetchChannels().
+            if var row = memberships[channelId] {
+                row = ChatChannelMember(
+                    id: row.id, channelId: row.channelId, userId: row.userId,
+                    role: row.role, joinedAt: row.joinedAt,
+                    lastReadAt: Date(),
+                    mutedUntil: row.mutedUntil,
+                    pinnedAt: row.pinnedAt
+                )
+                memberships[channelId] = row
+            } else {
+                memberships[channelId] = ChatChannelMember(
+                    id: UUID(), channelId: channelId, userId: me,
+                    role: .member, joinedAt: nil, lastReadAt: Date(),
+                    mutedUntil: nil, pinnedAt: nil
+                )
+            }
+        } catch {
+            // Iter 7 §C.2 — silent CancellationError; nil 时不触发 banner。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
+        }
+    }
+
     // MARK: - Iter 7 Phase 1.2: Mute / Pin actions
 
     public func setMuted(channelId: UUID, until: Date?) async {
@@ -448,7 +495,8 @@ public class ChatListViewModel: ObservableObject {
                 memberships[channelId] = row
             }
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError; nil 时不触发 banner。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 
@@ -478,7 +526,8 @@ public class ChatListViewModel: ObservableObject {
             // 排序需要更新
             self.channels = applySort(channels)
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError; nil 时不触发 banner。
+            errorMessage = ErrorPresenter.userFacingMessage(error) ?? errorMessage
         }
     }
 

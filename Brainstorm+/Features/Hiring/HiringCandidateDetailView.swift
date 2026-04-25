@@ -60,6 +60,7 @@ public struct HiringCandidateDetailView: View {
                         onChanged()
                     }
                 }
+                .bsSheetStyle(.form)
             }
         }
         .task { await viewModel.load() }

@@ -72,7 +72,11 @@ public struct AdminUsersView: View {
                     .accessibilityLabel("创建用户")
                 }
             }
-            .searchable(text: $viewModel.searchText, prompt: "搜索姓名、邮箱、部门…")
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "搜索姓名、邮箱、部门…"
+            )
             .task {
                 await viewModel.load()
             }
@@ -87,6 +91,7 @@ public struct AdminUsersView: View {
                 ) {
                     Task { await viewModel.load() }
                 }
+                .bsSheetStyle(.form)
             }
             .sheet(item: $editTarget) { row in
                 AdminUserEditSheet(
@@ -97,6 +102,7 @@ public struct AdminUsersView: View {
                 ) {
                     Task { await viewModel.load() }
                 }
+                .bsSheetStyle(.form)
             }
             // Iter5 — 单一 confirmationDialog,以 enum payload 驱动两种危险操作。
             // presenting: 形态保证按钮闭包能拿到 strong-ref'd payload,即便

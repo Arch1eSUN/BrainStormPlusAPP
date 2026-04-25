@@ -29,7 +29,8 @@ public class NotificationListViewModel: ObservableObject {
                 .execute()
                 .value
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
         isLoading = false
     }
@@ -58,7 +59,8 @@ public class NotificationListViewModel: ObservableObject {
             }
             
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
     
@@ -79,7 +81,8 @@ public class NotificationListViewModel: ObservableObject {
                 .execute()
             await fetchNotifications()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 
@@ -96,7 +99,8 @@ public class NotificationListViewModel: ObservableObject {
                 .eq("id", value: notification.id)
                 .execute()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
             self.notifications = snapshot
         }
     }
@@ -120,7 +124,8 @@ public class NotificationListViewModel: ObservableObject {
                 
             await fetchNotifications()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
+            self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
         }
     }
 }

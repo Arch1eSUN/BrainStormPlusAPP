@@ -50,7 +50,11 @@ public struct HiringJobsView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .searchable(text: $viewModel.searchText, prompt: "搜索岗位/部门")
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索岗位/部门"
+        )
         .onChange(of: viewModel.searchText) { _, _ in
             Task { await viewModel.load() }
         }
@@ -69,6 +73,7 @@ public struct HiringJobsView: View {
             HiringJobEditSheet(existing: target.position) {
                 Task { await viewModel.load() }
             }
+            .bsSheetStyle(.form)
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }

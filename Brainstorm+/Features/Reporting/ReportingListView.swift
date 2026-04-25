@@ -17,7 +17,13 @@ public struct ReportingListView: View {
     /// iter6 §A.3 — 顶层 scope picker。"我的" 默认；"全员" 仅在
     /// canViewTeam = true 时露出（admin/HR）。
     @State private var scope: Scope = .mine
+    /// Iter 8 P2 — preserve scroll across tab swap (one position
+    /// shared across daily / weekly sub-tabs; that mirrors what users
+    /// expect — leaving the report tab and coming back to the same
+    /// scrolled-down day list).
+    @State private var scrollPosition = ScrollPosition()
 
+    @EnvironmentObject private var scrollStore: ScrollStateStore
     @Environment(SessionManager.self) private var sessionManager
 
     @State private var dailyEditTarget: DailyLogEditTarget?
@@ -71,6 +77,7 @@ public struct ReportingListView: View {
 
     private var coreContent: some View {
         ScrollView {
+            // Iter 8 P2 scrollPosition is bound at the ScrollView level.
             VStack(spacing: 16) {
                 if canViewTeam {
                     // iter6 §A.3 — 顶层 scope picker（我的 / 全员）。
@@ -92,6 +99,7 @@ public struct ReportingListView: View {
             }
             .padding(.vertical)
         }
+        .scrollPosition($scrollPosition)
         .navigationTitle("报告")
         .toolbar {
             // 新建按钮只在 "我的" tab 露出 —— 全员视图是只读聚合。
@@ -118,6 +126,24 @@ public struct ReportingListView: View {
         }
         .task {
             await viewModel.fetchReports()
+            // Iter 8 P1 §B.9 — realtime cross-device sync (Web ↔ iOS)
+            await viewModel.subscribeRealtime()
+        }
+        .onAppear {
+            // Iter 8 P2 — restore scroll position across tab swap.
+            let key = viewModel.selectedTab == .daily
+                ? ScrollStateStore.Key.reportingDaily
+                : ScrollStateStore.Key.reportingWeekly
+            if let saved = scrollStore.position(for: key) {
+                scrollPosition = saved
+            }
+        }
+        .onDisappear {
+            Task { await viewModel.unsubscribeRealtime() }
+            let key = viewModel.selectedTab == .daily
+                ? ScrollStateStore.Key.reportingDaily
+                : ScrollStateStore.Key.reportingWeekly
+            scrollStore.save(scrollPosition, for: key)
         }
         .task(id: scope) {
             // 切到 team 时延迟加载（首次切才 fetch）。
@@ -128,12 +154,14 @@ public struct ReportingListView: View {
                 viewModel: viewModel,
                 existingLog: target.log
             )
+            .bsSheetStyle(.form)
         }
         .sheet(item: $weeklyEditTarget) { target in
             WeeklyReportEditView(
                 viewModel: viewModel,
                 existingReport: target.report
             )
+            .bsSheetStyle(.form)
         }
         .confirmationDialog(
             "确认删除",
@@ -178,6 +206,8 @@ public struct ReportingListView: View {
     // ── 我的 (个人日报/周报) ──────────────────────────────────────
     @ViewBuilder
     private var mineContent: some View {
+        // Iter 7 §C.1 — skeleton-first via bsLoadingState。section 始终挂载,
+        // bsLoadingState 决定 redacted shimmer / 错误 / 空态 chrome。
         VStack(spacing: 16) {
             Picker("视图", selection: $viewModel.selectedTab) {
                 ForEach(ReportingViewModel.Tab.allCases) { tab in
@@ -187,15 +217,34 @@ public struct ReportingListView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
 
-            if viewModel.isLoading {
-                ProgressView()
-                    .padding(.top, 40)
-            } else {
+            Group {
                 switch viewModel.selectedTab {
                 case .daily:  dailySection
                 case .weekly: weeklySection
                 }
             }
+            .bsLoadingState(BsLoadingState.derive(
+                isLoading: viewModel.isLoading,
+                hasItems: hasMineItems,
+                errorMessage: nil,                              // banner 走 zyErrorBanner
+                emptySystemImage: viewModel.selectedTab == .daily ? "calendar.badge.clock" : "doc.text",
+                emptyTitle: viewModel.selectedTab == .daily ? "暂无日报" : "暂无周报",
+                emptyDescription: "点击右上角「+」新建一条"
+            ))
+            .animation(
+                .smooth(duration: 0.25),
+                value: viewModel.selectedTab == .daily
+                    ? viewModel.dailyLogs.count
+                    : viewModel.weeklyReports.count
+            )
+        }
+    }
+
+    /// hasItems 选择器 —— daily / weekly 各自的 list count。
+    private var hasMineItems: Bool {
+        switch viewModel.selectedTab {
+        case .daily:  return !viewModel.dailyLogs.isEmpty
+        case .weekly: return !viewModel.weeklyReports.isEmpty
         }
     }
 

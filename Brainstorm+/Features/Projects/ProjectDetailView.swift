@@ -144,6 +144,7 @@ public struct ProjectDetailView: View {
                         Task { await reload() }
                     }
                 )
+                .bsSheetStyle(.form)
             }
         }
         // 2.0: destructive confirmation. Mirrors Web `confirm('确定删除这个项目吗？')` intent

@@ -62,6 +62,7 @@ public struct AdminLeaveQuotaView: View {
         .sheet(isPresented: $showBatchSheet) {
             AdminLeaveQuotaBatchSheet()
                 .environmentObject(vm)
+                .bsSheetStyle(.form)
         }
         .task { await vm.load() }
         .refreshable { await vm.load() }

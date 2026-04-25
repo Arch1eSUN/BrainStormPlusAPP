@@ -195,6 +195,7 @@ public struct AdminHolidaysView: View {
             HolidayAddSheet { date, name, region, isPaid, isWorkDay in
                 Task { _ = await vm.add(date: date, name: name, region: region, isPaid: isPaid, isWorkDay: isWorkDay) }
             }
+            .bsSheetStyle(.form)
         }
         .task { await vm.load() }
         .refreshable { await vm.load() }

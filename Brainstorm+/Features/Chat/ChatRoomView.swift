@@ -40,8 +40,26 @@ public struct ChatRoomView: View {
     /// 系统当前 channel id 字符串(用于 AppStorage key)。
     private var draftKey: String { "chat.draft.\(viewModel.channel.id.uuidString)" }
 
+    /// Iter 8 polish — viewport tracker for chat_mark_read. Replaces the old
+    /// `.onAppear + Task.sleep(0.5s)` per-bubble pattern that fired marks
+    /// even when a bubble only briefly flashed past during fast scrolls.
+    /// 1.5s dwell threshold; entries dropped on `.onDisappear`.
+    @StateObject private var visibilityTracker: ChatVisibilityTracker
+
+    /// Iter 8 polish — which message's "(已编辑)" footer is currently showing
+    /// the edit-timestamp popover. Tap to toggle; nil hides.
+    @State private var editedFootnotePopoverId: UUID? = nil
+
     public init(viewModel: ChatRoomViewModel, titleOverride: String? = nil) {
-        _viewModel = StateObject(wrappedValue: viewModel)
+        let vm = viewModel
+        _viewModel = StateObject(wrappedValue: vm)
+        _visibilityTracker = StateObject(wrappedValue: ChatVisibilityTracker(
+            dwellThreshold: 1.5,
+            onMarkRead: { [weak vm] id in
+                guard let vm = vm else { return }
+                await vm.markMessageRead(id)
+            }
+        ))
         self.titleOverride = titleOverride
     }
 
@@ -100,7 +118,10 @@ public struct ChatRoomView: View {
             }
             await viewModel.bootstrap()
         }
-        .onDisappear { viewModel.teardown() }
+        .onDisappear {
+            viewModel.teardown()
+            visibilityTracker.reset()
+        }
         .onChange(of: viewModel.draft) { _, newValue in
             // 1) 即时写入 per-device AppStorage(无延迟,免丢)
             UserDefaults.standard.set(newValue, forKey: draftKey)
@@ -145,6 +166,7 @@ public struct ChatRoomView: View {
                 parent: parent,
                 currentUserId: viewModel.currentUserId
             )
+            .bsSheetStyle(.detail)
         }
     }
 
@@ -509,6 +531,16 @@ public struct ChatRoomView: View {
         }
     }
 
+    /// Iter 8 polish — popover timestamp formatter for "(已编辑)" tap. Uses
+    /// the same locale convention as ChatDateFormatter but always shows the
+    /// full date+time (popover is the disclosure surface, no need to elide).
+    private func editedTimestamp(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.setLocalizedDateFormatFromTemplate("yMMMdHHmm")
+        return f.string(from: date)
+    }
+
     // MARK: - Message bubble
 
     @ViewBuilder
@@ -595,19 +627,50 @@ public struct ChatRoomView: View {
                             .font(BsTypography.captionSmall)
                             .foregroundStyle(BsColor.inkMuted)
                     }
-                    if msg.editedAt != nil {
-                        Text("(已编辑)")
-                            .font(BsTypography.captionSmall)
-                            .foregroundStyle(BsColor.inkFaint)
+                    if let editedAt = msg.editedAt {
+                        // Iter 8 polish — smaller / lighter footer + tappable
+                        // popover with the exact edit timestamp. Animated
+                        // .opacity + .scale on first appear so the marker
+                        // doesn't pop in jarringly.
+                        Button {
+                            // Toggle popover for this bubble
+                            editedFootnotePopoverId = (editedFootnotePopoverId == msg.id) ? nil : msg.id
+                        } label: {
+                            Text("(已编辑)")
+                                .font(BsTypography.captionSmall)
+                                .foregroundStyle(BsColor.inkMuted)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .popover(isPresented: Binding(
+                            get: { editedFootnotePopoverId == msg.id },
+                            set: { if !$0 { editedFootnotePopoverId = nil } }
+                        )) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("于 \(editedTimestamp(editedAt)) 编辑")
+                                    .font(BsTypography.captionSmall)
+                                    .foregroundStyle(BsColor.ink)
+                            }
+                            .padding(.horizontal, BsSpacing.md)
+                            .padding(.vertical, BsSpacing.sm)
+                            .presentationCompactAdaptation(.popover)
+                        }
                     }
                 }
             }
             .onAppear {
-                // Iter 7 Phase 1.2 — 进入 viewport 即触发已读回执 (debounced VM-side)
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    await viewModel.markMessageRead(msg.id)
-                }
+                // Iter 8 polish — register with the visibility tracker. The
+                // tracker fires markMessageRead only after a 1.5s dwell, so
+                // momentum scrolls past a bubble no longer count as "read".
+                // Skipping own messages and already-read ones is enforced by
+                // the VM (idempotent), but the tracker also avoids
+                // re-firing within the same room session.
+                visibilityTracker.register(msg.id)
+            }
+            .onDisappear {
+                // Drops the dwell timer if the user scrolled the bubble out
+                // before the threshold elapsed.
+                visibilityTracker.unregister(msg.id)
             }
             // contextMenu —— 长按系统 v3 (docs/longpress-system.md)
             //
