@@ -307,6 +307,15 @@ public class ProjectDetailViewModel: ObservableObject {
         self.projectId = initialProject.id
     }
 
+    /// Lightweight init for callers that only have the project id (e.g. Dashboard
+    /// `ProjectRowCard` knows just the id from `ProjectSummary`). VM 拿到 id 后在
+    /// `.task { fetchDetail() }` 里 hydrate `project`，UI 显示 loading 直到加载完。
+    public init(client: SupabaseClient, projectId: UUID) {
+        self.client = client
+        self.project = nil
+        self.projectId = projectId
+    }
+
     /// Fetch the project detail with Web-aligned access semantics.
     ///
     /// Mirrors `fetchProjectDetail(projectId)` in `BrainStorm+-Web/src/lib/actions/projects.ts`:

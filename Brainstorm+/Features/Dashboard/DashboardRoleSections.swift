@@ -473,7 +473,12 @@ private struct ProjectRowCard: View {
     let accent: Color
 
     var body: some View {
-        NavigationLink(destination: ActionItemHelper.destination(for: .projects)) {
+        // Tap 这一行直接 push 到该 project 的 detail（一层 push，返回一次回 Dashboard）。
+        // 之前错误地跳到 ProjectListView 整个列表 → 用户必须再点一次 list 里的 item 才能
+        // 进 detail，回 Dashboard 要按 2 次返回 —— 用户报"几乎所有点击都跳项目管理"的真因。
+        NavigationLink(destination: ProjectDetailView(
+            viewModel: ProjectDetailViewModel(client: supabase, projectId: project.id)
+        )) {
             VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
                 HStack(spacing: BsSpacing.sm + 2) {
                     ZStack {
