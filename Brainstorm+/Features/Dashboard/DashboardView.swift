@@ -538,7 +538,7 @@ struct DashboardView: View {
     @ViewBuilder
     private var employeeWidgetSections: some View {
         Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
-        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot, pushModule: pushModule)) }
         Section {
             widgetRowDecor(
                 ActiveProjectsSection(
@@ -549,7 +549,7 @@ struct DashboardView: View {
             )
         }
         Section { widgetRowDecor(MyOkrSection(objectives: widgets.myOkr, pushModule: pushModule)) }
-        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity, pushModule: pushModule)) }
     }
 
     @ViewBuilder
@@ -568,7 +568,7 @@ struct DashboardView: View {
             )
         }
         Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
-        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot, pushModule: pushModule)) }
         Section {
             widgetRowDecor(
                 ActiveProjectsSection(
@@ -578,12 +578,12 @@ struct DashboardView: View {
                 )
             )
         }
-        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity, pushModule: pushModule)) }
     }
 
     @ViewBuilder
     private var superadminWidgetSections: some View {
-        Section { widgetRowDecor(ExecutiveKPIsCard(kpis: widgets.executiveKpis)) }
+        Section { widgetRowDecor(ExecutiveKPIsCard(kpis: widgets.executiveKpis, pushModule: pushModule)) }
         Section {
             widgetRowDecor(
                 HStack(spacing: BsSpacing.md) {
@@ -598,7 +598,7 @@ struct DashboardView: View {
             )
         }
         Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
-        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot, pushModule: pushModule)) }
         Section {
             widgetRowDecor(
                 ActiveProjectsSection(
@@ -608,7 +608,7 @@ struct DashboardView: View {
                 )
             )
         }
-        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity, pushModule: pushModule)) }
     }
 
     private var isManagerTier: Bool {

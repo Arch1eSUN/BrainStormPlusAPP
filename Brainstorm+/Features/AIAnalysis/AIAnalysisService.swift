@@ -130,7 +130,18 @@ public final class AIAnalysisService {
                     )
                     request.httpBody = try JSONEncoder().encode(payload)
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    let bytes: URLSession.AsyncBytes
+                    let response: URLResponse
+                    do {
+                        (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    } catch let urlErr as URLError {
+                        // 透传给上层 ErrorLocalizer.localize(URLError)，但同时打日志
+                        // 让真机调试时一眼能看到目标 URL（不会泄给用户）。
+                        #if DEBUG
+                        print("[AIAnalysisService] bytes(for:) failed url=\(analyzeURL.absoluteString) code=\(urlErr.code.rawValue) desc=\(urlErr.localizedDescription)")
+                        #endif
+                        throw urlErr
+                    }
 
                     guard let http = response as? HTTPURLResponse else {
                         throw AIAnalysisServiceError.invalidResponse
@@ -147,6 +158,11 @@ public final class AIAnalysisService {
                     }
 
                     var receivedTerminal = false
+                    // Last successfully decoded phase. Used as a fallback when
+                    // the server emits a phase string this client doesn't know
+                    // about (forward compat) — falling back to .initPhase here
+                    // would visibly rewind the progress bar each time.
+                    var lastKnownPhase: AIAnalysisPhase = .initPhase
 
                     for try await line in bytes.lines {
                         if Task.isCancelled { break }
@@ -160,7 +176,15 @@ public final class AIAnalysisService {
                         switch type {
                         case "progress":
                             let phaseRaw = raw["phase"] as? String ?? "INIT"
-                            let phase = AIAnalysisPhase(rawValue: phaseRaw) ?? .initPhase
+                            let phase: AIAnalysisPhase
+                            if let known = AIAnalysisPhase(rawValue: phaseRaw) {
+                                phase = known
+                                lastKnownPhase = known
+                            } else {
+                                // Unknown phase from server — keep current
+                                // phase rather than resetting to INIT.
+                                phase = lastKnownPhase
+                            }
                             let message = raw["message"] as? String ?? ""
                             let percent = (raw["progress"] as? Int) ?? Int((raw["progress"] as? Double) ?? 0)
                             continuation.yield(.progress(AIAnalysisProgress(phase: phase, message: message, percent: percent)))

@@ -118,11 +118,16 @@ public struct TaskListView: View {
         //   • search drawer 仍紧贴 NavBar,但不再有 large title gap
         //   • 顶部直接接 statsRow + segmented filter,内容密度回正
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(
-            text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "搜索任务..."
-        )
+        // Bug-fix v6 (kanban 顶部 80pt 空白 / 2026-04-25):
+        // 之前 .searchable 无条件挂在 coreContent 上 —— 即使切到 kanban,
+        // NavBar 仍然给搜索 drawer 预留空间 (~52pt automatic drawer + 安全区
+        // padding),累计在 ScrollView 顶端浮出大片空白。kanban 不需要搜索
+        // (横向看板按状态分列, 搜索没有合理 UX),改成只在 list 模式挂
+        // .searchable,kanban 模式直接走光板 NavBar,顶部无 drawer 预留。
+        .modifier(TaskSearchableModifier(
+            isEnabled: viewMode == .list,
+            text: $viewModel.searchText
+        ))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 projectFilterMenu
@@ -410,6 +415,10 @@ public struct TaskListView: View {
                 LazyHStack(alignment: .top, spacing: BsSpacing.md) {
                     ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { column in
                         kanbanColumn(for: column, width: columnWidth)
+                            // 列高 = 视口高度 - top/bottom padding,让 sticky
+                            // header 有可滚动区域;不限高的话 LazyVStack 会
+                            // 撑到 intrinsic 高度,sticky 失效。
+                            .frame(height: max(proxy.size.height - BsSpacing.lg * 2, 320))
                     }
                 }
                 // .scrollTargetLayout marks each LazyHStack child as a paging
@@ -417,8 +426,10 @@ public struct TaskListView: View {
                 // those targets so each fling stops on a whole column.
                 .scrollTargetLayout()
                 .padding(.horizontal, sidePad)
-                .padding(.top, BsSpacing.md)
-                .padding(.bottom, BsSpacing.xxl)
+                // 顶部 padding 收成 sm —— kanban 不挂 .searchable,NavBar 直接
+                // 紧接列卡片,与 list 模式 List 内联 statsRow 视觉重量对等。
+                .padding(.top, BsSpacing.sm)
+                .padding(.bottom, BsSpacing.lg)
             }
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
@@ -429,74 +440,93 @@ public struct TaskListView: View {
     private func kanbanColumn(for column: TaskModel.TaskStatus, width: CGFloat) -> some View {
         let tasks = viewModel.filteredTasks.filter { $0.status == column }
 
-        VStack(alignment: .leading, spacing: BsSpacing.md) {
-            // ── Flat section header —— Apple Reminders 风格 ──────────
-            //   • Title (sectionTitle, .title3 semibold)
-            //   • 右侧 count pill,tint 取列状态色
-            //   • 无外框 / 无背景,直接坐在 page background 上
-            HStack(alignment: .firstTextBaseline, spacing: BsSpacing.sm) {
-                Text(column.cnLabel)
-                    .font(BsTypography.sectionTitle)
-                    .foregroundColor(BsColor.ink)
-
-                Text("\(tasks.count)")
-                    .font(BsTypography.captionSmall.weight(.semibold))
-                    .foregroundColor(column.tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(column.tint.opacity(0.14), in: Capsule())
-
-                Spacer()
-            }
-            .padding(.horizontal, BsSpacing.xs)
-
-            // ── Card stack —— 使用 LazyVStack 不嵌 ScrollView ────────
-            LazyVStack(spacing: BsSpacing.sm) {
-                if tasks.isEmpty {
-                    kanbanEmptyColumn
-                } else {
-                    ForEach(tasks) { task in
-                        KanbanNativeCard(task: task)
-                            .draggable(task.id.uuidString) {
-                                KanbanNativeCard(task: task)
-                                    .frame(width: width - 8)
-                                    .opacity(0.9)
-                            }
-                            .contextMenu {
-                                ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
-                                    Button {
-                                        Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
-                                    } label: {
-                                        Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
+        // ── 列容器 = surfacePrimary card (Things 3 area 风) ─────────
+        // v5 native化:每列包成独立 card —— surfacePrimary 背 +
+        // BsRadius.lg + BsShadow.xs 抬层,跟 web Trello-style 平面看板拉开
+        // 距离。column header pinned 到 LazyVStack 顶部,纵向滚动时 sticky。
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: BsSpacing.sm, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    if tasks.isEmpty {
+                        kanbanEmptyColumn
+                    } else {
+                        ForEach(tasks) { task in
+                            KanbanNativeCard(task: task)
+                                .draggable(task.id.uuidString) {
+                                    KanbanNativeCard(task: task)
+                                        .frame(width: width - 8)
+                                        .opacity(0.9)
+                                }
+                                .contextMenu {
+                                    ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
+                                        Button {
+                                            Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
+                                        } label: {
+                                            Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
+                                        }
+                                        .disabled(s == task.status)
                                     }
-                                    .disabled(s == task.status)
+                                    Divider()
+                                    Button {
+                                        Task { await viewModel.toggleTaskCompletion(task.id) }
+                                    } label: {
+                                        Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        pendingDeleteTask = task
+                                    } label: {
+                                        Label("删除任务", systemImage: "trash")
+                                    }
                                 }
-                                Divider()
-                                Button {
-                                    Task { await viewModel.toggleTaskCompletion(task.id) }
-                                } label: {
-                                    Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    pendingDeleteTask = task
-                                } label: {
-                                    Label("删除任务", systemImage: "trash")
-                                }
-                            }
+                        }
                     }
+                } header: {
+                    // ── Sticky column header —— pinned, Things 3 area 风 ─
+                    //   • Title (sectionTitle, .title3 semibold)
+                    //   • 右侧 count pill,tint 取列状态色
+                    //   • surfacePrimary 背景同列容器,确保滚动时 header
+                    //     不会被卡片透出来
+                    HStack(alignment: .firstTextBaseline, spacing: BsSpacing.sm) {
+                        Text(column.cnLabel)
+                            .font(BsTypography.sectionTitle)
+                            .foregroundColor(BsColor.ink)
+
+                        Text("\(tasks.count)")
+                            .font(BsTypography.captionSmall.weight(.semibold))
+                            .foregroundColor(column.tint)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(column.tint.opacity(0.14), in: Capsule())
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, BsSpacing.md)
+                    .padding(.top, BsSpacing.md)
+                    .padding(.bottom, BsSpacing.sm)
+                    .background(BsColor.surfacePrimary)
                 }
             }
-            .dropDestination(for: String.self) { ids, _ in
-                guard let first = ids.first, let uuid = UUID(uuidString: first) else { return false }
-                guard let task = viewModel.tasks.first(where: { $0.id == uuid }) else { return false }
-                guard task.status != column else { return false }
-                Haptic.success()
-                Task { await viewModel.updateTaskStatus(task: task, newStatus: column) }
-                return true
-            }
+            .padding(.horizontal, BsSpacing.sm)
+            .padding(.bottom, BsSpacing.md)
         }
+        .scrollIndicators(.hidden)
         .frame(width: width, alignment: .top)
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .bsShadow(BsShadow.xs)
+        .dropDestination(for: String.self) { ids, _ in
+            guard let first = ids.first, let uuid = UUID(uuidString: first) else { return false }
+            guard let task = viewModel.tasks.first(where: { $0.id == uuid }) else { return false }
+            guard task.status != column else { return false }
+            Haptic.success()
+            Task { await viewModel.updateTaskStatus(task: task, newStatus: column) }
+            return true
+        }
     }
 
     /// 空列占位 —— 无边框, SF symbol + 文案居中, Apple Reminders 风格。
@@ -827,5 +857,29 @@ private struct KanbanNativeCard: View {
                 .stroke(BsColor.borderSubtle, lineWidth: 0.5)
         )
         .bsShadow(BsShadow.xs)
+    }
+}
+
+// MARK: - Conditional .searchable modifier
+//
+// SwiftUI 的 .searchable 是直接挂在 View 上的固定 modifier —— 没有原生
+// "条件挂" 写法 (条件 if 会让 SwiftUI 觉得 view identity 改变,引发整树
+// 重建)。用 ViewModifier 包一层,在 isEnabled = false 时直接返回 content,
+// 让 NavBar 不再为 search drawer 预留空间 —— 修 kanban 顶部 80pt 空白。
+
+private struct TaskSearchableModifier: ViewModifier {
+    let isEnabled: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.searchable(
+                text: $text,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "搜索任务..."
+            )
+        } else {
+            content
+        }
     }
 }

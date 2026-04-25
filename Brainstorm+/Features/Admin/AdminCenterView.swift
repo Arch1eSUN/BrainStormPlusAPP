@@ -30,7 +30,7 @@ public struct AdminCenterView: View {
         case geofence
         case attendanceExemption
         case leaveQuota
-        case broadcast
+        case teamReports
         case aiSettings
         case audit
 
@@ -43,7 +43,7 @@ public struct AdminCenterView: View {
             case .geofence: return "geofence"
             case .attendanceExemption: return "attendanceExemption"
             case .leaveQuota: return "leaveQuota"
-            case .broadcast: return "broadcast"
+            case .teamReports: return "teamReports"
             case .aiSettings: return "aiSettings"
             case .audit: return "audit"
             }
@@ -110,8 +110,8 @@ public struct AdminCenterView: View {
                 AdminAttendanceExemptionView()
             case .leaveQuota:
                 AdminLeaveQuotaView()
-            case .broadcast:
-                AdminBroadcastView(isEmbedded: true)
+            case .teamReports:
+                AdminTeamReportsView(isEmbedded: true)
             case .aiSettings:
                 AdminAISettingsView()
             case .audit:
@@ -281,13 +281,16 @@ public struct AdminCenterView: View {
                     divider()
                 }
 
-                if viewModel.canAssignPrivileges {
+                // 广播通知 — 已合并进"公告通知"(发布公告时勾选"同时推送给所有人")。
+                // 入口收敛：只保留单一"公告"功能位面，避免用户困惑。
+
+                if viewModel.canManagePeople || viewModel.canEnterAdmin {
                     row(
-                        icon: "megaphone.fill",
-                        color: .pink,
-                        title: "广播通知",
-                        subtitle: "向全员推送系统消息",
-                        route: .broadcast
+                        icon: "doc.text.magnifyingglass",
+                        color: BsColor.brandMint,
+                        title: "全员日报周报",
+                        subtitle: "查看团队成员的日报和周报",
+                        route: .teamReports
                     )
                     divider()
                 }
@@ -360,7 +363,11 @@ public struct AdminCenterView: View {
             .padding(.vertical, BsSpacing.md + 2)
             .padding(.horizontal, BsSpacing.lg)
             .contentShape(Rectangle())
-            .bsInteractiveFeel(.row)
+            // Bug-fix(滑动难滑): 移除 .bsInteractiveFeel(.row) —— 它内部用
+            // simultaneousGesture(DragGesture(minimumDistance:0)) 抢占父
+            // ScrollView 的 drag 跟踪,导致管理模块列表滑动被吃掉,且每次手指
+            // 接触就触发 haptic.light()。Button 自带的按压反馈已足够,UX 上
+            // 也消除了"轻触即震"的问题。
         }
         .buttonStyle(.plain)
     }

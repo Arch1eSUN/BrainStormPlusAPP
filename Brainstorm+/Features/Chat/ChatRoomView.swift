@@ -400,90 +400,112 @@ public struct ChatRoomView: View {
                         .foregroundStyle(BsColor.inkMuted)
                 }
             }
-            // contextMenu —— 长按系统设计 (docs/longpress-system.md)
+            // contextMenu —— 长按系统 v3 (docs/longpress-system.md)
             //
-            //   • 顶部：快速 emoji 反应 Menu（仅未撤回时；对齐 iMessage / Slack）
-            //   • 中部：mutation actions —— 回复 / 复制 / @提及 / 转发
-            //     （回复在最前是因为它是 chat 里频次最高的动作）
-            //   • 底部：destructive —— 撤回（仅 own-message + 2 分钟窗口）
+            // iOS 26 `.contextMenu(menuItems:preview:)`:
+            //   • preview: 放大版气泡 —— 系统自动做 zoom-in 弹动画
+            //   • menuItems: 顶部横向 emoji reaction picker(参考 Slack iOS / iMessage)
+            //                + Divider + 标准动作列表
             //
-            // 撤回 = 数据库 mutation（chat_withdraw_message RPC，2 分钟窗口）
-            // 一并替代了 "删除" —— chat_messages 没有 hard-delete 路径，
-            // 删除统一走撤回（Web 行为亦同）。
+            // 横向 reaction picker 取代旧 v2 的 "添加表情" Menu submenu ——
+            // 一次手势 + 一次点击就能投表情,体感跟 iMessage `tapback` 一致。
             //
-            // 转发 = 暂以 "拷贝带 attribution 的引用块" 形式实现 ——
-            // 「转发 · <time>: <content>」入剪贴板，用户切到目标频道粘贴。
+            // 撤回 = 数据库 mutation(chat_withdraw_message RPC,2 分钟窗口)
+            // 一并替代了 "删除" —— chat_messages 没有 hard-delete 路径,
+            // 删除统一走撤回(Web 行为亦同)。
+            //
+            // 转发 = 暂以 "拷贝带 attribution 的引用块" 形式实现。
             // 完整 channel-picker 转发待新 sprint。
-            .contextMenu {
-                if !msg.isWithdrawn {
-                    // —— 顶部：快速 emoji 反应
-                    Menu {
-                        ForEach(Self.quickEmojis, id: \.self) { emoji in
-                            Button {
-                                Task { await viewModel.toggleReaction(messageId: msg.id, emoji: emoji) }
+            .contextMenu(
+                menuItems: {
+                    if !msg.isWithdrawn {
+                        // —— 顶部:横向 emoji reaction picker(Slack iOS pattern)
+                        // SwiftUI 不支持把任意 View 塞进 contextMenu menuItems,
+                        // 但 iOS 26 允许 controls (Picker / 小按钮组)。我们
+                        // 把 6 个常用 emoji 摊成 6 个独立按钮 + 1 个 "更多" Menu;
+                        // 系统 16pt 图标 + 紧密布局让它视觉上接近 Slack 的横向条。
+                        ControlGroup {
+                            ForEach(Self.quickEmojis, id: \.self) { emoji in
+                                Button {
+                                    Task { await viewModel.toggleReaction(messageId: msg.id, emoji: emoji) }
+                                } label: {
+                                    Text(emoji)
+                                }
+                            }
+                            Menu {
+                                ForEach(Self.extendedEmojis, id: \.self) { emoji in
+                                    Button {
+                                        Task { await viewModel.toggleReaction(messageId: msg.id, emoji: emoji) }
+                                    } label: {
+                                        Text(emoji)
+                                    }
+                                }
                             } label: {
-                                Text("\(emoji)")
+                                Label("更多", systemImage: "plus")
                             }
                         }
-                    } label: {
-                        Label("添加表情", systemImage: "face.smiling")
-                    }
+                        .controlGroupStyle(.compactMenu)
 
-                    // —— 中部：mutation 优先
-                    Button {
-                        // Haptic removed: contextMenu 选项过密震动
-                        replyingTo = msg
-                    } label: {
-                        Label("回复", systemImage: "arrowshape.turn.up.left")
-                    }
+                        Divider()
 
-                    if !msg.content.isEmpty {
+                        // —— 中部:mutation 优先
                         Button {
-                            UIPasteboard.general.string = msg.content
-                            Haptic.light()
-                        } label: {
-                            Label("复制文本", systemImage: "doc.on.doc")
-                        }
-                    }
-
-                    // 仅别人的消息显示 @提及 / 转发
-                    if !isCurrentUser {
-                        Button {
-                            // 在 input 前置 "@" 并设 replyingTo —— 用户接着输入
-                            // 即可完成 mention（display-name 的 profiles 拉取
-                            // 待后续 sprint，此版本以 "@" 占位 + reply 锁人）。
-                            // Haptic removed: contextMenu 选项过密震动
                             replyingTo = msg
-                            if !messageText.hasPrefix("@") {
-                                messageText = "@" + messageText
+                        } label: {
+                            Label("回复", systemImage: "arrowshape.turn.up.left")
+                        }
+
+                        if !msg.content.isEmpty {
+                            Button {
+                                UIPasteboard.general.string = msg.content
+                                Haptic.light()
+                            } label: {
+                                Label("复制文本", systemImage: "doc.on.doc")
                             }
-                        } label: {
-                            Label("@提及此人", systemImage: "at")
                         }
 
-                        Button {
-                            // 拷贝引用块到剪贴板。Attachment 不随转发走 ——
-                            // Supabase public bucket URL 转发风险按 Web 默认行为。
-                            let stamp = ChatDateFormatter.format(msg.createdAt)
-                            let body = msg.content.isEmpty ? "[非文本消息]" : msg.content
-                            UIPasteboard.general.string = "「转发\(stamp.isEmpty ? "" : " · " + stamp)」\n\(body)"
-                            Haptic.success()
-                        } label: {
-                            Label("转发（复制引用）", systemImage: "arrowshape.turn.up.right")
-                        }
-                    }
+                        // 仅别人的消息显示 @提及 / 转发
+                        if !isCurrentUser {
+                            Button {
+                                replyingTo = msg
+                                if !messageText.hasPrefix("@") {
+                                    messageText = "@" + messageText
+                                }
+                            } label: {
+                                Label("@提及此人", systemImage: "at")
+                            }
 
-                    // —— 底部：destructive
-                    if isCurrentUser && canWithdraw(msg) {
-                        Button(role: .destructive) {
-                            Haptic.warning() // destructive 真触发：消息撤回
-                            Task { await viewModel.withdrawMessage(msg.id) }
-                        } label: {
-                            Label("撤回", systemImage: "arrow.uturn.backward")
+                            Button {
+                                let stamp = ChatDateFormatter.format(msg.createdAt)
+                                let body = msg.content.isEmpty ? "[非文本消息]" : msg.content
+                                UIPasteboard.general.string = "「转发\(stamp.isEmpty ? "" : " · " + stamp)」\n\(body)"
+                                Haptic.success()
+                            } label: {
+                                Label("转发(复制引用)", systemImage: "arrowshape.turn.up.right")
+                            }
+                        }
+
+                        // —— 底部:destructive
+                        if isCurrentUser && canWithdraw(msg) {
+                            Divider()
+                            Button(role: .destructive) {
+                                Haptic.warning()
+                                Task { await viewModel.withdrawMessage(msg.id) }
+                            } label: {
+                                Label("撤回", systemImage: "arrow.uturn.backward")
+                            }
                         }
                     }
+                },
+                preview: {
+                    // iOS 26 zoom-in preview —— 同一气泡 body,放在白色背景里
+                    // 让系统的"放大动画 + 半透明遮罩"自然生效。这里不能用
+                    // Spacer/Container 占满全屏,否则 preview 会撑到屏幕边。
+                    enlargedPreview(msg: msg, isCurrentUser: isCurrentUser)
+                        .padding(BsSpacing.lg)
+                        .frame(maxWidth: 320)
                 }
-            }
+            )
 
             if !isCurrentUser { Spacer(minLength: 50) }
         }
@@ -584,7 +606,58 @@ public struct ChatRoomView: View {
     }
 
     // Phase 4.5: 与 Web `QUICK_EMOJIS` (page.tsx:70) 对齐。
-    private static let quickEmojis: [String] = ["👍", "❤️", "😂", "🎉", "🤔", "👀"]
+    // Long-press v3:横向 reaction picker 直接展示这 6 个,触达成本最低。
+    private static let quickEmojis: [String] = ["👍", "❤️", "😂", "😮", "🎉", "🔥"]
+
+    // Long-press v3:"+ 更多" submenu —— 给少见但常用的 reaction 留扩展位。
+    // 跟 iMessage tapback 6 + Slack 1-row picker 的"主+扩展"分层一致。
+    private static let extendedEmojis: [String] = [
+        "🤔", "👀", "🙌", "🙏", "👏", "💯",
+        "💡", "✅", "❌", "⚠️", "✨", "💪"
+    ]
+
+    /// Long-press v3 preview —— `.contextMenu(menuItems:preview:)` 触发时
+    /// 系统自动用此 view 做 zoom-in 弹动画(参考 iMessage)。同样的气泡
+    /// body,套白色 surfacePrimary 背景增强 "突出" 感。
+    @ViewBuilder
+    private func enlargedPreview(msg: ChatMessage, isCurrentUser: Bool) -> some View {
+        VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: BsSpacing.xs) {
+            if !msg.content.isEmpty {
+                Text(ChatContentHighlighter.attributed(
+                    msg.content,
+                    mentionColor: isCurrentUser ? BsColor.brandCoral : BsColor.brandAzure
+                ))
+                    .font(BsTypography.body)
+                    .padding(.horizontal, BsSpacing.lg)
+                    .padding(.vertical, BsSpacing.sm + 2)
+                    .glassEffect(
+                        isCurrentUser
+                            ? .regular.tint(BsColor.brandAzure.opacity(0.18))
+                            : .regular,
+                        in: bubbleShape(isCurrentUser: isCurrentUser)
+                    )
+                    .foregroundStyle(BsColor.ink)
+            }
+
+            // 附件展示用缩略形态保留,放在 preview 里能让用户更直观看到
+            // "我要对哪条消息操作"。
+            ForEach(msg.attachments, id: \.url) { att in
+                attachmentView(att)
+            }
+
+            let timeText = ChatDateFormatter.format(msg.createdAt)
+            if !timeText.isEmpty {
+                Text(timeText)
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
+            }
+        }
+        .padding(BsSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .fill(BsColor.surfacePrimary)
+        )
+    }
 
     /// Phase 4.5: 呈现 reaction 芯片 —— 每个 emoji 是一个可 tap 的 chip，显示
     /// 计数；当前用户已投票的 chip 高亮。对齐 Web page.tsx:772-790。

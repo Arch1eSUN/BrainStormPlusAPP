@@ -8,6 +8,9 @@ public struct AnnouncementsListView: View {
     @State private var showCreate: Bool = false
     @State private var pendingDelete: Announcement?
 
+    /// Long-press v3:作者头像长按 → 弹 UserPreviewSheet。
+    @State private var profilePreview: UserPreviewData? = nil
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -45,6 +48,9 @@ public struct AnnouncementsListView: View {
             .refreshable { await viewModel.load() }
             .sheet(isPresented: $showCreate) {
                 AnnouncementCreateView(viewModel: viewModel)
+            }
+            .sheet(item: $profilePreview) { user in
+                UserPreviewSheet(user: user)
             }
             .confirmationDialog(
                 "确认删除",
@@ -238,6 +244,20 @@ public struct AnnouncementsListView: View {
         }
         .frame(width: 36, height: 36)
         .accessibilityLabel(item.profiles?.fullName ?? "用户")
+        // Long-press v3:作者头像长按 → 半屏 profile sheet。
+        .contextMenu {
+            if let profile = item.profiles, let id = profile.id {
+                Button {
+                    profilePreview = UserPreviewData(
+                        id: id,
+                        fullName: profile.fullName,
+                        avatarUrl: profile.avatarUrl
+                    )
+                } label: {
+                    Label("查看资料", systemImage: "person.crop.square.filled.and.at.rectangle")
+                }
+            }
+        }
     }
 
     @ViewBuilder

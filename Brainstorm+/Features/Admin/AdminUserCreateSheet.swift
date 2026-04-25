@@ -148,7 +148,7 @@ public struct AdminUserCreateSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(submitting ? "提交中…" : "创建") {
-                        Haptic.medium()
+                        // Haptic removed: 用户反馈管理模块按钮震动过密
                         Task { await submit() }
                     }
                     .disabled(submitting || fullName.isEmpty || displayName.isEmpty || email.isEmpty || password.count < 6)

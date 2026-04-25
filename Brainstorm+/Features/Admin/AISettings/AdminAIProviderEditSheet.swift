@@ -96,7 +96,7 @@ public struct AdminAIProviderEditSheet: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button(viewModel.isSaving ? "保存中…" : "保存") {
-                    Haptic.medium()
+                    // Haptic removed: 用户反馈管理模块按钮震动过密
                     Task { await save() }
                 }
                 .disabled(viewModel.isSaving || !hasChanges)

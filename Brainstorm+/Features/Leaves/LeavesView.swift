@@ -133,13 +133,10 @@ public struct LeavesView: View {
             } else if viewModel.balances.isEmpty {
                 EmptyBalanceCard()
             } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: BsSpacing.md),
-                        GridItem(.flexible(), spacing: BsSpacing.md),
-                    ],
-                    spacing: BsSpacing.md
-                ) {
+                // 2026-04-25 — 事假无额度,VM 现在只返回 1 张「调休」卡。
+                // 单卡用整行 VStack 渲染,不走 2-列 LazyVGrid (避免右侧空格)。
+                // 若以后政策恢复多种额度,再回退到 LazyVGrid。
+                VStack(spacing: BsSpacing.md) {
                     ForEach(viewModel.balances) { balance in
                         BalanceCardView(balance: balance)
                     }
@@ -150,25 +147,14 @@ public struct LeavesView: View {
 
     @ViewBuilder
     private var balanceSkeletonGrid: some View {
-        // Phase 25.c — 公司政策只有调休 + 事假两类，骨架数量跟 VM 组装的卡片
-        // 数一致（2 张）。
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: BsSpacing.md),
-                GridItem(.flexible(), spacing: BsSpacing.md),
-            ],
-            spacing: BsSpacing.md
-        ) {
-            ForEach(0..<2, id: \.self) { _ in
+        // 2026-04-25 — 事假无额度,只剩「调休」1 张卡。骨架占位 1 张,占满整行。
+        RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
+            .fill(BsColor.surfacePrimary)
+            .frame(height: 120)
+            .overlay(
                 RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
-                    .fill(BsColor.surfacePrimary)
-                    .frame(height: 120)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
-                            .stroke(BsColor.borderSubtle, lineWidth: 1)
-                    )
-            }
-        }
+                    .stroke(BsColor.borderSubtle, lineWidth: 1)
+            )
     }
 
     // MARK: - History

@@ -1,15 +1,42 @@
 import SwiftUI
 import Combine
 
+// ══════════════════════════════════════════════════════════════════
+// AttendanceView —— 用户自己的考勤主页（重新设计 v1.5）
+//
+// v1.5 ("Apple Health daily summary" pivot, 2026-04-25)
+//
+// 5 轮迭代后用户仍然觉得 hero 下方信息太挤、有重复。本轮把 v1.4
+// 的 "Timeline card + Status footer + 单独 Week strip 段" 三段
+// 合并成 一张 "Today + Week" content card：
+//
+//   ┌── HERO（保留 Liquid-Fill）──────────────────────┐
+//   │ statusPill · 8h 12m · subtitle · CTA           │
+//   └────────────────────────────────────────────────┘
+//
+//   ┌── BsContentCard ────────────────────────────────┐
+//   │ 上班 09:02  ─────[ 8h 12m pill ]─────  下班 18:14│
+//   │                                                 │
+//   │ ── 本周 ─────────────────────────────────────── │
+//   │  ▇  ▆  ▅  ▄  ▃    ·  ·                          │
+//   │  一 二 三 四 五   六 日                          │
+//   └─────────────────────────────────────────────────┘
+//
+// 关键删减（vs v1.4）：
+//   • 去掉 "今日时间线" 卡标题 + statusFooter —— hero 的 statusPill 已表达
+//   • 去掉 timeline header 的 "8h 12m" digital readout —— hero heroNumber
+//     已是同一个数字的 48pt 正文，二次显示纯属噪音
+//   • 把 punch endpoints 收紧到一行 + 中央 duration pill,liquid-fill 进度
+//     已经在 hero 表达，timeline 不再二次画 progressFraction
+//   • 周条改成 Apple Fitness Activity 风格的 hours bar chart —— 直接消化
+//     Attendance.workHours 数据，带"本周累计/工作日完成数"副标
+//
+// 嵌入模式（isEmbedded=true）：去掉 NavigationStack 包壳，由父级提供
+// ══════════════════════════════════════════════════════════════════
+
 public struct AttendanceView: View {
     @StateObject private var viewModel = AttendanceViewModel()
-    @State private var isPulsing = false
-    /// Drives the heartbeat ring behind the clock button while the app is
-    /// waiting on either geolocation resolution or a server round-trip.
-    /// Mirrors the Web `acquiring | in-fence` gating on the outer rings.
-    @State private var isAwaitingSuccess = false
 
-    // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
     public init(isEmbedded: Bool = false) {
@@ -25,363 +52,249 @@ public struct AttendanceView: View {
     }
 
     private var coreContent: some View {
-        ZStack {
-            // Ambient 弥散底 —— Azure/Mint blobs 漂在暖米纸底上。
-            // AttendanceView 常被作为嵌入视图（Dashboard widget），
-            // 但即便嵌入，多一层 ambient 也不会干扰父级（blobs 透明度 ≤ 0.15）。
-            BsColor.pageBackground.ignoresSafeArea()
-                .allowsHitTesting(false)
+        ScrollView {
+            VStack(spacing: BsSpacing.lg) {
+                // ─── 1. Signature Hero —— 液体打卡卡 ─────────────────
+                AttendanceHeroCard(
+                    viewModel: viewModel,
+                    isEmbedded: true,
+                    todayState: nil
+                )
 
-            VStack(spacing: BsSpacing.lg + 4) {
-                header
-                locationCard
-                primaryButton
-                messageBanner
-                summaryGrid
+                // ─── 2. 今日 + 本周 合并卡 ──────────────────────────
+                summaryCard
             }
-            .padding(BsSpacing.xl)
+            .padding(.horizontal, BsSpacing.lg)
+            .padding(.top, BsSpacing.md)
+            .padding(.bottom, BsSpacing.xxl)
         }
-        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xxl + 4, style: .continuous))
-        .bsShadow(BsShadow.md)
-        .onAppear { isPulsing = true }
-        // Heartbeat ring is live while loading OR immediately after a
-        // fence is acquired but before success ripple fires.
-        .onChange(of: viewModel.isLoading) { _, newValue in
-            isAwaitingSuccess = newValue
+        .scrollIndicators(.hidden)
+        .background(BsColor.pageBackground.ignoresSafeArea())
+        .navigationTitle("考勤")
+        .navigationBarTitleDisplayMode(.large)
+        .refreshable {
+            await viewModel.loadToday()
+            await viewModel.loadThisWeek()
+        }
+        .task(id: "attendance-load") {
+            await viewModel.loadToday()
+            await viewModel.loadThisWeek()
         }
     }
 
-    // MARK: - Header
+    // MARK: - Combined summary card (Today punch strip + Week activity bars)
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                Text("每日打卡")
-                    .font(BsTypography.sectionTitle)
+    private var summaryCard: some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.lg) {
+                punchStripRow
+                Divider()
+                    .background(BsColor.borderSubtle)
+                weekActivitySection
+            }
+        }
+    }
+
+    // MARK: - Today punch strip
+    //
+    // 一行：上班时间 ─── [duration pill] ─── 下班时间
+    //   • 未打卡        → 空 endpoints + dashed line
+    //   • clockedIn     → 左 endpoint Azure 实，右 endpoint 镂空（脉动）+ 实时累计 pill
+    //   • done          → 双端 endpoints 实 Mint，pill 显示总工时
+
+    @ViewBuilder
+    private var punchStripRow: some View {
+        HStack(alignment: .center, spacing: BsSpacing.sm) {
+            punchEndpoint(label: "上班", time: viewModel.today?.clockIn, alignment: .leading)
+            punchTrack
+            punchEndpoint(label: "下班", time: viewModel.today?.clockOut, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func punchEndpoint(label: String, time: Date?, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(label)
+                .font(BsTypography.label)
+                .foregroundStyle(BsColor.inkMuted)
+                .textCase(.uppercase)
+            Text(Self.fmtTime(time))
+                .font(.system(.title3, design: .rounded, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(time == nil ? BsColor.inkFaint : BsColor.ink)
+                .contentTransition(.numericText())
+        }
+        .frame(minWidth: 56, alignment: alignment == .leading ? .leading : .trailing)
+    }
+
+    /// 中央 track：dashed/solid line + duration pill 浮于中央
+    @ViewBuilder
+    private var punchTrack: some View {
+        ZStack {
+            // line —— 未打卡 dashed，已打卡渐变
+            GeometryReader { geo in
+                let mid = geo.size.height / 2
+                if viewModel.clockState == .ready {
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: mid))
+                        p.addLine(to: CGPoint(x: geo.size.width, y: mid))
+                    }
+                    .stroke(
+                        BsColor.inkFaint.opacity(0.35),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 5])
+                    )
+                } else {
+                    LinearGradient(
+                        colors: [BsColor.brandAzure.opacity(0.55), trackTone.opacity(0.55)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(height: 2)
+                    .clipShape(Capsule())
+                    .position(x: geo.size.width / 2, y: mid)
+                }
+            }
+            .frame(height: 24)
+
+            // 中央 duration pill
+            durationPill
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var durationPill: some View {
+        HStack(spacing: 4) {
+            Image(systemName: durationIcon)
+                .font(.system(.caption2, weight: .semibold))
+            Text(durationText)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(trackTone)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(BsColor.surfacePrimary)
+                .shadow(color: trackTone.opacity(0.18), radius: 6, y: 1)
+        )
+        .overlay(
+            Capsule().stroke(trackTone.opacity(0.25), lineWidth: 0.5)
+        )
+    }
+
+    private var durationIcon: String {
+        switch viewModel.clockState {
+        case .ready:     return "circle.dashed"
+        case .clockedIn: return "hourglass"
+        case .done:      return "checkmark"
+        }
+    }
+
+    private var durationText: String {
+        switch viewModel.clockState {
+        case .ready:
+            return "未开始"
+        case .clockedIn:
+            if let inDate = viewModel.today?.clockIn {
+                return Self.fmtDuration(Date().timeIntervalSince(inDate))
+            }
+            return "进行中"
+        case .done:
+            if let h = viewModel.today?.workHours {
+                return Self.fmtHoursCompact(h)
+            }
+            if let inDate = viewModel.today?.clockIn,
+               let outDate = viewModel.today?.clockOut {
+                return Self.fmtDuration(outDate.timeIntervalSince(inDate))
+            }
+            return "已完成"
+        }
+    }
+
+    private var trackTone: Color {
+        switch viewModel.clockState {
+        case .ready:     return BsColor.inkFaint
+        case .clockedIn: return BsColor.brandAzure
+        case .done:      return BsColor.brandMint
+        }
+    }
+
+    // MARK: - Week activity (Apple Fitness 风格 bar chart)
+
+    @ViewBuilder
+    private var weekActivitySection: some View {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("本周")
+                    .font(BsTypography.cardTitle)
                     .foregroundStyle(BsColor.ink)
-
-                Text(Date().formatted(date: .complete, time: .omitted))
-                    .font(BsTypography.bodySmall)
+                Spacer(minLength: 0)
+                Text(weekSubtitle)
+                    .font(BsTypography.captionSmall)
+                    .monospacedDigit()
                     .foregroundStyle(BsColor.inkMuted)
             }
 
-            Spacer()
-
-            fencePill
+            WeekActivityBars(days: weekActivityDays)
+                .frame(height: 84)
         }
     }
 
-    private var fencePill: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(fenceTone)
-                .frame(width: 8, height: 8)
-                .scaleEffect(isPulsing ? 1.2 : 0.8)
-                // intentional: breathing pulse 1s loop —— 不换成 BsMotion.smooth（2s 节奏会太慢）
-                .animation(.easeInOut(duration: 1).repeatForever(), value: isPulsing)
-
-            Text(fenceLabel)
-                .font(BsTypography.captionSmall)
-                .foregroundStyle(fenceTone)
-        }
-        .padding(.horizontal, BsSpacing.sm + 2)
-        .padding(.vertical, 6)
-        // Fusion glass pill —— tone-tinted liquid glass
-        .glassEffect(
-            .regular.tint(fenceTone.opacity(0.20)),
-            in: Capsule()
-        )
+    /// "本周已完成 4/5 · 累计 32.5h" 副标
+    private var weekSubtitle: String {
+        let completed = weekActivityDays.prefix(5).filter { $0.workHours > 0 }.count
+        let totalHours = weekActivityDays.reduce(0) { $0 + $1.workHours }
+        let totalStr: String = {
+            guard totalHours > 0 else { return "未累计" }
+            let whole = Int(totalHours)
+            let mins = Int(round((totalHours - Double(whole)) * 60))
+            if mins == 0 { return "累计 \(whole)h" }
+            return "累计 \(whole)h \(mins)m"
+        }()
+        return "\(completed)/5 个工作日 · \(totalStr)"
     }
 
-    // MARK: - Location card
+    /// 7-day cadence bars from viewModel.thisWeek (Mon-Sun).
+    /// 高度 = workHours / 8h，封顶 1.0；今日高亮，过去未打卡 = 空白 baseline。
+    private var weekActivityDays: [WeekActivityDay] {
+        let cal = Calendar(identifier: .gregorian)
+        let today = Date()
+        let weekday = cal.component(.weekday, from: today)
+        let mondayOffset = (weekday + 5) % 7
+        let labels = ["一", "二", "三", "四", "五", "六", "日"]
 
-    private var locationCard: some View {
-        ZStack {
-            // Fusion glass envelope —— 取代 solid surfaceSecondary + hairline。
-            Color.clear
-                .frame(height: 140)
-                .glassEffect(
-                    .regular,
-                    in: RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
-                )
+        return (0..<7).map { idx in
+            let dayDiff = idx - mondayOffset
+            let isToday = (dayDiff == 0)
+            let isFuture = dayDiff > 0
+            let date = cal.date(byAdding: .day, value: dayDiff, to: today) ?? today
+            let iso = Self.isoDate(date)
+            let record = viewModel.thisWeek[iso]
 
-            ZStack {
-                Circle()
-                    .stroke(BsColor.brandAzure.opacity(0.2), lineWidth: 1)
-                    .frame(width: 80, height: 80)
-                    .scaleEffect(isPulsing ? 1.5 : 1.0)
-                    .opacity(isPulsing ? 0 : 1)
-
-                Circle()
-                    .fill(BsColor.brandAzure.opacity(0.1))
-                    .frame(width: 60, height: 60)
-                    .scaleEffect(isPulsing ? 1.2 : 1.0)
-                    .opacity(isPulsing ? 0.3 : 1)
-
-                Image(systemName: "location.fill")
-                    .foregroundStyle(BsColor.brandAzure)
-                    .font(.system(.title3))
-            }
-            .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isPulsing)
-
-            VStack {
-                Spacer()
-                HStack {
-                    Text(viewModel.currentLocationName ?? "正在获取位置…")
-                        .font(BsTypography.captionSmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                    Spacer()
-                }
-                .padding(BsSpacing.md)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous))
-    }
-
-    // MARK: - Button
-
-    private var primaryButton: some View {
-        ZStack {
-            // Heartbeat outer rings — only while actively awaiting the
-            // server or geolocation. Two layered circles with staggered
-            // durations (mirrors the Framer Motion `scale: [0.9, 1.08,
-            // 0.9]` on clock-section.tsx L188-200).
-            if isAwaitingSuccess && !viewModel.justSucceeded {
-                Capsule()
-                    .stroke(buttonTone.opacity(0.35), lineWidth: 2)
-                    .scaleEffect(isAwaitingSuccess ? 1.08 : 1.0)
-                    .opacity(isAwaitingSuccess ? 0 : 0.6)
-                    // intentional: heartbeat outer ring 1.2s loop（对齐 Web Framer Motion scale keyframes）
-                    .animation(
-                        .easeInOut(duration: 1.2).repeatForever(autoreverses: false),
-                        value: isAwaitingSuccess
-                    )
-                    .frame(height: 56)
-
-                Capsule()
-                    .fill(buttonTone.opacity(0.18))
-                    .scaleEffect(isAwaitingSuccess ? 1.12 : 1.0)
-                    .opacity(isAwaitingSuccess ? 0 : 0.4)
-                    // intentional: heartbeat inner ring 1.6s loop（和 1.2s ring 错相）
-                    .animation(
-                        .easeInOut(duration: 1.6).repeatForever(autoreverses: false),
-                        value: isAwaitingSuccess
-                    )
-                    .frame(height: 56)
-            }
-
-            // Success ripple — one-shot green burst when the server
-            // confirms the punch. VM auto-clears `justSucceeded` after
-            // 1.2s so this doesn't require a matched `withAnimation`.
-            if viewModel.justSucceeded {
-                Capsule()
-                    .fill(BsColor.success.opacity(0.35))
-                    .scaleEffect(viewModel.justSucceeded ? 1.4 : 0.9)
-                    .opacity(viewModel.justSucceeded ? 0 : 0.7)
-                    .animation(.easeOut(duration: 0.8), value: viewModel.justSucceeded)
-                    .frame(height: 56)
-            }
-
-            // Fusion primary CTA —— Liquid Glass tinted capsule with
-            // tone-aware haptic（Azure=上班 / Warning=下班 / Faint=已完成）。
-            Button(action: {
-                switch viewModel.clockState {
-                case .ready: Haptic.medium()
-                case .clockedIn: Haptic.rigid()
-                case .done: Haptic.soft()
-                }
-                Task { await viewModel.punch() }
-            }) {
-                HStack(spacing: BsSpacing.sm) {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(buttonTone)
-                    } else {
-                        Image(systemName: buttonIcon)
-                            .font(.system(.body))
+            // 计算 workHours：优先取 server 的 workHours，否则按 clockIn/clockOut 补算；
+            // 进行中（today + clockedIn）按当前 elapsed 估算，让今日 bar 实时跟随。
+            let computedHours: Double = {
+                if let h = record?.workHours, h > 0 { return h }
+                if let inD = record?.clockIn {
+                    if let outD = record?.clockOut {
+                        return max(0, outD.timeIntervalSince(inD)) / 3600
                     }
-                    Text(buttonLabel)
-                        .font(Font.custom("Outfit-Bold", size: 16, relativeTo: .body))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, BsSpacing.lg)
-                .glassEffect(
-                    .regular.tint(buttonTone.opacity(buttonEnabled ? 0.35 : 0.15)).interactive(),
-                    in: Capsule()
-                )
-                .foregroundStyle(buttonEnabled ? buttonTone : BsColor.inkFaint)
-                .shadow(color: buttonEnabled ? buttonTone.opacity(0.3) : .clear, radius: 8, y: 4)
-            }
-            .disabled(!buttonEnabled)
-            .buttonStyle(SquishyButtonStyle())
-        }
-    }
-
-    private var buttonEnabled: Bool {
-        viewModel.hasLocation && !viewModel.isLoading && !viewModel.isInitializing && viewModel.clockState != .done
-    }
-
-    private var buttonLabel: String {
-        if viewModel.isInitializing { return "加载中…" }
-        if viewModel.isLoading { return "处理中…" }
-        switch viewModel.clockState {
-        case .ready: return viewModel.hasLocation ? "上班打卡" : "等待定位"
-        case .clockedIn: return "下班打卡"
-        case .done: return "今日已完成"
-        }
-    }
-
-    private var buttonIcon: String {
-        if viewModel.clockState == .done { return "checkmark.circle.fill" }
-        if viewModel.clockState == .clockedIn { return "rectangle.portrait.and.arrow.right" }
-        return viewModel.hasLocation ? "hand.tap.fill" : "lock.fill"
-    }
-
-    private var buttonTone: Color {
-        if !buttonEnabled { return BsColor.inkFaint.opacity(0.3) }
-        switch viewModel.clockState {
-        case .ready: return BsColor.brandAzure
-        case .clockedIn: return BsColor.warning
-        case .done: return BsColor.inkFaint.opacity(0.3)
-        }
-    }
-
-    // MARK: - Message banner
-
-    @ViewBuilder
-    private var messageBanner: some View {
-        if let msg = viewModel.successMessage {
-            HStack(spacing: BsSpacing.xs) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(.caption))
-                Text(msg)
-                    .font(BsTypography.caption)
-            }
-            .foregroundStyle(BsColor.success)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        } else if let err = viewModel.errorMessage {
-            // 分辨错误类型：定位 / 网络 / 其他 —— 让用户知道下一步该做什么
-            HStack(spacing: BsSpacing.xs) {
-                Image(systemName: errorIcon(for: err))
-                    .font(.system(.caption, weight: .semibold))
-                Text(err)
-                    .font(BsTypography.caption)
-                    .lineLimit(2)
-                Spacer(minLength: 0)
-                Button {
-                    // Haptic removed: 用户反馈辅助按钮过密震动
-                    Task { await viewModel.punch() }
-                } label: {
-                    Text("重试")
-                        .font(BsTypography.captionSmall.weight(.semibold))
-                        .foregroundStyle(BsColor.brandAzure)
-                }
-                .buttonStyle(.plain)
-            }
-            .foregroundStyle(BsColor.danger)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    private func errorIcon(for message: String) -> String {
-        if message.contains("定位") || message.contains("位置") || message.contains("围栏") {
-            return "location.slash"
-        }
-        if message.contains("网络") || message.contains("超时") || message.contains("连接") {
-            return "wifi.exclamationmark"
-        }
-        return "exclamationmark.triangle.fill"
-    }
-
-    // MARK: - Summary grid (上班 / 下班 / 工时 / 状态)
-
-    private var summaryGrid: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
-            HStack(spacing: BsSpacing.sm) {
-                summaryCell(label: "上班", value: Self.fmtTime(viewModel.today?.clockIn))
-                summaryCell(label: "下班", value: Self.fmtTime(viewModel.today?.clockOut))
-                summaryCell(label: "工时", value: Self.fmtHours(viewModel.today?.workHours))
-                statusSummaryCell
-            }
-
-            // Secondary row for work_hours + field_work indicator. Kept
-            // lightweight so it doesn't disrupt the 4-col grid above.
-            if viewModel.today != nil {
-                HStack(spacing: BsSpacing.sm) {
-                    if let hours = viewModel.today?.workHours {
-                        Text("工时: \(Self.fmtHoursInline(hours))")
-                            .font(BsTypography.captionSmall)
-                            .foregroundStyle(BsColor.inkMuted)
+                    if isToday {
+                        return max(0, Date().timeIntervalSince(inD)) / 3600
                     }
-                    if viewModel.today?.isFieldWork == true {
-                        StatusChip(label: "外勤", tone: .blue, icon: "location.fill")
-                    }
-                    Spacer(minLength: 0)
                 }
-            }
-        }
-    }
+                return 0
+            }()
 
-    private var statusSummaryCell: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.xs) {
-            Text("状态")
-                .font(BsTypography.captionSmall)
-                .foregroundStyle(BsColor.inkMuted)
-                .textCase(.uppercase)
-            StatusChip.attendance(status: viewModel.today?.status)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.sm + 2)
-        // Fusion glass stat tile —— 对齐 Dashboard widget vocabulary
-        .glassEffect(
-            .regular,
-            in: RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-        )
-    }
-
-    private func summaryCell(label: String, value: String, tone: Color = BsColor.ink) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.xs) {
-            Text(label)
-                .font(BsTypography.captionSmall)
-                .foregroundStyle(BsColor.inkMuted)
-                .textCase(.uppercase)
-            Text(value)
-                .font(Font.custom("Outfit-Bold", size: 14, relativeTo: .subheadline))
-                .foregroundStyle(tone)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(BsSpacing.sm + 2)
-        // Fusion glass stat tile —— 对齐 Dashboard widget vocabulary
-        .glassEffect(
-            .regular,
-            in: RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-        )
-    }
-
-    // MARK: - Fence tone/label
-
-    private var fenceLabel: String {
-        switch viewModel.fenceState {
-        case .idle: return viewModel.hasLocation ? "可打卡" : "等待定位"
-        case .acquiring: return "正在获取位置…"
-        case .inFence: return "已在围栏内"
-        case .outOfFence: return "围栏外，请靠近"
-        case .error: return "定位或网络失败"
-        }
-    }
-
-    private var fenceTone: Color {
-        switch viewModel.fenceState {
-        case .idle: return viewModel.hasLocation ? BsColor.brandAzure : BsColor.warning
-        case .acquiring: return BsColor.brandAzure
-        case .inFence: return BsColor.success
-        case .outOfFence: return BsColor.warning
-        case .error: return BsColor.danger
+            return WeekActivityDay(
+                id: iso,
+                shortLabel: labels[idx],
+                workHours: computedHours,
+                isToday: isToday,
+                isInFuture: isFuture
+            )
         }
     }
 
@@ -395,20 +308,162 @@ public struct AttendanceView: View {
         return f.string(from: date)
     }
 
-    private static func fmtHours(_ h: Double?) -> String {
-        guard let h else { return "—" }
-        // 极端值保护：负数 / NaN / 超过 24h 都按合理上限回退
+    private static func fmtHoursCompact(_ h: Double) -> String {
         guard h.isFinite, h >= 0 else { return "—" }
         let clamped = min(h, 99.9)
         let whole = Int(clamped)
         let mins = Int(round((clamped - Double(whole)) * 60))
-        // round up 导致 mins == 60 时的进位
-        if mins == 60 { return "\(whole + 1)h0m" }
-        return "\(whole)h\(mins)m"
+        if mins == 60 { return "\(whole + 1)h 0m" }
+        return "\(whole)h \(mins)m"
     }
 
-    /// Inline variant used in the secondary row, e.g. `工时: 8.5h`.
-    private static func fmtHoursInline(_ h: Double) -> String {
-        String(format: "%.1fh", h)
+    private static func fmtDuration(_ seconds: TimeInterval) -> String {
+        let safe = max(0, seconds)
+        let h = Int(safe) / 3600
+        let m = (Int(safe) % 3600) / 60
+        return "\(h)h \(m)m"
     }
+
+    private static let isoDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static func isoDate(_ date: Date) -> String {
+        isoDayFormatter.string(from: date)
+    }
+}
+
+// MARK: - WeekActivityDay model
+//
+// 比 WeekDayCadence 多带 workHours 数据；保留为 fileprivate（非 design-system
+// 候选 —— 仅 Attendance 自己消费，不需要进 Shared/DesignSystem）。
+
+private struct WeekActivityDay: Identifiable, Hashable {
+    let id: String
+    let shortLabel: String
+    let workHours: Double
+    let isToday: Bool
+    let isInFuture: Bool
+}
+
+// MARK: - WeekActivityBars
+//
+// Apple Fitness Activity-strip 灵感的 7 列竖 bar：
+//   • 高度 = workHours / 8h（封顶 1.0），有最小可见高度（>0 时至少 8% 满）
+//   • 颜色：今日 → Azure 实色 + 顶端 highlight；过去 → Mint；未来 → 空白圆角
+//   • Reduce Motion 下进入动画自动跳过
+
+private struct WeekActivityBars: View {
+    let days: [WeekActivityDay]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasAppeared: Bool = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let columnWidth = geo.size.width / CGFloat(max(1, days.count))
+            let barWidth = min(columnWidth - 8, 18)
+            let chartHeight = geo.size.height - 18  // 18pt 让出底部 weekday label
+            let barAreaHeight = max(8, chartHeight)
+
+            HStack(spacing: 0) {
+                ForEach(days) { day in
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .bottom) {
+                            // 背景 track（满高灰）
+                            Capsule()
+                                .fill(BsColor.inkFaint.opacity(0.10))
+                                .frame(width: barWidth, height: barAreaHeight)
+
+                            // 实际 bar
+                            Capsule()
+                                .fill(barFill(for: day))
+                                .frame(
+                                    width: barWidth,
+                                    height: hasAppeared ? barHeight(for: day, total: barAreaHeight) : 0
+                                )
+                                .overlay(alignment: .top) {
+                                    // 顶端 highlight hairline —— 给"已完成"的 bar
+                                    // 一抹 Apple Fitness 同款光泽
+                                    if barHeight(for: day, total: barAreaHeight) > 6 {
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.45))
+                                            .frame(width: barWidth, height: 2)
+                                            .padding(.top, 1)
+                                    }
+                                }
+                        }
+                        .frame(height: barAreaHeight, alignment: .bottom)
+
+                        Text(day.shortLabel)
+                            .font(.custom("Inter-Medium", size: 11, relativeTo: .caption2))
+                            .foregroundStyle(
+                                day.isToday ? BsColor.brandAzure : BsColor.inkMuted
+                            )
+                    }
+                    .frame(width: columnWidth)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(a11yLabel(for: day))
+                }
+            }
+        }
+        .onAppear {
+            if reduceMotion {
+                hasAppeared = true
+            } else {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.78).delay(0.06)) {
+                    hasAppeared = true
+                }
+            }
+        }
+    }
+
+    private func barHeight(for day: WeekActivityDay, total: CGFloat) -> CGFloat {
+        guard !day.isInFuture, day.workHours > 0 else { return 0 }
+        let fraction = min(1.0, day.workHours / 8.0)
+        let minVisible: CGFloat = 6
+        return max(minVisible, CGFloat(fraction) * total)
+    }
+
+    private func barFill(for day: WeekActivityDay) -> LinearGradient {
+        if day.isInFuture {
+            return LinearGradient(colors: [Color.clear, Color.clear], startPoint: .top, endPoint: .bottom)
+        }
+        if day.isToday {
+            return LinearGradient(
+                colors: [BsColor.brandAzure, BsColor.brandAzure.opacity(0.78)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        if day.workHours > 0 {
+            return LinearGradient(
+                colors: [BsColor.brandMint, BsColor.brandMint.opacity(0.72)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        return LinearGradient(
+            colors: [BsColor.inkFaint.opacity(0.18), BsColor.inkFaint.opacity(0.18)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private func a11yLabel(for day: WeekActivityDay) -> String {
+        if day.isInFuture { return "周\(day.shortLabel)，未到" }
+        if day.workHours <= 0 { return "周\(day.shortLabel)，未打卡" }
+        let whole = Int(day.workHours)
+        let mins = Int(round((day.workHours - Double(whole)) * 60))
+        let prefix = day.isToday ? "今天，周\(day.shortLabel)" : "周\(day.shortLabel)"
+        return "\(prefix)，工作 \(whole) 小时 \(mins) 分"
+    }
+}
+
+#Preview {
+    AttendanceView()
 }

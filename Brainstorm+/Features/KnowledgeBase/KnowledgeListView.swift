@@ -47,6 +47,9 @@ public struct KnowledgeListView: View {
     /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
     @State private var pushTarget: KnowledgeArticle? = nil
 
+    /// Long-press v3:删除走 hoisted confirmationDialog,与 swipe action 共享 state。
+    @State private var pendingDelete: KnowledgeArticle? = nil
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -160,6 +163,26 @@ public struct KnowledgeListView: View {
             photoItems = []
         }
         .zyErrorBanner($viewModel.errorMessage)
+        // Long-press v3:hoisted confirmationDialog —— 与 swipe action 共享
+        // 同一 pendingDelete state,避免每行单独挂 dialog 互相覆盖。
+        .confirmationDialog(
+            "确认删除",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { article in
+            Button("删除", role: .destructive) {
+                Haptic.error()
+                Task { await viewModel.deleteArticle(article) }
+                pendingDelete = nil
+            }
+            Button("取消", role: .cancel) { pendingDelete = nil }
+        } message: { article in
+            Text("将删除文档「\(article.title)」,该操作无法撤销。")
+        }
     }
 
     // MARK: - Content
@@ -236,34 +259,49 @@ public struct KnowledgeListView: View {
                         .padding(.horizontal)
                 }
                 .buttonStyle(.plain)
+                // Long-press v3 (longpress-system §v3 知识库):
+                //   • 顶部 mutation: 打开 / 复制链接(若有附件) / 编辑或重命名(admin)
+                //   • 底部 destructive: 删除 → 走 hoisted confirmationDialog
                 .contextMenu {
-                    if isAdmin {
-                        Button("编辑") {
-                            // Haptic removed: contextMenu 选项过密震动
-                            editTarget = .edit(article)
-                        }
-                        Button("删除", role: .destructive) {
-                            // 真删触发：destructive confirm 用 warning
-                            Haptic.warning()
-                            Task { await viewModel.deleteArticle(article) }
-                        }
+                    Button {
+                        pushTarget = article
+                    } label: {
+                        Label("打开", systemImage: "arrow.up.forward.app")
                     }
                     if let urlString = article.fileUrl, let url = URL(string: urlString) {
                         Link(destination: url) {
                             Label("打开附件", systemImage: "paperclip")
+                        }
+                        Button {
+                            UIPasteboard.general.string = urlString
+                            Haptic.light()
+                        } label: {
+                            Label("复制链接", systemImage: "doc.on.doc")
+                        }
+                    }
+                    if isAdmin {
+                        Button {
+                            editTarget = .edit(article)
+                        } label: {
+                            Label("重命名 / 编辑", systemImage: "pencil")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            Haptic.warning()
+                            pendingDelete = article
+                        } label: {
+                            Label("删除", systemImage: "trash")
                         }
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if isAdmin {
                         Button(role: .destructive) {
-                            // Haptic removed: swipe action 系统自带反馈
-                            Task { await viewModel.deleteArticle(article) }
+                            pendingDelete = article
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
                         Button {
-                            // Haptic removed: swipe action 系统自带反馈
                             editTarget = .edit(article)
                         } label: {
                             Label("编辑", systemImage: "pencil")

@@ -44,6 +44,9 @@ public struct ApprovalCenterView: View {
     @State private var pendingAction: PendingAction?
     @Namespace private var zoomNamespace
 
+    /// Long-press v3:申请人头像长按 → 弹 UserPreviewSheet。
+    @State private var profilePreview: UserPreviewData? = nil
+
     private let client: SupabaseClient
     public let isEmbedded: Bool
 
@@ -129,6 +132,9 @@ public struct ApprovalCenterView: View {
         }
         .sheet(item: $pendingAction) { action in
             commentSheet(for: action)
+        }
+        .sheet(item: $profilePreview) { user in
+            UserPreviewSheet(user: user)
         }
         .zyErrorBanner($viewModel.errorMessage)
         .refreshable {
@@ -219,9 +225,14 @@ public struct ApprovalCenterView: View {
         }
     }
 
-    /// Mirrors `ActivityFeedView` chip pattern (lines 95-113): selected
-    /// uses brand tint at 10% opacity, brand text color; unselected is
-    /// transparent with muted ink. Subtle and Apple-native — no glass.
+    /// 2026-04-25 — chip 升级为 iOS 26 原生 Liquid Glass:
+    ///   • 高度 ≥ 44pt(Apple HIG 触控目标),水平 padding 16pt,字号 14pt
+    ///   • 选中态用 `.glassEffect(.regular.tint(BsColor.brandAzure)
+    ///     .interactive(), in: Capsule())`,与项目其他 glass 标签一致
+    ///     (TeamAttendanceView / ApprovalQueueView)
+    ///   • 未选中也走 `.glassEffect(.regular.interactive(), in: Capsule())`
+    ///     提供 Liquid Glass 的折射感,而不是干瘪的纯色 capsule
+    ///   • 禁用态走 plain capsule,避免 glass 闪烁误导
     @ViewBuilder
     private func chip(
         label: String,
@@ -231,25 +242,33 @@ public struct ApprovalCenterView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(label)
-                    .font(BsTypography.caption.weight(isSelected ? .semibold : .medium))
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
                 if let count, count > 0 {
                     Text("\(count)")
-                        .font(.caption2)
-                        .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.inkFaint)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(
+                            isSelected ? Color.white.opacity(0.95) : BsColor.inkFaint
+                        )
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(
+                                isSelected
+                                ? Color.white.opacity(0.22)
+                                : BsColor.inkFaint.opacity(0.12)
+                            )
+                        )
                 }
             }
-            .padding(.horizontal, BsSpacing.md)
-            .padding(.vertical, BsSpacing.xs + 2)
-            .background(
-                RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
-                    .fill(isSelected ? BsColor.brandAzure.opacity(0.1) : Color.clear)
-            )
+            .padding(.horizontal, BsSpacing.md + 4)  // 16pt
+            .frame(minHeight: 44)
             .foregroundStyle(
                 isDisabled ? BsColor.inkFaint
-                : (isSelected ? BsColor.brandAzure : BsColor.inkMuted)
+                : (isSelected ? Color.white : BsColor.ink)
             )
+            .modifier(ChipGlassBackground(isSelected: isSelected, isDisabled: isDisabled))
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
@@ -369,7 +388,9 @@ public struct ApprovalCenterView: View {
     @ViewBuilder
     private func queueRow(_ row: ApprovalListRow, kind: ApprovalQueueKind, index: Int) -> some View {
         NavigationLink(value: row.id) {
-            QueueRowView(row: row)
+            QueueRowView(row: row, onAvatarLongPress: {
+                profilePreview = makePreview(from: row.requesterProfile)
+            })
                 .matchedTransitionSource(id: row.id, in: zoomNamespace)
         }
         .bsAppearStagger(index: index)
@@ -637,6 +658,19 @@ public struct ApprovalCenterView: View {
         return "\(typeLabel) · \(name)"
     }
 
+    /// Long-press v3:把申请人 ApprovalActorProfile 提为 UserPreviewSheet
+    /// 能消化的 UserPreviewData。ApprovalActorProfile.id 是 UUID? —— 没 id
+    /// 时返回 nil(sheet 不弹),避免 UserPreviewSheet 拿到无效 id。
+    private func makePreview(from actor: ApprovalActorProfile?) -> UserPreviewData? {
+        guard let actor, let id = actor.id else { return nil }
+        return UserPreviewData(
+            id: id,
+            fullName: actor.fullName,
+            avatarUrl: actor.avatarUrl,
+            department: actor.department
+        )
+    }
+
     // MARK: - Lifecycle
 
     private func applyInitialDefaultsIfNeeded() async {
@@ -719,13 +753,27 @@ public struct ApprovalCenterView: View {
 
 /// Queue row — shown in 我审 mode. Apple-Mail-density: 36pt avatar +
 /// name + meta line + status chip on the right. Tap pushes detail.
+///
+/// Long-press v3: avatar 长按 → 触发 onAvatarLongPress(申请人 profile)
+/// 走外层 UserPreviewSheet。caller 用 PreviewRequest 装 ApprovalActorProfile
+/// → UserPreviewData 转换。
 private struct QueueRowView: View {
     let row: ApprovalListRow
+    var onAvatarLongPress: (() -> Void)? = nil
 
     var body: some View {
         BsContentCard(padding: .none) {
             HStack(alignment: .top, spacing: BsSpacing.md) {
                 avatar
+                    .contextMenu {
+                        if onAvatarLongPress != nil {
+                            Button {
+                                onAvatarLongPress?()
+                            } label: {
+                                Label("查看资料", systemImage: "person.crop.square.filled.and.at.rectangle")
+                            }
+                        }
+                    }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(row.requesterProfile?.fullName ?? "未知用户")
@@ -963,6 +1011,40 @@ private struct MineRowView: View {
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f
     }()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MARK: - Chip glass background
+// ══════════════════════════════════════════════════════════════════
+
+/// iOS 26 Liquid Glass capsule for ApprovalCenterView 的分类 chip。
+///
+/// 选中态走 `.glassEffect(.regular.tint(BsColor.brandAzure).interactive(),
+/// in: Capsule())` —— 与 TeamAttendanceView / ApprovalQueueView 的玻璃标签
+/// 同款,品牌蓝玻璃。未选中走纯 `.glassEffect(.regular.interactive(),
+/// in: Capsule())`,保留 Liquid Glass 的折射 + 触控反馈但不染色。禁用态
+/// 走静态半透明 capsule,避免在"无审批权限"占位时玻璃闪烁。
+private struct ChipGlassBackground: ViewModifier {
+    let isSelected: Bool
+    let isDisabled: Bool
+
+    func body(content: Content) -> some View {
+        if isDisabled {
+            content.background(
+                Capsule().fill(BsColor.inkFaint.opacity(0.10))
+            )
+        } else if isSelected {
+            content.glassEffect(
+                .regular.tint(BsColor.brandAzure).interactive(),
+                in: Capsule()
+            )
+        } else {
+            content.glassEffect(
+                .regular.interactive(),
+                in: Capsule()
+            )
+        }
+    }
 }
 
 #Preview {

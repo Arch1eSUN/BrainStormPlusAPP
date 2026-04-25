@@ -61,6 +61,12 @@ public class TeamAttendanceViewModel: ObservableObject {
     @Published public var selectedDate: Date = Date()
     @Published public var departmentFilter: String? = nil
 
+    /// 防止初始化阶段重复 fire load —— 避免 NavigationLink eager destination
+    /// + .task 多次触发的双重拉取浪费请求。
+    private var hasLoadedOnce: Bool = false
+    /// 当前进行中的 load Task —— 避免 race 时数据被旧响应覆盖
+    private var inFlight: Task<Void, Never>?
+
     public var allDepartments: [String] {
         Array(Set(rows.compactMap { $0.profile.department?.isEmpty == false ? $0.profile.department : nil })).sorted()
     }
@@ -92,9 +98,44 @@ public class TeamAttendanceViewModel: ObservableObject {
 
     public init(client: SupabaseClient = supabase) {
         self.client = client
+        // v1.5 修复"全员考勤经常需要手动刷新才出现"——
+        // 原因复盘：BsCommandPalette 用 NavigationLink(destination:) eager 构造，
+        // VM @StateObject 在 palette 列表 render 时就 init 一次。.task(id:) 后来
+        // 在真正 push 出来的可见实例上是否 fire 是 SwiftUI 私有 lifecycle 决定 ——
+        // 实测在 iOS 18+ NavStack 下 phantom 实例的 .task 会被 cancel，但 SwiftUI
+        // 在某些 view-identity 复用路径上 .task(id:) 不会重 fire。
+        //
+        // 现在策略：VM init 立刻 kick off 一次 prefetch。即使 phantom 实例被丢，
+        // SwiftUI 也会保留同一个 @StateObject（identity 复用），rows 数据被
+        // populate 后真正可见的实例首帧就有数据。幂等：performLoad 内部 cancel
+        // 旧 inFlight，多次 fire 不会浪费请求。
+        Task { [weak self] in
+            await self?.load()
+        }
+    }
+
+    /// 首次进入：如果还没拉过、且 rows 为空，才触发 load。
+    /// 与 init 的 prefetch 配合作为兜底 —— 如果 prefetch 因 auth/network
+    /// 还没就绪而 silent fail，view appear 时这条会再补一发。
+    public func loadIfNeeded() async {
+        if hasLoadedOnce && !rows.isEmpty { return }
+        await load()
     }
 
     public func load() async {
+        // Cancel 旧请求 —— 防止用户快速切日期时旧响应覆盖新响应
+        inFlight?.cancel()
+        let task = Task { @MainActor [weak self] in
+            // 显式 Void 返回 —— optional chaining 会让闭包推断成 () ?,
+            // 与 inFlight: Task<Void, Never> 类型不兼容,显式包一层修。
+            await self?.performLoad()
+            return ()
+        }
+        inFlight = task
+        await task.value
+    }
+
+    private func performLoad() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -111,6 +152,8 @@ public class TeamAttendanceViewModel: ObservableObject {
                 .execute()
                 .value
 
+            try Task.checkCancellation()
+
             // 2. 拉指定日期所有打卡记录
             let attendances: [Attendance] = try await client
                 .from("attendance")
@@ -118,6 +161,8 @@ public class TeamAttendanceViewModel: ObservableObject {
                 .eq("date", value: dateStr)
                 .execute()
                 .value
+
+            try Task.checkCancellation()
 
             // 3. 合并：一个 profile 最多一条 attendance
             let attMap: [UUID: Attendance] = Dictionary(uniqueKeysWithValues: attendances.map { ($0.userId, $0) })
@@ -127,6 +172,9 @@ public class TeamAttendanceViewModel: ObservableObject {
             }
 
             self.rows = merged
+            self.hasLoadedOnce = true
+        } catch is CancellationError {
+            // 用户切了日期；下一次 load 会正常补上
         } catch {
             #if DEBUG
             print("[TeamAttendanceVM] load failed — type: \(type(of: error)), detail:", error)

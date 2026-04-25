@@ -7,12 +7,27 @@ public struct AppEnvironment {
     public static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNjYWljbWpwcmtxbGtwYWdibmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyODU1MDgsImV4cCI6MjA4OTg2MTUwOH0.6K6yKMkkH9D-XsZmMdBk4tRsl5X6b3V4uVmYLP_lkaQ"
 
     // BrainStorm+ Web API base URL. 用于调用 Next.js 侧 API route（mobile/attendance、AI chat 等）。
-    // DEBUG 连本地 `next dev`；RELEASE 走 zyoffice.me 自定义域名（Vercel 托管）。
+    //
+    // RELEASE：固定走 zyoffice.me 自定义域名（Vercel 托管）。
+    // DEBUG：默认也走 zyoffice.me，避免开发者忘开 `next dev` 时
+    //        AI 分析等模块直接报 "could not connect to the server"。
+    //        若需调本地服务器，运行前在 scheme env 设
+    //          BS_USE_LOCAL_DEV=1
+    //        或在 UserDefaults 写 `BSUseLocalDev = true` (`defaults write` /
+    //        Settings) 即可切到 http://127.0.0.1:3000。
     public static let webAPIBaseURL: URL = {
+        let production = URL(string: "https://www.zyoffice.me")!
         #if DEBUG
-        return URL(string: "http://127.0.0.1:3000")!
+        let env = ProcessInfo.processInfo.environment
+        let useLocal =
+            env["BS_USE_LOCAL_DEV"] == "1" ||
+            UserDefaults.standard.bool(forKey: "BSUseLocalDev")
+        if useLocal {
+            return URL(string: "http://127.0.0.1:3000")!
+        }
+        return production
         #else
-        return URL(string: "https://www.zyoffice.me")!
+        return production
         #endif
     }()
 }

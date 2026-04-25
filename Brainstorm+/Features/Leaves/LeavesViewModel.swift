@@ -12,9 +12,13 @@ import Supabase
 //
 // Phase 25.c — 实际请假制度只保留「调休 (comp_time) + 事假 (personal)」两种。
 // 公司没有年假/病假额度，Web 上那 2 张卡是历史占位。iOS 直接裁掉，不再暴露
-// annual / sick 卡片。额度与历史查询仍走原来的两条 pipeline（approvals +
-// rest_records），但只聚合 personal / comp_time 两桶，其他类型落入 "other"
-// 丢弃。
+// annual / sick 卡片。
+//
+// 2026-04-25 update — 事假 is now unlimited (no quota / 无额度)。LeavesView 只
+// 显示「调休」一张额度卡;事假完全走「正常申请审批」路径,不预占额度,
+// 不在审批通过时扣额度。VM 这里不再返回 personal 卡片,仅保留 comp_time。
+// 历史聚合的 personal 桶不再使用,但保留 LeaveBalance 字符串 raw value
+// 以兼容 history filter / chip 显示。
 //
 // Balance computation approach — CLIENT-SIDE (no RPC):
 //   Web intentionally does not provide a `get_leave_balance` RPC.
@@ -175,10 +179,16 @@ public final class LeavesViewModel: ObservableObject {
             if days > 0 { usedCompTime += days }
         }
 
-        // ─── 4. Assemble cards: 调休在前（主要额度），事假在后 ────────
+        // ─── 4. Assemble cards: 只展示「调休」一张额度卡。
+        //
+        // 2026-04-25 — 业务规则确认事假无额度,完全走"正常申请审批"路径,
+        // 不再展示事假余额卡片。`personalTotal` / `usedPersonal` 仍然计算
+        // 但不再绑定到 UI;保留计算分支只是为了将来若公司政策恢复事假
+        // 限额时减少改动面。`_` 抑制 Swift 的未使用警告。
+        _ = personalTotal
+        _ = usedPersonal
         return [
             LeaveBalance(leaveType: "comp_time", totalDays: compTimeTotal, usedDays: usedCompTime),
-            LeaveBalance(leaveType: "personal",  totalDays: personalTotal, usedDays: usedPersonal),
         ]
     }
 

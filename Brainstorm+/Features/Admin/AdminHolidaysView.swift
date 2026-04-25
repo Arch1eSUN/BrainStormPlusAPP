@@ -253,7 +253,7 @@ private struct HolidayAddSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("保存") {
-                        Haptic.medium()
+                        // Haptic removed: 用户反馈管理模块按钮震动过密
                         let f = DateFormatter()
                         f.calendar = Calendar(identifier: .gregorian)
                         f.locale = Locale(identifier: "en_US_POSIX")

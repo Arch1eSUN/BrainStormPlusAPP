@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // ══════════════════════════════════════════════════════════════════
 // TeamAttendanceView —— 全员考勤（Admin 专属）
@@ -71,8 +72,27 @@ public struct TeamAttendanceView: View {
             // Haptic removed: 用户反馈滑动场景不应震动
             await viewModel.load()
         }
-        .task { await viewModel.load() }
-        .onChange(of: viewModel.selectedDate) { _, _ in
+        // 主入口：用 selectedDate 作为 task id —— 切日期时 SwiftUI
+        // 自动重启该 task。第一次触发时 rows 为空 → load()；之后每次切
+        // 日期 id 变 → 强制 load()。
+        //
+        // 注意：VM init 已经主动发起一次 prefetch。这条 .task 是第二道防线：
+        // 当 SwiftUI 把 NavigationLink 的 phantom 实例 cancel 掉（连带 prefetch
+        // task 一起 cancel），可见实例 .task fire 时会再发一次，由 VM 内部
+        // performLoad 的 inFlight 去重保证不会重复请求。
+        .task(id: viewModel.selectedDate) {
+            await viewModel.load()
+        }
+        // 第三道防线：onAppear 时若仍然 rows 为空 + 非加载中（即前两步全失败），
+        // 再补一发。loadIfNeeded 幂等。
+        .onAppear {
+            if viewModel.rows.isEmpty && !viewModel.isLoading {
+                Task { await viewModel.loadIfNeeded() }
+            }
+        }
+        // Scene foregrounding（用户从后台回到 app）也补刷一次，避免后台
+        // 期间日期跨天后看到上一日的旧数据。
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             Task { await viewModel.load() }
         }
         .zyErrorBanner($viewModel.errorMessage)

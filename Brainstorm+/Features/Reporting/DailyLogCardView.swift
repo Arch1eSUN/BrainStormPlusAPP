@@ -46,8 +46,16 @@ public struct DailyLogCardView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
+        // Perf (2026-04-25 heat audit): ultraThinMaterial 在 ForEach scroll-cell
+        // 内是 GPU 重负荷 (每 cell 一次实时模糊 sample),用户报"发热掉帧"。
+        // 改成 surfacePrimary 实色 + borderSubtle 0.5 hairline,与 BsContentCard
+        // 同款,视觉差异在低对比下基本不可察觉,GPU 成本砍 ~80%。
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
     }
 
     @ViewBuilder
@@ -135,8 +143,15 @@ public struct WeeklyReportCardView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
+        // Perf (2026-04-25 heat audit): ultraThinMaterial 在 list-cell 内是
+        // 重负荷 GPU 操作。改 surfacePrimary 实色 + 0.5 hairline,见 DailyLogCardView
+        // 同款修法。
+        .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
     }
 
     private var weekRangeText: String {

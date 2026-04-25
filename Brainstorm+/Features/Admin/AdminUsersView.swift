@@ -15,8 +15,29 @@ public struct AdminUsersView: View {
 
     @State private var showCreateSheet = false
     @State private var editTarget: AdminUserRow?
-    @State private var pendingDeactivate: AdminUserRow?
-    @State private var pendingDelete: AdminUserRow?
+    /// Iter5 — 合并两个 confirmationDialog 为一个,通过 enum 区分意图。
+    /// 之前两个 dialog 同时挂在 contentView 上,iOS 26 上后挂的会"吃掉"前一个,
+    /// 表现为弹窗位置错乱、点击删除没反应。改用 presenting: 形态,弹窗按钮闭包
+    /// 拿到的是 enum payload 的强引用,不依赖 @State 的 race。
+    @State private var pendingAction: PendingAction?
+
+    private enum PendingAction: Identifiable, Equatable {
+        case deactivate(AdminUserRow)
+        case delete(AdminUserRow)
+
+        var id: String {
+            switch self {
+            case .deactivate(let u): return "deactivate-\(u.id.uuidString)"
+            case .delete(let u): return "delete-\(u.id.uuidString)"
+            }
+        }
+
+        var user: AdminUserRow {
+            switch self {
+            case .deactivate(let u), .delete(let u): return u
+            }
+        }
+    }
 
     private var currentUserId: UUID? {
         sessionManager.currentProfile?.id
@@ -77,45 +98,44 @@ public struct AdminUsersView: View {
                     Task { await viewModel.load() }
                 }
             }
+            // Iter5 — 单一 confirmationDialog,以 enum payload 驱动两种危险操作。
+            // presenting: 形态保证按钮闭包能拿到 strong-ref'd payload,即便
+            // pendingAction 已被 dismiss 清空也不影响 await 内部逻辑。
             .confirmationDialog(
-                pendingDeactivate.map { "禁用用户 \($0.fullName ?? "")？禁用后该用户将无法登录。" } ?? "",
+                dialogTitle(for: pendingAction),
                 isPresented: Binding(
-                    get: { pendingDeactivate != nil },
-                    set: { if !$0 { pendingDeactivate = nil } }
+                    get: { pendingAction != nil },
+                    set: { if !$0 { pendingAction = nil } }
                 ),
-                titleVisibility: .visible
-            ) {
-                Button("禁用账号", role: .destructive) {
-                    if let u = pendingDeactivate {
+                titleVisibility: .visible,
+                presenting: pendingAction
+            ) { action in
+                switch action {
+                case .deactivate(let user):
+                    Button("禁用账号", role: .destructive) {
                         Task {
-                            _ = await viewModel.deactivate(userId: u.id)
+                            _ = await viewModel.deactivate(userId: user.id)
                             await viewModel.load()
-                            pendingDeactivate = nil
                         }
                     }
-                }
-                Button("取消", role: .cancel) { pendingDeactivate = nil }
-            }
-            .confirmationDialog(
-                pendingDelete.map { "确认删除账号 \($0.fullName ?? "")？" } ?? "",
-                isPresented: Binding(
-                    get: { pendingDelete != nil },
-                    set: { if !$0 { pendingDelete = nil } }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button("确认删除", role: .destructive) {
-                    if let u = pendingDelete {
+                    Button("取消", role: .cancel) { }
+                case .delete(let user):
+                    Button("确认删除", role: .destructive) {
+                        let name = user.fullName ?? "未命名"
                         Task {
-                            _ = await viewModel.softDelete(userId: u.id, targetName: u.fullName ?? "未命名")
+                            _ = await viewModel.softDelete(userId: user.id, targetName: name)
                             await viewModel.load()
-                            pendingDelete = nil
                         }
                     }
+                    Button("取消", role: .cancel) { }
                 }
-                Button("取消", role: .cancel) { pendingDelete = nil }
-            } message: {
-                Text("iOS 端为软删除（标记为 deleted），物理清理 auth.users 仍需在 Web 超管后台完成。")
+            } message: { action in
+                switch action {
+                case .delete:
+                    Text("iOS 端为软删除（标记为 deleted），物理清理 auth.users 仍需在 Web 超管后台完成。")
+                case .deactivate:
+                    Text("禁用后该用户将无法登录,可在编辑页恢复为活跃状态。")
+                }
             }
             .zyErrorBanner($viewModel.errorMessage)
     }
@@ -146,8 +166,8 @@ public struct AdminUsersView: View {
                         AdminUserRowView(
                             user: user,
                             onEdit: { editTarget = user },
-                            onDeactivate: { pendingDeactivate = user },
-                            onDelete: { pendingDelete = user },
+                            onDeactivate: { pendingAction = .deactivate(user) },
+                            onDelete: { pendingAction = .delete(user) },
                             canManage: canAssignPrivileges,
                             isSelf: user.id == currentUserId
                         )
@@ -160,6 +180,14 @@ public struct AdminUsersView: View {
             }
         }
         .background(BsColor.pageBackground.ignoresSafeArea())
+    }
+
+    private func dialogTitle(for action: PendingAction?) -> String {
+        guard let action else { return "" }
+        switch action {
+        case .deactivate(let u): return "禁用用户 \(u.fullName ?? "未命名")?"
+        case .delete(let u): return "确认删除账号 \(u.fullName ?? "未命名")?"
+        }
     }
 
     private var roleFilterStrip: some View {
@@ -244,25 +272,55 @@ private struct AdminUserRowView: View {
             trailing: buildTrailingSwipeActions(),
             allowsFullSwipe: false
         )
-        .bsContextMenu([
-            BsContextMenuItem(
-                label: "编辑",
-                systemImage: "square.and.pencil",
-                action: { onEdit() }
-            ),
-            BsContextMenuItem(
-                label: "复制 ID",
-                systemImage: "doc.on.doc",
-                action: {
-                    UIPasteboard.general.string = user.id.uuidString
-                    Haptic.success()
-                }
-            )
-        ])
+        // Long-press v3:管理员行长按补全 —— 编辑/修改角色/复制 ID
+        // + destructive (禁用 / 删除)。修改角色目前与编辑共享 sheet,
+        // AdminUserEditSheet 内部含角色 picker;独立 surface 是 nice-to-have。
+        .bsContextMenu(buildContextMenu())
         .onTapGesture {
             // Haptic removed: 用户反馈列表行点击过密震动
             onEdit()
         }
+    }
+
+    private func buildContextMenu() -> [BsContextMenuItem] {
+        var items: [BsContextMenuItem] = []
+        items.append(BsContextMenuItem(
+            label: "编辑",
+            systemImage: "square.and.pencil",
+            action: { onEdit() }
+        ))
+        if canManage {
+            items.append(BsContextMenuItem(
+                label: "修改角色",
+                systemImage: "person.badge.shield.checkmark",
+                action: { onEdit() }   // sheet 内含角色 picker
+            ))
+        }
+        items.append(BsContextMenuItem(
+            label: "复制 ID",
+            systemImage: "doc.on.doc",
+            action: {
+                UIPasteboard.general.string = user.id.uuidString
+                Haptic.light()
+            }
+        ))
+        if canManage && !isSelf {
+            items.append(BsContextMenuItem(
+                label: "禁用账号",
+                systemImage: "nosign",
+                role: .destructive,
+                haptic: { Haptic.warning() },
+                action: { onDeactivate() }
+            ))
+            items.append(BsContextMenuItem(
+                label: "删除",
+                systemImage: "trash",
+                role: .destructive,
+                haptic: { Haptic.warning() },
+                action: { onDelete() }
+            ))
+        }
+        return items
     }
 
     private func buildTrailingSwipeActions() -> [BsSwipeAction] {

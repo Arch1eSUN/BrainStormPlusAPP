@@ -389,6 +389,32 @@ private struct MyDayRow: View {
         rowContent(isToday: isToday, color: color, label: label)
             .contentShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             .onTapGesture { onSelect() }
+            // Long-press v3 (longpress-system §v3 排班):整行长按 →
+            // 快速请假 / 外勤 / 出差 + 选中查看详情。屏幕窄的时候右侧 3
+            // 个圆 quick-apply 按钮命中区受限,长按是更可靠的入口。
+            .contextMenu {
+                Button {
+                    onQuickApply(.leave)
+                } label: {
+                    Label("快速请假", systemImage: "calendar.badge.minus")
+                }
+                Button {
+                    onQuickApply(.fieldWork)
+                } label: {
+                    Label("快速外勤", systemImage: "figure.walk")
+                }
+                Button {
+                    onQuickApply(.businessTrip)
+                } label: {
+                    Label("快速出差", systemImage: "briefcase.fill")
+                }
+                Divider()
+                Button {
+                    onSelect()
+                } label: {
+                    Label("查看排班详情", systemImage: "calendar")
+                }
+            }
     }
 
     @ViewBuilder

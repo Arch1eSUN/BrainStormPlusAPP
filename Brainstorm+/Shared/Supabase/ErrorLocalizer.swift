@@ -37,6 +37,7 @@ public enum ErrorLocalizer {
         "The Internet connection appears to be offline.": "当前无网络连接",
         "The network connection was lost.":               "网络连接中断，请重试",
         "A server with the specified hostname could not be found.": "无法连接服务器，请检查网络",
+        "Could not connect to the server.":               "无法连接服务器，请检查网络或稍后重试",
         "The request timed out.":                         "请求超时，请重试",
         "cancelled":                                      "请求已取消",
 
@@ -69,6 +70,30 @@ public enum ErrorLocalizer {
 
     /// 把任意 Error 映射成面向用户的中文 errorMessage。
     public static func localize(_ error: Error) -> String {
+        // 0. URLError 类型化短路 —— iOS 的 localizedDescription 会随系统语言 / 版本
+        //    波动（"Could not connect to the server." vs "无法连接到服务器。"），
+        //    直接对 .code 分支才稳定。
+        if let urlErr = error as? URLError {
+            switch urlErr.code {
+            case .notConnectedToInternet:        return "当前无网络连接"
+            case .networkConnectionLost:         return "网络连接中断，请重试"
+            case .timedOut:                      return "请求超时，请重试"
+            case .cannotFindHost,
+                 .dnsLookupFailed:               return "无法连接服务器，请检查网络"
+            case .cannotConnectToHost:           return "无法连接服务器，请检查网络或稍后重试"
+            case .cancelled:                     return "请求已取消"
+            case .secureConnectionFailed,
+                 .serverCertificateUntrusted,
+                 .serverCertificateHasBadDate,
+                 .serverCertificateNotYetValid,
+                 .serverCertificateHasUnknownRoot,
+                 .clientCertificateRejected,
+                 .clientCertificateRequired:     return "安全连接失败，请检查网络环境"
+            default:
+                break
+            }
+        }
+
         let raw = error.localizedDescription
 
         // 1. 精确匹配

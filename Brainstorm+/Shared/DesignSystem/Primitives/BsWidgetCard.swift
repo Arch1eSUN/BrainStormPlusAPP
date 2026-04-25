@@ -28,7 +28,7 @@ import SwiftUI
 //   }
 // ══════════════════════════════════════════════════════════════════
 
-public struct BsWidgetCard<Accessory: View, Body: View>: View {
+public struct BsWidgetCard<Accessory: View, Body: View, Menu: View>: View {
     public enum Hero {
         case number(String, sublabel: String)
         case none
@@ -45,19 +45,22 @@ public struct BsWidgetCard<Accessory: View, Body: View>: View {
     let cta: Cta
     let accessory: () -> Accessory
     let content: () -> Body
+    let menu: (() -> Menu)?
 
     public init(
         label: String,
         hero: Hero = .none,
         cta: Cta = .none,
         @ViewBuilder accessory: @escaping () -> Accessory = { EmptyView() },
-        @ViewBuilder content: @escaping () -> Body
+        @ViewBuilder content: @escaping () -> Body,
+        @ViewBuilder menu: @escaping () -> Menu
     ) {
         self.label = label
         self.hero = hero
         self.cta = cta
         self.accessory = accessory
         self.content = content
+        self.menu = menu
     }
 
     public var body: some View {
@@ -89,6 +92,7 @@ public struct BsWidgetCard<Accessory: View, Body: View>: View {
             .padding(BsSpacing.lg + 4)  // 留白 30% 提升：16 → 20
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .modifier(BsWidgetCardMenuModifier(menu: menu))
     }
 
     @ViewBuilder
@@ -131,6 +135,49 @@ public struct BsWidgetCard<Accessory: View, Body: View>: View {
             .padding(.top, BsSpacing.xs)
         case .none:
             EmptyView()
+        }
+    }
+}
+
+// MARK: - No-menu convenience init
+//
+// 99% 的 widget 不挂长按菜单。Swift 不允许默认 generic 类型参数,所以
+// 用 `Menu == EmptyView` 的 extension + nil menu closure 给 caller 一个
+// 不需要写菜单 closure 的入口。Long-press v3 用主 init 传 menu。
+
+public extension BsWidgetCard where Menu == EmptyView {
+    init(
+        label: String,
+        hero: Hero = .none,
+        cta: Cta = .none,
+        @ViewBuilder accessory: @escaping () -> Accessory = { EmptyView() },
+        @ViewBuilder content: @escaping () -> Body
+    ) {
+        self.label = label
+        self.hero = hero
+        self.cta = cta
+        self.accessory = accessory
+        self.content = content
+        self.menu = nil
+    }
+}
+
+// MARK: - Long-press menu modifier (Long-press v3)
+//
+// 单独抽 modifier 是因为 SwiftUI `.contextMenu { ... }` 的 closure 直接
+// 引用 generic Menu 的 ViewBuilder 时,在 `BsWidgetCard` body 里展开会
+// 让编译器对 BsContentCard 的 generic 解析失败。modifier 形态把 contextMenu
+// 调用孤立到独立 view tree。
+
+private struct BsWidgetCardMenuModifier<Menu: View>: ViewModifier {
+    let menu: (() -> Menu)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let menu {
+            content.contextMenu { menu() }
+        } else {
+            content
         }
     }
 }

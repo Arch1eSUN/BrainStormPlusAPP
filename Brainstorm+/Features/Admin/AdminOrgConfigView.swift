@@ -185,7 +185,7 @@ public struct AdminOrgConfigView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(vm.isSaving ? "保存中…" : "保存") {
-                    Haptic.medium()
+                    // Haptic removed: 用户反馈管理模块按钮震动过密
                     Task { await vm.save() }
                 }
                 .disabled(vm.isSaving || vm.isLoading)

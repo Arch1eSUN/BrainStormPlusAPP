@@ -56,11 +56,53 @@ public final class AnnouncementsListViewModel: ObservableObject {
         }
     }
 
+    private struct BroadcastNotificationPayload: Encodable {
+        let user_id: String
+        let title: String
+        let body: String
+        let type: String
+        let link: String
+    }
+
+    private struct ProfileIdRow: Decodable { let id: UUID }
+
+    /// Iter5 — 公告 / 广播合并:
+    /// 用户反馈 "公告和广播不是一个功能吗为什么拆开了"。我们保留公告的持久化
+    /// (announcements 表),并在创建时可选地"推送给所有人"——即 fan-out 到
+    /// notifications 表(等同旧 AdminBroadcastView 的行为)。
+    /// 失败兜底:公告写入成功 + 推送失败时返回 true(公告已发出),只把推送错误
+    /// 写到 errorMessage,避免用户以为整个流程失败。
+    private func broadcastAnnouncementToAll(title: String, body: String) async -> (succeeded: Int, error: String?) {
+        do {
+            let profiles: [ProfileIdRow] = try await client
+                .from("profiles")
+                .select("id")
+                .eq("status", value: "active")
+                .execute()
+                .value
+            guard !profiles.isEmpty else { return (0, "没有活跃用户") }
+            let payloads = profiles.map {
+                BroadcastNotificationPayload(
+                    user_id: $0.id.uuidString,
+                    title: title,
+                    body: body,
+                    type: "info",
+                    link: "/dashboard/announcements"
+                )
+            }
+            _ = try await client.from("notifications").insert(payloads).execute()
+            return (payloads.count, nil)
+        } catch {
+            return (0, ErrorLocalizer.localize(error))
+        }
+    }
+
     @discardableResult
     public func create(
         title: String,
         content: String,
-        priority: Announcement.Priority
+        priority: Announcement.Priority,
+        broadcastToAll: Bool = false
     ) async -> Bool {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -109,6 +151,23 @@ public final class AnnouncementsListViewModel: ObservableObject {
                 entityType: "announcement",
                 entityId: saved.id
             )
+
+            // Iter5 — 合并广播：可选地推送给所有活跃用户。
+            if broadcastToAll {
+                let result = await broadcastAnnouncementToAll(title: t, body: body)
+                if let err = result.error {
+                    errorMessage = "公告已发布，但推送通知失败：\(err)"
+                } else {
+                    await ActivityLogWriter.write(
+                        client: client,
+                        type: .system,
+                        action: "broadcast",
+                        description: "公告「\(t)」已推送给 \(result.succeeded) 人",
+                        entityType: "announcement",
+                        entityId: saved.id
+                    )
+                }
+            }
             return true
         } catch {
             errorMessage = ErrorLocalizer.localize(error)

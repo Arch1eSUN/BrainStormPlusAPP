@@ -260,34 +260,54 @@ struct MyTasksSection: View {
         if isEmpty {
             BsWidgetCard(
                 label: "我的任务",
-                cta: .button("查看全部") { pushModule(.tasks) }
-            ) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(.title2))
-                        .foregroundStyle(BsColor.brandMint)
-                    Text("今日无待办")
-                        .font(BsTypography.cardTitle)
-                        .foregroundStyle(BsColor.ink)
-                    Text("点击右下角 + 新建任务开始")
-                        .font(BsTypography.bodySmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, BsSpacing.sm)
-            }
+                cta: .button("查看全部") { pushModule(.tasks) },
+                content: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(.title2))
+                            .foregroundStyle(BsColor.brandMint)
+                        Text("今日无待办")
+                            .font(BsTypography.cardTitle)
+                            .foregroundStyle(BsColor.ink)
+                        Text("点击右下角 + 新建任务开始")
+                            .font(BsTypography.bodySmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, BsSpacing.sm)
+                },
+                menu: { taskCardMenu }
+            )
         } else {
             BsWidgetCard(
                 label: "我的任务",
                 hero: .number("\(tasks.activeCount)", sublabel: "活跃任务"),
-                cta: .button("查看全部") { pushModule(.tasks) }
-            ) {
-                BsStatTileRow([
-                    .init(value: "\(tasks.inProgress)", label: "进行中", tone: .azure),
-                    .init(value: "\(tasks.todo)",       label: "待处理", tone: .neutral),
-                    .init(value: "\(tasks.overdue)",    label: "逾期",   tone: .danger),
-                ])
-            }
+                cta: .button("查看全部") { pushModule(.tasks) },
+                content: {
+                    BsStatTileRow([
+                        .init(value: "\(tasks.inProgress)", label: "进行中", tone: .azure),
+                        .init(value: "\(tasks.todo)",       label: "待处理", tone: .neutral),
+                        .init(value: "\(tasks.overdue)",    label: "逾期",   tone: .danger),
+                    ])
+                },
+                menu: { taskCardMenu }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var taskCardMenu: some View {
+        Button {
+            pushModule(.tasks)
+        } label: {
+            Label("跳到任务管理", systemImage: "arrow.up.forward.app")
+        }
+        Button {
+            let summary = "活跃 \(tasks.activeCount) · 进行中 \(tasks.inProgress) · 待处理 \(tasks.todo) · 逾期 \(tasks.overdue)"
+            UIPasteboard.general.string = summary
+            Haptic.light()
+        } label: {
+            Label("复制摘要", systemImage: "doc.on.doc")
         }
     }
 }
@@ -303,6 +323,7 @@ struct MyTasksSection: View {
 
 struct MonthlySnapshotSection: View {
     let snapshot: DashboardWidgetsViewModel.MonthlySnapshot
+    var pushModule: PushModuleHandler? = nil
 
     private struct Item { let label: String; let value: Int; let icon: String; let fg: Color; let bg: Color }
 
@@ -336,34 +357,52 @@ struct MonthlySnapshotSection: View {
                 } else {
                     AnyView(EmptyView())
                 }
-            }
-        ) {
-            VStack(spacing: BsSpacing.md) {
-                ForEach(0..<items.count, id: \.self) { idx in
-                    HStack(spacing: BsSpacing.sm + 2) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous)
-                                .fill(items[idx].bg)
-                                .frame(width: 36, height: 36)
-                            Image(systemName: items[idx].icon)
-                                .font(.system(.callout, weight: .medium))
-                                .foregroundStyle(items[idx].fg)
+            },
+            content: {
+                VStack(spacing: BsSpacing.md) {
+                    ForEach(0..<items.count, id: \.self) { idx in
+                        HStack(spacing: BsSpacing.sm + 2) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous)
+                                    .fill(items[idx].bg)
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: items[idx].icon)
+                                    .font(.system(.callout, weight: .medium))
+                                    .foregroundStyle(items[idx].fg)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(items[idx].value)")
+                                    .font(BsTypography.statSmall)
+                                    .foregroundStyle(BsColor.ink)
+                                    .monospacedDigit()
+                                    .contentTransition(.numericText())
+                                Text(items[idx].label)
+                                    .font(BsTypography.meta)
+                                    .foregroundStyle(BsColor.inkMuted)
+                            }
+                            Spacer()
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(items[idx].value)")
-                                .font(BsTypography.statSmall)
-                                .foregroundStyle(BsColor.ink)
-                                .monospacedDigit()
-                                .contentTransition(.numericText())
-                            Text(items[idx].label)
-                                .font(BsTypography.meta)
-                                .foregroundStyle(BsColor.inkMuted)
-                        }
-                        Spacer()
                     }
                 }
+            },
+            menu: {
+                // 考勤 widget: 长按提供"跳到考勤页"快捷入口。
+                // 打卡上班 / 下班 是 AttendanceHeroCard 自身的功能,这里
+                // 只承担 widget surface → page 的导航,不重复打卡 mutation。
+                Button {
+                    pushModule?(.attendance)
+                } label: {
+                    Label("跳到考勤页", systemImage: "arrow.up.forward.app")
+                }
+                Button {
+                    let summary = "出勤 \(snapshot.attendanceDays) · 出差 \(snapshot.businessTripDays) · 事假 \(snapshot.leaveDays) · 调休 \(snapshot.compTimeDays) · 旷工 \(snapshot.absentDays)"
+                    UIPasteboard.general.string = summary
+                    Haptic.light()
+                } label: {
+                    Label("复制本月摘要", systemImage: "doc.on.doc")
+                }
             }
-        }
+        )
     }
 }
 
@@ -390,23 +429,38 @@ struct ActiveProjectsSection: View {
     var body: some View {
         BsWidgetCard(
             label: "活跃项目",
-            cta: .button("所有项目") { pushModule(.projects) }
-        ) {
-            if projects.isEmpty {
-                EmptyStateCard(iconName: "folder", title: "暂无活跃项目", hint: "创建新项目以开始跟踪进度")
-            } else {
-                VStack(spacing: BsSpacing.sm + 2) {
-                    ForEach(projects) { project in
-                        ProjectRowCard(
-                            project: project,
-                            accent: statusColor(project.status),
-                            pushModule: pushModule,
-                            pushProject: pushProject
-                        )
+            cta: .button("所有项目") { pushModule(.projects) },
+            content: {
+                if projects.isEmpty {
+                    EmptyStateCard(iconName: "folder", title: "暂无活跃项目", hint: "创建新项目以开始跟踪进度")
+                } else {
+                    VStack(spacing: BsSpacing.sm + 2) {
+                        ForEach(projects) { project in
+                            ProjectRowCard(
+                                project: project,
+                                accent: statusColor(project.status),
+                                pushModule: pushModule,
+                                pushProject: pushProject
+                            )
+                        }
                     }
                 }
+            },
+            menu: {
+                Button {
+                    pushModule(.projects)
+                } label: {
+                    Label("跳到项目列表", systemImage: "arrow.up.forward.app")
+                }
+                Button {
+                    let names = projects.map(\.name).joined(separator: "\n")
+                    UIPasteboard.general.string = names.isEmpty ? "暂无活跃项目" : names
+                    Haptic.light()
+                } label: {
+                    Label("复制项目清单", systemImage: "doc.on.doc")
+                }
             }
-        }
+        )
     }
 }
 
@@ -525,18 +579,35 @@ struct MyOkrSection: View {
     var body: some View {
         BsWidgetCard(
             label: "我的 OKR",
-            cta: .button("OKR 详情") { pushModule(.okr) }
-        ) {
-            if objectives.isEmpty {
-                EmptyStateCard(iconName: "target", title: "暂无 OKR 目标", hint: "前往 OKR 页面创建目标")
-            } else {
-                VStack(spacing: BsSpacing.md) {
-                    ForEach(objectives) { obj in
-                        ObjectiveRow(obj: obj, accent: statusColor(obj.status))
+            cta: .button("OKR 详情") { pushModule(.okr) },
+            content: {
+                if objectives.isEmpty {
+                    EmptyStateCard(iconName: "target", title: "暂无 OKR 目标", hint: "前往 OKR 页面创建目标")
+                } else {
+                    VStack(spacing: BsSpacing.md) {
+                        ForEach(objectives) { obj in
+                            ObjectiveRow(obj: obj, accent: statusColor(obj.status))
+                        }
+                    }
+                }
+            },
+            menu: {
+                Button {
+                    pushModule(.okr)
+                } label: {
+                    Label("跳到 OKR 详情", systemImage: "arrow.up.forward.app")
+                }
+                if !objectives.isEmpty {
+                    Button {
+                        let titles = objectives.map { "• \($0.title) (\($0.progress)%)" }.joined(separator: "\n")
+                        UIPasteboard.general.string = titles
+                        Haptic.light()
+                    } label: {
+                        Label("复制目标清单", systemImage: "doc.on.doc")
                     }
                 }
             }
-        }
+        )
     }
 }
 
@@ -593,6 +664,7 @@ private struct ProgressRing: View {
 
 struct RecentActivitySection: View {
     let activity: [DashboardWidgetsViewModel.ActivityEntry]
+    var pushModule: PushModuleHandler? = nil
 
     var body: some View {
         BsWidgetCard(
@@ -603,24 +675,32 @@ struct RecentActivitySection: View {
                 } else {
                     AnyView(BsBadge("\(activity.count) 条", tone: .azure, size: .small))
                 }
-            }
-        ) {
-            if activity.isEmpty {
-                EmptyStateCard(iconName: "clock", title: "暂无近期动态", hint: "团队成员开始行动后将在此显示")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(activity.enumerated()), id: \.element.id) { index, entry in
-                        VStack(spacing: 0) {
-                            ActivityRow(entry: entry)
-                            if index < activity.count - 1 {
-                                Divider()
-                                    .background(BsColor.borderSubtle)
+            },
+            content: {
+                if activity.isEmpty {
+                    EmptyStateCard(iconName: "clock", title: "暂无近期动态", hint: "团队成员开始行动后将在此显示")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(activity.enumerated()), id: \.element.id) { index, entry in
+                            VStack(spacing: 0) {
+                                ActivityRow(entry: entry)
+                                if index < activity.count - 1 {
+                                    Divider()
+                                        .background(BsColor.borderSubtle)
+                                }
                             }
                         }
                     }
                 }
+            },
+            menu: {
+                Button {
+                    pushModule?(.activity)
+                } label: {
+                    Label("查看全部动态", systemImage: "arrow.up.forward.app")
+                }
             }
-        }
+        )
     }
 }
 
@@ -696,24 +776,42 @@ struct ApprovalSummaryCard: View {
             // Phase 24 collapse: skip the 120pt-tall "0 · 待我处理" hero
             // and render a compact one-liner so cleared inboxes feel
             // like an accomplishment rather than a dead cell.
-            BsWidgetCard(label: "待审批") {
-                HStack(spacing: BsSpacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(BsColor.success)
-                    Text("审批已全部处理")
-                        .font(BsTypography.bodyMedium)
-                        .foregroundStyle(BsColor.ink)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            BsWidgetCard(
+                label: "待审批",
+                content: {
+                    HStack(spacing: BsSpacing.sm) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(BsColor.success)
+                        Text("审批已全部处理")
+                            .font(BsTypography.bodyMedium)
+                            .foregroundStyle(BsColor.ink)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                },
+                menu: { approvalCardMenu }
+            )
         } else {
             BsWidgetCard(
                 label: "待审批",
                 hero: .number("\(pending)", sublabel: "待我处理"),
-                cta: .button("查看") { pushModule(.approval) }
-            ) {
-                EmptyView()
-            }
+                cta: .button("查看") { pushModule(.approval) },
+                content: { EmptyView() },
+                menu: { approvalCardMenu }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var approvalCardMenu: some View {
+        Button {
+            pushModule(.approval)
+        } label: {
+            Label("跳到审批中心", systemImage: "arrow.up.forward.app")
+        }
+        Button {
+            pushModule(.approval)
+        } label: {
+            Label("我审 / 我提", systemImage: "rectangle.2.swap")
         }
     }
 }
@@ -736,8 +834,23 @@ struct RiskOverviewCard: View {
 
     var body: some View {
         BsWidgetCard(
-            label: "风险概览"
-        ) {
+            label: "风险概览",
+            content: { riskBody },
+            menu: {
+                Button {
+                    let summary = "活跃 \(risk.activeRisks) · 高优 \(risk.highSeverityRisks) · 阻塞 \(risk.blockedTasks) · 逾期 \(risk.overdueTasks)"
+                    UIPasteboard.general.string = summary
+                    Haptic.light()
+                } label: {
+                    Label("复制风险摘要", systemImage: "doc.on.doc")
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var riskBody: some View {
+        Group {
             if isEmpty {
                 HStack(spacing: BsSpacing.sm) {
                     Image(systemName: "checkmark.shield.fill")
@@ -801,30 +914,50 @@ struct TeamMonitorCard: View {
             cta: .button("全部告警") { pushModule(.team) },
             accessory: {
                 AnyView(BsBadge("管理员+", tone: .azure, size: .small))
-            }
-        ) {
-            VStack(alignment: .leading, spacing: BsSpacing.md + 2) {
-                let items: [(label: String, value: String, icon: String, color: Color)] = [
-                    ("团队成员", "\(stats.members)", "person.2", BsColor.brandAzure),
-                    ("待审批请假", "\(stats.pendingLeaves)", "doc.text", stats.pendingLeaves > 0 ? BsColor.warning : BsColor.inkMuted),
-                    ("逾期任务", "\(stats.overdueTasks)", "exclamationmark.triangle", stats.overdueTasks > 0 ? BsColor.danger : BsColor.success),
-                    ("今日日报率", "\(stats.dailyLogRate)%", "chart.line.uptrend.xyaxis", BsColor.brandMint),
-                ]
+            },
+            content: {
+                VStack(alignment: .leading, spacing: BsSpacing.md + 2) {
+                    let items: [(label: String, value: String, icon: String, color: Color)] = [
+                        ("团队成员", "\(stats.members)", "person.2", BsColor.brandAzure),
+                        ("待审批请假", "\(stats.pendingLeaves)", "doc.text", stats.pendingLeaves > 0 ? BsColor.warning : BsColor.inkMuted),
+                        ("逾期任务", "\(stats.overdueTasks)", "exclamationmark.triangle", stats.overdueTasks > 0 ? BsColor.danger : BsColor.success),
+                        ("今日日报率", "\(stats.dailyLogRate)%", "chart.line.uptrend.xyaxis", BsColor.brandMint),
+                    ]
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: BsSpacing.sm) {
-                    ForEach(0..<items.count, id: \.self) { idx in
-                        TeamStatTile(
-                            label: items[idx].label,
-                            value: items[idx].value,
-                            icon: items[idx].icon,
-                            color: items[idx].color
-                        )
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: BsSpacing.sm) {
+                        ForEach(0..<items.count, id: \.self) { idx in
+                            TeamStatTile(
+                                label: items[idx].label,
+                                value: items[idx].value,
+                                icon: items[idx].icon,
+                                color: items[idx].color
+                            )
+                        }
                     }
-                }
 
-                teamTodoAlertsSection
+                    teamTodoAlertsSection
+                }
+            },
+            menu: {
+                Button {
+                    pushModule(.team)
+                } label: {
+                    Label("跳到团队", systemImage: "arrow.up.forward.app")
+                }
+                Button {
+                    pushModule(.daily)
+                } label: {
+                    Label("查看全员日报", systemImage: "doc.append")
+                }
+                Button {
+                    let summary = "成员 \(stats.members) · 待审请假 \(stats.pendingLeaves) · 逾期任务 \(stats.overdueTasks) · 日报率 \(stats.dailyLogRate)%"
+                    UIPasteboard.general.string = summary
+                    Haptic.light()
+                } label: {
+                    Label("复制团队摘要", systemImage: "doc.on.doc")
+                }
             }
-        }
+        )
     }
 
     // Max rows shown in the scroll column before scroll kicks in.
@@ -1001,6 +1134,7 @@ private struct TeamStatTile: View {
 
 struct ExecutiveKPIsCard: View {
     let kpis: DashboardWidgetsViewModel.ExecutiveKpis
+    var pushModule: PushModuleHandler? = nil
 
     // Phase 24 collapse: if all 3 KPI counters are zero, drop the
     // "0 0 0" tile row and surface a single inkMuted line. dailyLogRate
@@ -1015,41 +1149,61 @@ struct ExecutiveKPIsCard: View {
             label: "经营总览",
             accessory: {
                 AnyView(BsBadge("高管", tone: .coral, size: .small))
-            }
-        ) {
-            if isEmpty {
-                HStack(spacing: BsSpacing.xs) {
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.system(.footnote))
-                        .foregroundStyle(BsColor.inkFaint)
-                    Text("今日暂无经营数据 · 下拉可刷新")
-                        .font(BsTypography.bodySmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(alignment: .leading, spacing: BsSpacing.sm) {
-                    BsStatTileRow([
-                        .init(value: "\(kpis.pendingApprovals)", label: "待处理审批", tone: .azure),
-                        .init(value: "\(kpis.teamMembers)",      label: "团队规模",   tone: .mint),
-                        .init(value: "\(kpis.tasksDone7d)",      label: "近 7 日产出", tone: .azure),
-                    ])
-
-                    // Phase 24: ratio → visual. The footer "日报覆盖 X%" now
-                    // has a 6pt inline bar beneath it so the % reads as
-                    // progress instead of loose text.
-                    VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                        Text("日报覆盖 \(kpis.dailyLogRate)%")
-                            .font(BsTypography.meta)
+            },
+            content: {
+                if isEmpty {
+                    HStack(spacing: BsSpacing.xs) {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.system(.footnote))
+                            .foregroundStyle(BsColor.inkFaint)
+                        Text("今日暂无经营数据 · 下拉可刷新")
+                            .font(BsTypography.bodySmall)
                             .foregroundStyle(BsColor.inkMuted)
-                        BsProgressBar(
-                            progress: Double(kpis.dailyLogRate) / 100.0,
-                            tint: BsColor.brandAzure
-                        )
                     }
-                    .padding(.top, BsSpacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                        BsStatTileRow([
+                            .init(value: "\(kpis.pendingApprovals)", label: "待处理审批", tone: .azure),
+                            .init(value: "\(kpis.teamMembers)",      label: "团队规模",   tone: .mint),
+                            .init(value: "\(kpis.tasksDone7d)",      label: "近 7 日产出", tone: .azure),
+                        ])
+
+                        // Phase 24: ratio → visual. The footer "日报覆盖 X%" now
+                        // has a 6pt inline bar beneath it so the % reads as
+                        // progress instead of loose text.
+                        VStack(alignment: .leading, spacing: BsSpacing.xs) {
+                            Text("日报覆盖 \(kpis.dailyLogRate)%")
+                                .font(BsTypography.meta)
+                                .foregroundStyle(BsColor.inkMuted)
+                            BsProgressBar(
+                                progress: Double(kpis.dailyLogRate) / 100.0,
+                                tint: BsColor.brandAzure
+                            )
+                        }
+                        .padding(.top, BsSpacing.xs)
+                    }
+                }
+            },
+            menu: {
+                Button {
+                    pushModule?(.aiAnalysis)
+                } label: {
+                    Label("跳到 AI 分析", systemImage: "brain")
+                }
+                Button {
+                    pushModule?(.finance)
+                } label: {
+                    Label("跳到财务 AI", systemImage: "dollarsign.circle")
+                }
+                Button {
+                    let summary = "待审 \(kpis.pendingApprovals) · 团队 \(kpis.teamMembers) · 7 日产出 \(kpis.tasksDone7d) · 日报率 \(kpis.dailyLogRate)%"
+                    UIPasteboard.general.string = summary
+                    Haptic.light()
+                } label: {
+                    Label("复制 KPI 摘要", systemImage: "doc.on.doc")
                 }
             }
-        }
+        )
     }
 }

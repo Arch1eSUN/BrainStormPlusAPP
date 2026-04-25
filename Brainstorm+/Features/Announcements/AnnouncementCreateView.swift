@@ -12,6 +12,9 @@ public struct AnnouncementCreateView: View {
     @State private var title: String = ""
     @State private var content: String = ""
     @State private var priority: Announcement.Priority = .normal
+    /// Iter5 — 合并广播功能后,创建公告时可勾选"同时推送给所有人"。
+    /// 默认关:大多数公告只需要进公告列表,不一定要全员推送。
+    @State private var broadcastToAll: Bool = false
 
     @State private var isDrafting: Bool = false
     @State private var draftError: String?
@@ -77,6 +80,14 @@ public struct AnnouncementCreateView: View {
                     .pickerStyle(.segmented)
                     // Haptic removed: 用户反馈 picker 切换过密震动
                 }
+
+                Section {
+                    Toggle("同时推送给所有人", isOn: $broadcastToAll)
+                } footer: {
+                    Text("勾选后,公告会作为系统通知推送给所有活跃用户(原「广播通知」功能)。")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
             }
             .navigationTitle("发布公告")
             .navigationBarTitleDisplayMode(.inline)
@@ -90,7 +101,8 @@ public struct AnnouncementCreateView: View {
                             let ok = await viewModel.create(
                                 title: title,
                                 content: content,
-                                priority: priority
+                                priority: priority,
+                                broadcastToAll: broadcastToAll
                             )
                             if ok { dismiss() }
                         }

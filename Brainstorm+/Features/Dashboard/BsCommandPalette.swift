@@ -125,9 +125,8 @@ public struct BsCommandPalette: View {
             .init(id: "admin_audit", name: "审计", systemImage: "doc.text.magnifyingglass", tint: BsColor.inkMuted,
                   category: .admin, requires: nil, adminOnly: true,
                   destination: { AnyView(AdminAuditView(isEmbedded: true)) }),
-            .init(id: "admin_broadcast", name: "广播", systemImage: "dot.radiowaves.left.and.right", tint: BsColor.adminTint,
-                  category: .admin, requires: nil, adminOnly: true,
-                  destination: { AnyView(AdminBroadcastView(isEmbedded: true)) }),
+            // Iter5 — 广播已合并进"公告通知"(创建时勾选"推送给所有人")。
+            // 不再单独提供 admin 广播入口。
             .init(id: "admin_org", name: "组织配置", systemImage: "building.2.fill", tint: BsColor.inkMuted,
                   category: .admin, requires: nil, adminOnly: true,
                   destination: { AnyView(AdminOrgConfigView(isEmbedded: true)) }),
@@ -251,11 +250,13 @@ public struct BsCommandPalette: View {
             // Haptic removed: 用户反馈关闭按钮过密震动
             dismiss()
         }
-        // 落点 = 系统 NavBar trailing 视觉位置:overlay 在 NavStack 外层,
-        // alignment topTrailing 让 X 落在屏幕右上 safe-area 内。
-        // padding 6pt top + 12pt trailing ≈ 系统 toolbar item insets。
-        .padding(.top, 6)
-        .padding(.trailing, BsSpacing.md)
+        // 落点 = 系统 NavBar trailing 视觉位置 (与 toolbar trailing 对齐):
+        //   • BsCloseButton 自带 44×44 hit target (4pt padding 围 36pt 视觉圆)
+        //   • overlay 在 NavStack root 上,topTrailing 让 X 锚到 safe-area 内
+        //   • 系统 toolbar item leading/trailing inset = 8pt,这里 -2pt 抵
+        //     消 BsCloseButton 内的 4pt hit padding 让视觉圆心对齐
+        .padding(.top, 0)
+        .padding(.trailing, BsSpacing.sm)
     }
 
     // MARK: - Sections

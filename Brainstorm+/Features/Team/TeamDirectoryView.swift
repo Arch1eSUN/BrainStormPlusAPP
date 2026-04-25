@@ -23,6 +23,9 @@ public struct TeamDirectoryView: View {
     /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
     @State private var memberPushTarget: UUID? = nil
 
+    /// Long-press v3:头像/卡片长按 → 弹 UserPreviewSheet 半屏 profile 预览。
+    @State private var profilePreview: UserPreviewData? = nil
+
     private let gridColumns: [GridItem] = [
         GridItem(.adaptive(minimum: 160), spacing: BsSpacing.md)
     ]
@@ -64,6 +67,9 @@ public struct TeamDirectoryView: View {
         }
         .navigationDestination(item: $chatDestination) { channel in
             ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
+        }
+        .sheet(item: $profilePreview) { user in
+            UserPreviewSheet(user: user)
         }
         .zyErrorBanner($chatError)
         .searchable(text: $viewModel.searchText,
@@ -252,6 +258,16 @@ public struct TeamDirectoryView: View {
 
     private func memberContextMenu(_ m: TeamMember) -> [BsContextMenuItem] {
         var items: [BsContextMenuItem] = []
+        // Long-press v3: 顶部"查看资料"打开 UserPreviewSheet 半屏卡。
+        // Slack iOS member sheet pattern —— 给用户一次手势就能预览 profile,
+        // 不用先 push 整页 detail。
+        items.append(BsContextMenuItem(
+            label: "查看资料",
+            systemImage: "person.crop.square.filled.and.at.rectangle",
+            action: {
+                profilePreview = makePreview(from: m)
+            }
+        ))
         // Long-press → quick chat (mirrors Web team page "Message" affordance).
         // Skip when the row is the viewer themselves.
         if m.id != sessionManager.currentProfile?.id {
@@ -276,6 +292,19 @@ public struct TeamDirectoryView: View {
         return items
     }
 
+    private func makePreview(from m: TeamMember) -> UserPreviewData {
+        UserPreviewData(
+            id: m.id,
+            fullName: m.fullName,
+            avatarUrl: m.avatarUrl,
+            role: m.role,
+            department: m.department,
+            position: m.position,
+            email: nil, // profiles 表没存 email,见 ViewModel 注释
+            phone: viewModel.canViewDetails ? m.phone : nil
+        )
+    }
+
     private func avatar(for m: TeamMember) -> some View {
         Group {
             if let url = m.avatarUrl.flatMap(URL.init(string:)) {
@@ -293,6 +322,23 @@ public struct TeamDirectoryView: View {
         }
         .frame(width: 40, height: 40)
         .clipShape(Circle())
+        // Long-press v3:头像独立长按 → 直接弹 UserPreviewSheet。
+        // 卡片整体长按已在 memberContextMenu 里有 "查看资料" 项,
+        // 这里给头像一个更直接的入口(对齐 Slack iOS 头像独立长按)。
+        .contextMenu {
+            Button {
+                profilePreview = makePreview(from: m)
+            } label: {
+                Label("查看资料", systemImage: "person.crop.square.filled.and.at.rectangle")
+            }
+            if m.id != sessionManager.currentProfile?.id {
+                Button {
+                    Task { await startChat(with: m.id) }
+                } label: {
+                    Label("发消息", systemImage: "bubble.left.and.bubble.right")
+                }
+            }
+        }
     }
 
     private func initialsAvatar(_ name: String?) -> some View {

@@ -164,7 +164,7 @@ struct AdminGeofenceEditSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("保存") {
-                        Haptic.medium()
+                        // Haptic removed: 用户反馈管理模块按钮震动过密
                         saveAndDismiss()
                     }
                     .disabled(!canSave)

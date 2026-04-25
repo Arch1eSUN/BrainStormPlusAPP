@@ -70,7 +70,7 @@ public struct AdminUserEditSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(saving ? "保存中…" : "保存") {
-                        Haptic.medium()
+                        // Haptic removed: 用户反馈管理模块按钮震动过密
                         Task { await submit() }
                     }
                     .disabled(saving || loading || detail == nil)
