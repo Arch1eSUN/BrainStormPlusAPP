@@ -202,6 +202,23 @@ public struct BsCommandPalette: View {
             }
             .background(BsColor.pageBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
+            // Bug-fix v5 (ghost-X 常驻 / 2026-04-25):
+            // 上一版把 close button overlay 挂在 NavigationStack 外层
+            // (.overlay(alignment: .topTrailing) { closeButtonOverlay })。
+            // NavStack 外层 overlay 不参与 push transition —— 当用户点 tile
+            // push 进任意 destination(考勤 / OKR / 审批 / 用户列表 …)时,
+            // X 仍然浮在屏幕右上,挤在系统返回按钮旁边,违反了"X 仅用于关闭
+            // 整个 launcher,destination 内部应只有系统返回按钮"的语义。
+            // 修法:把 overlay 挂到 root ScrollView(NavigationStack 的 root
+            // 内容),push destination 时整个 root 被 transition out → overlay
+            // 自动跟随消失,destination 内部不再渲染 X。
+            //
+            // 关于 Liquid Glass:close button 现在是 BsCloseButton 原生 glass
+            // 圆按钮(详见 BsCloseButton.swift)。不进 toolbar pipeline,所以
+            // 系统也不会再 wrap 一层椭圆 capsule。
+            .overlay(alignment: .topTrailing) {
+                closeButtonOverlay
+            }
             .navigationTitle("所有应用")
             .navigationBarTitleDisplayMode(.large)
             .searchable(
@@ -220,45 +237,20 @@ public struct BsCommandPalette: View {
                 }
             }
         }
-        // Bug-fix(右上 X 被椭圆容器包裹):
-        // iOS 26 toolbar 在 .fullScreenCover + Liquid Glass 主题下会自动给
-        // ToolbarItem 套一层 capsule glass 容器 → 即便我们显式画 Circle().fill,
-        // 系统外层依旧 wrap 一个椭圆 → 视觉变成"圆 + 椭圆"叠加。
-        // 修法:把 close 按钮从 toolbar 拿出来,改成顶级 ZStack overlay floating
-        // button —— overlay 在 NavigationStack **外层**,不进 toolbar pipeline,
-        // 系统也不再套 Liquid Glass capsule。alignment topTrailing 让它落在屏幕
-        // 右上角 safe-area 内。
-        .overlay(alignment: .topTrailing) {
-            closeButtonOverlay
-        }
         // Phase 25 v4：改用 NavigationLink push —— 完全 iOS 原生。
         // launcher 的 NavigationStack 自动加左上角 native 返回按钮，
         // 不覆盖 destination 自己的 Large Title。Tile 切换成 NavigationLink。
     }
 
-    /// Floating close button —— 不走 toolbar 避免被 Liquid Glass capsule wrap。
-    /// 视觉:32pt 内圈 Circle + 0.5pt border + 44pt hit area + ink xmark icon。
+    /// Floating close button —— 不走 toolbar 避免被系统自动套 Liquid Glass
+    /// capsule。改用 `BsCloseButton`(iOS 26 原生 `.glassEffect(.regular.interactive(),
+    /// in: Circle())`,无外层 Capsule),修掉用户反馈"叉没用容器了 / liquid glass
+    /// 特性也没有了"的退步。详见 BsCloseButton.swift 的设计说明。
     private var closeButtonOverlay: some View {
-        Button {
+        BsCloseButton {
             // Haptic removed: 用户反馈关闭按钮过密震动
             dismiss()
-        } label: {
-            // 内层 32pt circle 是视觉本体;外层 44pt frame 扩 hit area 不影响视觉。
-            ZStack {
-                Circle()
-                    .fill(BsColor.surfacePrimary)
-                Circle()
-                    .stroke(BsColor.borderSubtle, lineWidth: 0.5)
-                Image(systemName: "xmark")
-                    .font(.system(.subheadline, weight: .bold))
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-            .frame(width: 32, height: 32)
-            .padding(6) // 32 + 6*2 = 44pt 总 hit area
-            .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("关闭")
         // 落点 = 系统 NavBar trailing 视觉位置:overlay 在 NavStack 外层,
         // alignment topTrailing 让 X 落在屏幕右上 safe-area 内。
         // padding 6pt top + 12pt trailing ≈ 系统 toolbar item insets。

@@ -324,79 +324,225 @@ public struct AIAnalysisView: View {
         .background(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous).fill(BsColor.danger.opacity(0.06)))
     }
 
-    // MARK: - Progress section
+    // MARK: - Progress section (iOS-native multi-stage list)
+
+    @State private var isLogExpanded: Bool = false
 
     @ViewBuilder
     private var progressSection: some View {
         if let progress = viewModel.progress {
             BsContentCard(padding: .small) {
                 VStack(alignment: .leading, spacing: BsSpacing.md) {
-                    // Phase pills
-                    HStack(spacing: BsSpacing.xs) {
-                        ForEach(Array(AIAnalysisPhase.ordered.enumerated()), id: \.element) { idx, phase in
-                            phasePill(idx: idx, phase: phase, current: progress.phase)
-                            if idx < AIAnalysisPhase.ordered.count - 1 {
-                                Rectangle()
-                                    .fill(viewModel.phaseHistory.contains(phase) ? BsColor.success.opacity(0.4) : BsColor.inkMuted.opacity(0.2))
-                                    .frame(height: 1)
-                                    .frame(maxWidth: .infinity)
-                            }
+                    progressHeader(progress: progress)
+
+                    Divider().opacity(0.4)
+
+                    VStack(spacing: BsSpacing.xs + 2) {
+                        ForEach(AIAnalysisPhase.ordered, id: \.self) { phase in
+                            stageRow(phase: phase, current: progress.phase)
                         }
                     }
 
-                    // Progress bar
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(BsColor.inkMuted.opacity(0.15))
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(
-                                    LinearGradient(
-                                        colors: viewModel.pageState == .done
-                                            ? [BsColor.success, BsColor.success.opacity(0.7)]
-                                            : [BsColor.brandAzure, BsColor.brandMint],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geo.size.width * CGFloat(max(0, min(100, progress.percent))) / 100.0)
-                                .animation(BsMotion.Anim.smooth, value: progress.percent)
-                        }
+                    if !viewModel.stageLogs.isEmpty {
+                        Divider().opacity(0.4)
+                        detailDisclosure
                     }
-                    .frame(height: 6)
-
-                    Text(progress.message).font(.caption2).foregroundStyle(BsColor.inkMuted)
                 }
             }
         }
     }
 
-    private func phasePill(idx: Int, phase: AIAnalysisPhase, current: AIAnalysisPhase) -> some View {
-        let history = viewModel.phaseHistory
-        let isCurrent = (current == phase)
-        let isComplete = history.contains(phase) && !isCurrent
-        let isPending = !history.contains(phase)
+    private func progressHeader(progress: AIAnalysisProgress) -> some View {
+        HStack(alignment: .center, spacing: BsSpacing.sm) {
+            Image(systemName: viewModel.pageState == .done ? "checkmark.seal.fill" : "sparkles")
+                .font(.system(.body))
+                .foregroundStyle(viewModel.pageState == .done ? BsColor.success : BsColor.brandAzure)
+            VStack(alignment: .leading, spacing: BsSpacing.xxs) {
+                Text(viewModel.pageState == .done ? "分析完成" : progress.phase.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BsColor.ink)
+                Text(stageSummaryText(progress: progress))
+                    .font(.caption2)
+                    .foregroundStyle(BsColor.inkMuted)
+            }
+            Spacer(minLength: 0)
+            // Compact percent badge — replaces the web <progress> bar.
+            Text("\(max(0, min(100, progress.percent)))%")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(viewModel.pageState == .done ? BsColor.success : BsColor.brandAzure)
+                .padding(.horizontal, BsSpacing.sm)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(
+                        (viewModel.pageState == .done ? BsColor.success : BsColor.brandAzure).opacity(0.1)
+                    )
+                )
+                .contentTransition(.numericText())
+                .animation(BsMotion.Anim.smooth, value: progress.percent)
+        }
+    }
 
-        return HStack(spacing: BsSpacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(isComplete ? BsColor.success : (isCurrent ? BsColor.brandAzure : BsColor.inkMuted.opacity(0.2)))
-                    .frame(width: 18, height: 18)
-                if isComplete {
-                    Image(systemName: "checkmark")
-                        .font(BsTypography.label)
-                        .foregroundStyle(.white)
-                } else {
-                    Text("\(idx + 1)")
-                        .font(BsTypography.label)
-                        .foregroundStyle(isPending ? BsColor.inkMuted : Color.white)
+    private func stageSummaryText(progress: AIAnalysisProgress) -> String {
+        let total = AIAnalysisPhase.ordered.count
+        let history = viewModel.phaseHistory.filter { AIAnalysisPhase.ordered.contains($0) }
+        let completed = history.filter { $0 != progress.phase }.count
+        if let dur = viewModel.totalDurationSeconds, viewModel.pageState == .done {
+            return String(format: "已完成 %d 个阶段，耗时 %.1fs", history.count, dur)
+        }
+        return "进度 \(min(completed + 1, total)) / \(total) · \(progress.message)"
+    }
+
+    @ViewBuilder
+    private func stageRow(phase: AIAnalysisPhase, current: AIAnalysisPhase) -> some View {
+        let history = viewModel.phaseHistory
+        let isDone = viewModel.pageState == .done
+        let isCurrent = !isDone && (current == phase)
+        let isComplete = (isDone && history.contains(phase)) || (history.contains(phase) && !isCurrent)
+        let isPending = !history.contains(phase) && !isCurrent
+
+        let log = viewModel.stageLogs.last(where: { $0.phase == phase })
+
+        HStack(alignment: .center, spacing: BsSpacing.smd) {
+            stageGlyph(phase: phase, isCurrent: isCurrent, isComplete: isComplete, isPending: isPending)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(phase.label)
+                    .font(.caption.weight(isPending ? .regular : .semibold))
+                    .foregroundStyle(stageTextColor(isCurrent: isCurrent, isComplete: isComplete, isPending: isPending))
+                if isCurrent, let log {
+                    Text(log.message)
+                        .font(.caption2)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .lineLimit(1)
                 }
             }
-            Text(phase.label)
-                .font(BsTypography.meta.weight(isPending ? .regular : .medium))
-                .foregroundStyle(isPending ? BsColor.inkMuted : BsColor.ink)
-                .lineLimit(1)
+            Spacer(minLength: 0)
+
+            if let dur = log?.durationSeconds, isComplete {
+                Text(String(format: "%.1fs", dur))
+                    .font(BsTypography.meta.monospacedDigit())
+                    .foregroundStyle(BsColor.inkMuted)
+            } else if isCurrent {
+                Text("进行中")
+                    .font(BsTypography.meta)
+                    .foregroundStyle(BsColor.brandAzure)
+            }
         }
+    }
+
+    private func stageGlyph(
+        phase: AIAnalysisPhase,
+        isCurrent: Bool,
+        isComplete: Bool,
+        isPending: Bool
+    ) -> some View {
+        Group {
+            if isComplete {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(BsColor.success)
+            } else if isCurrent {
+                if #available(iOS 17.0, *) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(BsColor.brandAzure)
+                        .symbolEffect(.pulse, options: .repeating)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(BsColor.brandAzure)
+                }
+            } else {
+                Image(systemName: "circle.dotted")
+                    .foregroundStyle(BsColor.inkMuted.opacity(0.5))
+            }
+        }
+        .font(.system(.body))
+        .frame(width: 22, height: 22)
+    }
+
+    private func stageTextColor(isCurrent: Bool, isComplete: Bool, isPending: Bool) -> Color {
+        if isCurrent { return BsColor.brandAzure }
+        if isComplete { return BsColor.ink }
+        return BsColor.inkMuted
+    }
+
+    // ── Expandable detail log ──
+
+    private var detailDisclosure: some View {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
+            Button {
+                withAnimation(BsMotion.Anim.smooth) {
+                    isLogExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: BsSpacing.xs + 2) {
+                    Image(systemName: "list.bullet.rectangle.portrait")
+                        .font(.caption)
+                    Text(isLogExpanded ? "收起阶段日志" : "展开阶段日志")
+                        .font(.caption.weight(.medium))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .rotationEffect(.degrees(isLogExpanded ? 180 : 0))
+                        .animation(BsMotion.Anim.smooth, value: isLogExpanded)
+                }
+                .foregroundStyle(BsColor.inkMuted)
+                .padding(.vertical, BsSpacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isLogExpanded ? "收起阶段日志" : "展开阶段日志")
+
+            if isLogExpanded {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: BsSpacing.xs + 2) {
+                        ForEach(viewModel.stageLogs) { entry in
+                            stageLogRow(entry)
+                        }
+                    }
+                }
+                .frame(maxHeight: 240)
+                .padding(BsSpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
+                        .fill(BsColor.inkMuted.opacity(0.05))
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func stageLogRow(_ entry: AIAnalysisStageLog) -> some View {
+        HStack(alignment: .top, spacing: BsSpacing.sm) {
+            Image(systemName: entry.phase.icon)
+                .font(.caption2)
+                .foregroundStyle(BsColor.brandAzure)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: BsSpacing.xs) {
+                    Text(entry.phase.label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BsColor.ink)
+                    Text(Self.timeString(entry.timestamp))
+                        .font(BsTypography.meta.monospacedDigit())
+                        .foregroundStyle(BsColor.inkMuted)
+                    if let dur = entry.durationSeconds {
+                        Text(String(format: "· %.2fs", dur))
+                            .font(BsTypography.meta.monospacedDigit())
+                            .foregroundStyle(BsColor.inkMuted.opacity(0.7))
+                    }
+                }
+                Text(entry.message)
+                    .font(.caption2)
+                    .foregroundStyle(BsColor.inkMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private static func timeString(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: d)
     }
 
     // MARK: - Scraped data

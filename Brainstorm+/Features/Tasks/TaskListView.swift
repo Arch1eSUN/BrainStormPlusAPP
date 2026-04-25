@@ -384,42 +384,44 @@ public struct TaskListView: View {
         .accessibilityLabel(viewMode == .list ? "切换看板视图" : "切换列表视图")
     }
 
-    // MARK: - Kanban mode body (Phase 12 重写)
+    // MARK: - Kanban mode body (Phase 12 重写 v4 — Apple-native)
     //
-    // Bug-fix(Kanban 横向视图奇怪) v3:
-    //
-    // Root cause:
-    //   1. 列宽固定 280pt → iPhone (393pt 屏) 一次只能看 1.4 列,半列被切边
-    //      不舒服;小屏 (iPhone SE 320pt) 几乎看不全单列。
-    //   2. 外横 ScrollView + 每列内部 vertical ScrollView 双层手势冲突 ——
-    //      横向滑的时候经常被列内竖滚抢手,要先把手指放对位置才能横滑。
-    //   3. 卡片用 TaskKanbanCardView 跟 list mode 视觉差异大,两个 mode 切换
-    //      像换了个 app。
-    //   4. 列 header 不 sticky,滚到底部看不到当前在哪列。
-    //
-    // 修法 v3 (按用户 spec):
-    //   • 列宽 = 屏宽 / 1.5 → 一次能完整看一列 + 下一列预览 ~33%。
-    //   • 外层 ScrollView(.horizontal) + LazyHStack —— 列 lazy 渲染,空列零代价。
-    //   • 列内不再嵌 ScrollView ——> 改用 LazyVStack。如果某列卡片超过屏高,
-    //     整个 kanban 一起垂直滚 (我们再加一层 vertical ScrollView 在外层
-    //     嵌套时 gesture 会冲突 —— iOS 不允许两轴 ScrollView 嵌套同方向)。
-    //   • 卡片用本文件下面定义的 KanbanCompactCard —— 一行标题 + 优先级
-    //     小点 + due date,跟 list mode 视觉同源 (复用 BsContentCard token)。
+    // v4 redesign goals (用户反馈 "重新设计横向卡片"):
+    //   • 去掉所有 web-style chrome —— 列 header 不再外包 card,改成 flat
+    //     section header (Apple Reminders / Stocks 风格)。
+    //   • 卡片去掉左侧 3pt 色条 —— 这是 Trello/web 看板视觉,iOS 原生 UI
+    //     不会出现。改成顶部一行 "优先级 dot + 标题"。
+    //   • Paging snap —— iOS 17+ scrollTargetBehavior(.viewAligned) +
+    //     scrollTargetLayout()，每次横滑停在整列上,不会半屏切边。
+    //   • 列宽 ~88% 视口宽,留出下一列 ~10% 预览,提示可继续滑。
+    //   • 空列状态去掉 dashed border —— 改成低调 SF symbol + 文案,
+    //     居中,无边框 (Apple Reminders 空 list 视觉)。
+    //   • 卡片复用 BsShadow.xs + BsColor.surfacePrimary + borderSubtle 0.5
+    //     + BsRadius.md,与 design tokens 完全对齐。
+    //   • Drag/drop + context menu 保留 —— 交互不改,仅视觉重做。
 
     private var kanbanBody: some View {
         GeometryReader { proxy in
-            let columnWidth = max(min(proxy.size.width / 1.5, 360), 240)
+            let viewport = proxy.size.width
+            let columnWidth = max(min(viewport * 0.88, 360), 260)
+            let sidePad = max((viewport - columnWidth) / 2, BsSpacing.lg)
+
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 12) {
+                LazyHStack(alignment: .top, spacing: BsSpacing.md) {
                     ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { column in
                         kanbanColumn(for: column, width: columnWidth)
                     }
                 }
-                .padding(.horizontal, 16)
+                // .scrollTargetLayout marks each LazyHStack child as a paging
+                // target;.scrollTargetBehavior(.viewAligned) below snaps to
+                // those targets so each fling stops on a whole column.
+                .scrollTargetLayout()
+                .padding(.horizontal, sidePad)
                 .padding(.top, BsSpacing.md)
                 .padding(.bottom, BsSpacing.xxl)
             }
             .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned)
         }
     }
 
@@ -427,80 +429,62 @@ public struct TaskListView: View {
     private func kanbanColumn(for column: TaskModel.TaskStatus, width: CGFloat) -> some View {
         let tasks = viewModel.filteredTasks.filter { $0.status == column }
 
-        VStack(alignment: .leading, spacing: 10) {
-            // Column header — dot + label + count pill,跟 list mode statsRow 视觉同步。
-            HStack(spacing: BsSpacing.sm) {
-                Circle()
-                    .fill(column.tint)
-                    .frame(width: 8, height: 8)
+        VStack(alignment: .leading, spacing: BsSpacing.md) {
+            // ── Flat section header —— Apple Reminders 风格 ──────────
+            //   • Title (sectionTitle, .title3 semibold)
+            //   • 右侧 count pill,tint 取列状态色
+            //   • 无外框 / 无背景,直接坐在 page background 上
+            HStack(alignment: .firstTextBaseline, spacing: BsSpacing.sm) {
                 Text(column.cnLabel)
-                    .font(BsTypography.cardSubtitle)
+                    .font(BsTypography.sectionTitle)
                     .foregroundColor(BsColor.ink)
-                Spacer()
+
                 Text("\(tasks.count)")
                     .font(BsTypography.captionSmall.weight(.semibold))
-                    .foregroundColor(BsColor.inkMuted)
+                    .foregroundColor(column.tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(column.tint.opacity(0.15), in: Capsule())
+                    .background(column.tint.opacity(0.14), in: Capsule())
+
+                Spacer()
             }
-            .padding(.horizontal, BsSpacing.sm)
-            .padding(.vertical, BsSpacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(BsColor.surfacePrimary)
-            .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                    .stroke(BsColor.borderSubtle, lineWidth: 0.5)
-            )
+            .padding(.horizontal, BsSpacing.xs)
 
-            // Body —— LazyVStack 不嵌 ScrollView。横/竖手势分离。
-            LazyVStack(spacing: 10) {
-                ForEach(tasks) { task in
-                    KanbanCompactCard(task: task)
-                        .draggable(task.id.uuidString) {
-                            KanbanCompactCard(task: task)
-                                .frame(width: width - 24)
-                                .opacity(0.85)
-                        }
-                        .contextMenu {
-                            ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
-                                Button {
-                                    Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
-                                } label: {
-                                    Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
-                                }
-                                .disabled(s == task.status)
-                            }
-                            Divider()
-                            Button {
-                                Task { await viewModel.toggleTaskCompletion(task.id) }
-                            } label: {
-                                Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
-                            }
-                            Divider()
-                            Button(role: .destructive) {
-                                pendingDeleteTask = task
-                            } label: {
-                                Label("删除任务", systemImage: "trash")
-                            }
-                        }
-                }
-
+            // ── Card stack —— 使用 LazyVStack 不嵌 ScrollView ────────
+            LazyVStack(spacing: BsSpacing.sm) {
                 if tasks.isEmpty {
-                    Text("暂无任务")
-                        .font(BsTypography.caption)
-                        .foregroundColor(BsColor.inkMuted.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, BsSpacing.xxl)
-                        .background(
-                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                                .fill(BsColor.surfaceSecondary.opacity(0.4))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                                .stroke(BsColor.borderSubtle, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                        )
+                    kanbanEmptyColumn
+                } else {
+                    ForEach(tasks) { task in
+                        KanbanNativeCard(task: task)
+                            .draggable(task.id.uuidString) {
+                                KanbanNativeCard(task: task)
+                                    .frame(width: width - 8)
+                                    .opacity(0.9)
+                            }
+                            .contextMenu {
+                                ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
+                                    Button {
+                                        Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
+                                    } label: {
+                                        Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
+                                    }
+                                    .disabled(s == task.status)
+                                }
+                                Divider()
+                                Button {
+                                    Task { await viewModel.toggleTaskCompletion(task.id) }
+                                } label: {
+                                    Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
+                                }
+                                Divider()
+                                Button(role: .destructive) {
+                                    pendingDeleteTask = task
+                                } label: {
+                                    Label("删除任务", systemImage: "trash")
+                                }
+                            }
+                    }
                 }
             }
             .dropDestination(for: String.self) { ids, _ in
@@ -513,6 +497,20 @@ public struct TaskListView: View {
             }
         }
         .frame(width: width, alignment: .top)
+    }
+
+    /// 空列占位 —— 无边框, SF symbol + 文案居中, Apple Reminders 风格。
+    private var kanbanEmptyColumn: some View {
+        VStack(spacing: BsSpacing.sm) {
+            Image(systemName: "tray")
+                .font(.system(size: 28, weight: .light))
+                .foregroundColor(BsColor.inkFaint)
+            Text("此列暂无任务")
+                .font(BsTypography.bodySmall)
+                .foregroundColor(BsColor.inkMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, BsSpacing.xxl + BsSpacing.sm)
     }
 
     // MARK: - Empty state
@@ -710,16 +708,19 @@ public struct CreateTaskView: View {
     }
 }
 
-// MARK: - Kanban Compact Card
+// MARK: - Kanban Native Card (v4)
 
-/// 看板模式专用紧凑卡片 —— 一行能看清的最小信息密度:
-///   • 优先级小圆点 (左侧 4pt 色条 + 顶部小点) —— 一眼颜色判断紧急程度
-///   • 标题 (最多 2 行截断) —— 主要识别符
-///   • 截止日期 + 是否逾期 (caption2) —— 时间感知
+/// Native iOS-style 看板卡片 —— 与 list mode 同源 typography + token,
+/// 但更紧凑、无 web-style 左色条/抽屉手柄。视觉参考: Apple Reminders /
+/// Things 3 list row, iOS Stocks 横向 watchlist tile。
 ///
-/// 跟 TaskCardView (list mode) 视觉同源:都用 BsContentCard token,
-/// 都用 BsColor 调色板,但布局更紧凑 (适合横滑卡片)。
-private struct KanbanCompactCard: View {
+/// 布局 (top → bottom):
+///   1. Title row: 优先级 6pt dot + Inter SemiBold 17 标题 (最多 2 行)
+///   2. (可选) 项目 chip —— 仅当 task 关联 project 时
+///   3. (可选) 描述 1 行 —— 仅当有 description
+///   4. (可选) 进度 mini bar —— 仅当 progress > 0
+///   5. Footer: 截止日期 pill + 协助者数 + 优先级文字
+private struct KanbanNativeCard: View {
     let task: TaskModel
 
     private var isOverdue: Bool {
@@ -728,48 +729,103 @@ private struct KanbanCompactCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // 左侧 3pt 优先级色条 —— 直观判断紧急程度
-            Rectangle()
-                .fill(task.priority.tint)
-                .frame(width: 3)
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
+            // ── 1. Title row ─────────────────────────────────────────
+            HStack(alignment: .firstTextBaseline, spacing: BsSpacing.sm) {
+                Circle()
+                    .fill(task.priority.tint)
+                    .frame(width: 7, height: 7)
+                    .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 2 }
 
-            VStack(alignment: .leading, spacing: 6) {
-                // 标题 + 优先级小点
-                HStack(alignment: .top, spacing: 6) {
-                    Circle()
-                        .fill(task.priority.tint)
-                        .frame(width: 6, height: 6)
-                        .padding(.top, 5)
-                    Text(task.title)
-                        .font(BsTypography.bodySmall.weight(.medium))
-                        .foregroundColor(BsColor.ink)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                Text(task.title)
+                    .font(BsTypography.cardTitle)
+                    .foregroundColor(BsColor.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // ── 2. Project chip ─────────────────────────────────────
+            if let project = task.project {
+                HStack(spacing: BsSpacing.xs) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 9))
+                    Text(project.name)
+                        .font(BsTypography.inter(11, weight: "Medium"))
                 }
+                .foregroundColor(BsColor.brandAzure.opacity(0.85))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(BsColor.brandAzure.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: BsRadius.xs, style: .continuous))
+            }
 
-                // Due date 行 —— 没有 due 也不强行渲染,保持紧凑
+            // ── 3. Description (single line) ────────────────────────
+            if let description = task.description, !description.isEmpty {
+                Text(description)
+                    .font(BsTypography.bodySmall)
+                    .foregroundColor(BsColor.inkMuted)
+                    .lineLimit(1)
+            }
+
+            // ── 4. Progress mini-bar ────────────────────────────────
+            if task.progress > 0 {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(BsColor.inkFaint.opacity(0.25))
+                        Capsule()
+                            .fill(BsColor.success)
+                            .frame(width: proxy.size.width * CGFloat(task.progress) / 100)
+                    }
+                }
+                .frame(height: 3)
+            }
+
+            // ── 5. Footer: due date + participants + priority ───────
+            HStack(spacing: BsSpacing.sm) {
                 if let due = task.dueDate {
                     HStack(spacing: 4) {
                         Image(systemName: isOverdue ? "exclamationmark.circle.fill" : "calendar")
-                            .font(.caption2)
-                            .foregroundColor(isOverdue ? BsColor.danger : BsColor.inkMuted)
+                            .font(.system(size: 10))
                         Text(due, format: .dateTime.month(.abbreviated).day())
                             .font(BsTypography.captionSmall)
-                            .foregroundColor(isOverdue ? BsColor.danger : BsColor.inkMuted)
                     }
+                    .foregroundColor(isOverdue ? BsColor.danger : BsColor.inkMuted)
+                    .padding(.horizontal, BsSpacing.sm)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill((isOverdue ? BsColor.danger : BsColor.inkMuted).opacity(0.10))
+                    )
                 }
+
+                if !task.participants.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 10))
+                        Text("\(task.participants.count)")
+                            .font(BsTypography.captionSmall)
+                    }
+                    .foregroundColor(BsColor.inkMuted)
+                }
+
+                Spacer()
+
+                Text(task.priority.cnLabel)
+                    .font(BsTypography.captionSmall.weight(.semibold))
+                    .foregroundColor(task.priority.tint)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
         }
+        .padding(.horizontal, BsSpacing.lg)
+        .padding(.vertical, BsSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(BsColor.surfacePrimary)
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
                 .stroke(BsColor.borderSubtle, lineWidth: 0.5)
         )
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .bsShadow(BsShadow.xs)
     }
 }

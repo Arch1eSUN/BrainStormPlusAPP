@@ -177,11 +177,11 @@ public struct ScheduleView: View {
     @ViewBuilder
     private var myModeSection: some View {
         VStack(alignment: .leading, spacing: BsSpacing.lg) {
-            // Keep the geofence attendance card at the top so "my" mode
-            // remains the employee's home — matches today's iOS UX.
-            AttendanceView(isEmbedded: true)
-                .clipShape(RoundedRectangle(cornerRadius: BsRadius.xxl - 4, style: .continuous))
-                .bsShadow(BsShadow.md)
+            // 用户反馈 (2026-04-25):"我们已经有考勤了 没必要在排班里再放一个打卡信息"
+            // 原本 my 模式顶部嵌了一个 `AttendanceView(isEmbedded: true)` 打卡卡,
+            // 与独立的 考勤页 (AttendanceView 主入口/Dashboard AttendanceHeroCard)
+            // 三处重复。打卡只保留 1) Dashboard Hero  2) 考勤模块。排班不再承担打卡。
+            // 排班 my 模式 = 纯排班视图(未来 14 天 + 快捷请假/外勤/出差)。
 
             if let error = viewModel.errorMessage {
                 errorBanner(error)

@@ -173,24 +173,61 @@ public enum AIAnalysisPhase: String {
     case initPhase = "INIT"
     case scraping = "SCRAPING"
     case analyzing = "ANALYZING"
+    case prompt    = "AI_PROMPT"
     case generating = "AI_GENERATING"
+    case streaming  = "AI_STREAMING"
+    case parsing    = "PARSING"
     case done = "DONE"
 
     public var label: String {
         switch self {
-        case .initPhase: return "初始化"
-        case .scraping: return "数据抓取"
-        case .analyzing: return "数据分析"
-        case .generating: return "报告生成中"
+        case .initPhase: return "初始化任务"
+        case .scraping: return "抓取页面内容"
+        case .analyzing: return "整理上下文"
+        case .prompt: return "构建分析指令"
+        case .generating: return "调用大模型"
+        case .streaming: return "流式输出 JSON"
+        case .parsing: return "解析结构化数据"
         case .done: return "完成"
         }
     }
 
-    public static let ordered: [AIAnalysisPhase] = [.initPhase, .scraping, .analyzing, .generating]
+    public var icon: String {
+        switch self {
+        case .initPhase: return "wand.and.stars"
+        case .scraping: return "doc.text.magnifyingglass"
+        case .analyzing: return "rectangle.stack.badge.person.crop"
+        case .prompt: return "text.bubble"
+        case .generating: return "brain.head.profile"
+        case .streaming: return "bolt.horizontal.fill"
+        case .parsing: return "curlybraces"
+        case .done: return "checkmark.seal.fill"
+        }
+    }
+
+    /// Order shown to the user. `done` is the terminal sentinel and not rendered as a row.
+    public static let ordered: [AIAnalysisPhase] = [
+        .initPhase, .scraping, .analyzing, .prompt, .generating, .streaming, .parsing,
+    ]
 }
 
 public struct AIAnalysisProgress: Equatable {
     public let phase: AIAnalysisPhase
     public let message: String
     public let percent: Int
+}
+
+/// Per-stage timing log entry (rendered in the expandable detail panel).
+public struct AIAnalysisStageLog: Identifiable, Equatable {
+    public let id = UUID()
+    public let phase: AIAnalysisPhase
+    public let message: String
+    public let timestamp: Date
+    /// When the stage finished. `nil` while still active.
+    public var completedAt: Date?
+
+    public var durationSeconds: Double? {
+        guard let completedAt else { return nil }
+        return completedAt.timeIntervalSince(timestamp)
+    }
 }

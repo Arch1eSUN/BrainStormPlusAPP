@@ -13,8 +13,18 @@ public final class AIAnalysisViewModel: ObservableObject {
     @Published public var pageState: AIAnalysisPageState = .idle
     @Published public var progress: AIAnalysisProgress? = nil
     @Published public var phaseHistory: [AIAnalysisPhase] = []
+    /// Per-phase timing log (used by the expandable detail panel).
+    @Published public var stageLogs: [AIAnalysisStageLog] = []
+    /// Wall-clock start of the current run; `nil` when idle.
+    @Published public var runStartedAt: Date? = nil
+    /// Total duration once `pageState == .done`.
+    @Published public var totalDurationSeconds: Double? = nil
     @Published public var report: String = ""
     @Published public var scrapedData: [String: Any]? = nil
+
+    /// Streaming `<think>` stripper state — defense in depth in case the
+    /// server forwards a leak (different provider, future regression, etc.).
+    private var clientStrip = ClientThinkStripState()
 
     // Provider
     @Published public var provider: AIAnalysisProvider? = nil
@@ -86,6 +96,10 @@ public final class AIAnalysisViewModel: ObservableObject {
         report = ""
         scrapedData = nil
         phaseHistory = []
+        stageLogs = []
+        totalDurationSeconds = nil
+        runStartedAt = Date()
+        clientStrip = ClientThinkStripState()
         progress = AIAnalysisProgress(phase: .initPhase, message: "准备中...", percent: 0)
 
         let images = parsedImageUrls
@@ -134,8 +148,12 @@ public final class AIAnalysisViewModel: ObservableObject {
         report = ""
         progress = nil
         phaseHistory = []
+        stageLogs = []
+        runStartedAt = nil
+        totalDurationSeconds = nil
         scrapedData = nil
         errorMessage = nil
+        clientStrip = ClientThinkStripState()
     }
 
     // MARK: - Event handler
@@ -143,25 +161,166 @@ public final class AIAnalysisViewModel: ObservableObject {
     private func apply(_ event: AIAnalysisEvent) {
         switch event {
         case .progress(let p):
+            // Mark previous active stage complete (closes its row in the log).
+            if let last = stageLogs.indices.last, stageLogs[last].completedAt == nil {
+                stageLogs[last].completedAt = Date()
+            }
             self.progress = p
             if !phaseHistory.contains(p.phase) {
                 phaseHistory.append(p.phase)
             }
+            if p.phase != .done {
+                stageLogs.append(
+                    AIAnalysisStageLog(phase: p.phase, message: p.message, timestamp: Date(), completedAt: nil)
+                )
+            }
         case .scrapedData(let data):
             self.scrapedData = data
         case .aiToken(let token):
-            self.report.append(token)
+            // Defense-in-depth: even if the server already strips, run the
+            // streaming-safe stripper here so a future provider regression
+            // can never leak <think> into the visible report.
+            let safe = stripThinkStreaming(state: &clientStrip, token: token)
+            if !safe.isEmpty {
+                self.report.append(safe)
+            }
         case .aiDone(let finalReport):
-            let trimmed = finalReport.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                self.report = trimmed
-            } else {
-                self.report = self.report.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Final whole-document sweep + flush.
+            var combined = finalReport
+            if combined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                combined = self.report
+            }
+            combined.append(flushThinkStreaming(state: &clientStrip))
+            let cleaned = sanitizeFinalReport(combined).trimmingCharacters(in: .whitespacesAndNewlines)
+            self.report = cleaned
+
+            // Close out any still-active stage entry.
+            if let last = stageLogs.indices.last, stageLogs[last].completedAt == nil {
+                stageLogs[last].completedAt = Date()
+            }
+            if let runStartedAt {
+                self.totalDurationSeconds = Date().timeIntervalSince(runStartedAt)
             }
             self.pageState = .done
         case .serverError(let msg):
             self.errorMessage = msg
             self.pageState = .error(msg)
+            if let last = stageLogs.indices.last, stageLogs[last].completedAt == nil {
+                stageLogs[last].completedAt = Date()
+            }
         }
     }
+}
+
+// MARK: - Client-side <think> stripper
+
+/// Mirrors `BrainStorm+-Web/src/app/api/ai/analyze/route.ts` stripper.
+struct ClientThinkStripState {
+    var insideThink: Bool = false
+    var pending: String = ""
+}
+
+private let kThinkOpen = try! NSRegularExpression(pattern: "<think(?:ing)?\\s*>", options: .caseInsensitive)
+private let kThinkClose = try! NSRegularExpression(pattern: "</think(?:ing)?\\s*>", options: .caseInsensitive)
+
+@MainActor
+func stripThinkStreaming(state: inout ClientThinkStripState, token: String) -> String {
+    var buf = state.pending + token
+    var out = ""
+
+    while !buf.isEmpty {
+        if state.insideThink {
+            let range = NSRange(buf.startIndex..., in: buf)
+            if let m = kThinkClose.firstMatch(in: buf, options: [], range: range),
+               let r = Range(m.range, in: buf) {
+                buf = String(buf[r.upperBound...])
+                state.insideThink = false
+                continue
+            }
+            // Whole buffer still inside <think>; hold a small tail in case
+            // </think> straddles the next chunk.
+            if buf.count > 12 {
+                state.pending = String(buf.suffix(12))
+            } else {
+                state.pending = buf
+            }
+            return out
+        }
+
+        let range = NSRange(buf.startIndex..., in: buf)
+        if let m = kThinkOpen.firstMatch(in: buf, options: [], range: range),
+           let r = Range(m.range, in: buf) {
+            out += String(buf[..<r.lowerBound])
+            buf = String(buf[r.upperBound...])
+            state.insideThink = true
+            continue
+        }
+
+        // No tag in buffer; hold trailing chars in case a partial "<thi"
+        // straddles into the next chunk.
+        if let lt = buf.lastIndex(of: "<") {
+            let suffixCount = buf.distance(from: lt, to: buf.endIndex)
+            if suffixCount <= 9 {
+                out += String(buf[..<lt])
+                state.pending = String(buf[lt...])
+                return out
+            }
+        }
+        out += buf
+        state.pending = ""
+        buf = ""
+    }
+    return out
+}
+
+@MainActor
+func flushThinkStreaming(state: inout ClientThinkStripState) -> String {
+    if state.insideThink {
+        state.pending = ""
+        return ""
+    }
+    let tail = state.pending
+    state.pending = ""
+    return tail
+}
+
+/// Whole-document final sweep — handles unclosed `<think>` openers.
+@MainActor
+func sanitizeFinalReport(_ raw: String) -> String {
+    if raw.isEmpty { return raw }
+    var s = raw
+
+    // Drop any properly-bracketed <think>…</think> blocks.
+    let bracketed = try! NSRegularExpression(
+        pattern: "<think(?:ing)?\\s*>[\\s\\S]*?</think(?:ing)?\\s*>",
+        options: [.caseInsensitive]
+    )
+    s = bracketed.stringByReplacingMatches(
+        in: s, options: [],
+        range: NSRange(s.startIndex..., in: s),
+        withTemplate: ""
+    )
+
+    // Unclosed opener: drop everything from `<think…>` up to the first `{` / `[`.
+    if let openMatch = kThinkOpen.firstMatch(
+        in: s, options: [], range: NSRange(s.startIndex..., in: s)
+    ),
+       let openRange = Range(openMatch.range, in: s) {
+        let prefix = String(s[..<openRange.lowerBound])
+        let after = String(s[openRange.lowerBound...])
+        if let jsonStart = after.firstIndex(where: { $0 == "{" || $0 == "[" }) {
+            s = prefix + String(after[jsonStart...])
+        } else {
+            s = prefix
+        }
+    }
+
+    // Catch dangling closer with no opener.
+    s = kThinkClose.stringByReplacingMatches(
+        in: s, options: [],
+        range: NSRange(s.startIndex..., in: s),
+        withTemplate: ""
+    )
+
+    return s.trimmingCharacters(in: .whitespacesAndNewlines)
 }
