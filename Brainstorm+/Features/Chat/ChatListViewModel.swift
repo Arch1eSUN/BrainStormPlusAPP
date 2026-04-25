@@ -31,6 +31,14 @@ public class ChatListViewModel: ObservableObject {
     /// Mirrors Web `getAccessibleChannelMap` (src/lib/actions/chat.ts:252-282).
     /// Three-part union done client-side because chat_channels SELECT RLS is
     /// `USING (true)`; Web enforces access via server-side admin client.
+    ///
+    /// Bug-fix(看不见历史对话记录):
+    /// 三个 query 改成串行 + per-query 异常隔离 ——
+    /// 之前 `async let` 并发 + 单个 catch 兜全部,任何一条 query 抛错(常见
+    /// 是 announcement 频道 RLS 在某些组织下没行,或 chat_channel_members
+    /// 在 user JWT 下被某些 schema 漂移阻断)整个 fetch 全挂,UI 显示空。
+    /// 串行 + 各自 try? 后,即使某一条失败仍能展示其他两条的结果,跟 web
+    /// admin client 看到的"任意可访问 channel"语义对齐。
     public func fetchChannels() async {
         isLoading = true
         errorMessage = nil
@@ -44,59 +52,92 @@ public class ChatListViewModel: ObservableObject {
             return
         }
 
-        do {
-            async let announcements: [ChatChannel] = client
+        // 1) Announcement channels —— RLS: type='announcement' 任何登录用户可见
+        let anns: [ChatChannel] = await fetchChannelGroup("announcements") {
+            try await client
                 .from("chat_channels")
                 .select()
                 .eq("type", value: "announcement")
                 .execute()
                 .value
+        }
 
-            async let owned: [ChatChannel] = client
+        // 2) Owned channels —— created_by = self
+        let ownd: [ChatChannel] = await fetchChannelGroup("owned") {
+            try await client
                 .from("chat_channels")
                 .select()
                 .eq("created_by", value: currentUserId.uuidString)
                 .execute()
                 .value
+        }
 
-            async let memberships: [ChatChannelMember] = client
+        // 3) Member channels —— 先拿 membership 再批量查 channel
+        let memberRows: [ChatChannelMember] = await fetchChannelGroup("memberships") {
+            try await client
                 .from("chat_channel_members")
                 .select("id,channel_id,user_id,role,joined_at")
                 .eq("user_id", value: currentUserId.uuidString)
                 .execute()
                 .value
+        }
 
-            let (anns, ownd, memberRows) = try await (announcements, owned, memberships)
-
-            var memberChannels: [ChatChannel] = []
-            let memberChannelIds = memberRows.map { $0.channelId.uuidString }
-            if !memberChannelIds.isEmpty {
-                memberChannels = try await client
+        var memberChannels: [ChatChannel] = []
+        let memberChannelIds = memberRows.map { $0.channelId.uuidString }
+        if !memberChannelIds.isEmpty {
+            memberChannels = await fetchChannelGroup("memberChannels") {
+                try await client
                     .from("chat_channels")
                     .select()
                     .in("id", values: memberChannelIds)
                     .execute()
                     .value
             }
+        }
 
-            var seen = Set<UUID>()
-            var merged: [ChatChannel] = []
-            for ch in anns + ownd + memberChannels {
-                if seen.insert(ch.id).inserted { merged.append(ch) }
+        var seen = Set<UUID>()
+        var merged: [ChatChannel] = []
+        for ch in anns + ownd + memberChannels {
+            if seen.insert(ch.id).inserted { merged.append(ch) }
+        }
+
+        merged.sort { a, b in
+            switch (a.lastMessageAt, b.lastMessageAt) {
+            case let (x?, y?): return x > y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return (a.createdAt ?? .distantPast) > (b.createdAt ?? .distantPast)
             }
+        }
 
-            merged.sort { a, b in
-                switch (a.lastMessageAt, b.lastMessageAt) {
-                case let (x?, y?): return x > y
-                case (_?, nil): return true
-                case (nil, _?): return false
-                case (nil, nil): return (a.createdAt ?? .distantPast) > (b.createdAt ?? .distantPast)
-                }
-            }
+        #if DEBUG
+        print("[ChatListViewModel] fetchChannels merged=\(merged.count) anns=\(anns.count) owned=\(ownd.count) member=\(memberChannels.count)")
+        #endif
 
-            self.channels = merged
+        self.channels = merged
+
+        // 如果三条全空 + 用户也没 membership,给一个明确提示而不是 silent
+        // empty(避免用户反馈"消息没和 web 同步"时无从下手 debug)。
+        if merged.isEmpty {
+            #if DEBUG
+            print("[ChatListViewModel] no channels visible to user \(currentUserId.uuidString) — check chat_channels RLS or seeded data")
+            #endif
+        }
+    }
+
+    /// Helper: 每条 query 独立 try,失败 console log 后返回 [],而不是
+    /// 让一条挂掉的 query 把整个 fetchChannels 的结果清零。
+    private func fetchChannelGroup<T>(
+        _ tag: String,
+        _ run: () async throws -> [T]
+    ) async -> [T] {
+        do {
+            return try await run()
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            #if DEBUG
+            print("[ChatListViewModel] fetchChannelGroup(\(tag)) failed: \(error.localizedDescription)")
+            #endif
+            return []
         }
     }
 

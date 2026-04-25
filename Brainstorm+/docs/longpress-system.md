@@ -121,6 +121,44 @@
 - "刷新此卡片" 是 nice-to-have 但 widget 数据已通过 `.task` 自动 fetch + `.refreshable` 全屏刷新，独立刷单卡的工程量 > 收益。
 - 留给未来：当 widget 出现独立大数据源（如外部 API）时再加 per-widget refresh。
 
+### 6. 审批申请项 ("我提交的" + 审批人 queue)
+
+`ApprovalsListView.swift`（"我提交的"）：
+
+| 位置 | 项 | 角色 | 备注 |
+|---|---|---|---|
+| 顶部 | 查看详情 | 普通 | NavigationLink(value:)，与 row tap 等价 |
+| 中部 | 复制编号 | 普通 | UIPasteboard，UUID 字符串供工单使用 |
+| 中部 | 复制审批意见 | 普通 | 仅 `reviewerNote` 非空时显示 |
+| 中部 | 复制摘要 | 普通 | "类型 · 创建时间" 拼接，常用于 chat 求审 |
+
+`ApprovalQueueView.swift`（审批人）：
+
+| 位置 | 项 | 角色 | 备注 |
+|---|---|---|---|
+| 顶部 | 查看详情 | 普通 | 同 row tap |
+| 中部 | 批准 | 普通 | 仅 pending + `kind.supportsWriteOnIOS`；走 PendingAction sheet |
+| 中部 | 拒绝 | destructive | 同上；后续 ApprovalCommentSheet 强制填 reason |
+| 底部 | 复制申请人 / 复制编号 | 普通 | 仅 profile 非空时显示申请人 |
+
+### 7. 公告项 (`AnnouncementsListView.swift`)
+
+| 位置 | 项 | 角色 | 备注 |
+|---|---|---|---|
+| 中部 | 复制内容 / 复制标题与内容 | 普通 | UIPasteboard |
+| 中部 | 置顶 / 取消置顶 | 普通 | 仅 admin+ 可见，调 `togglePin` |
+| 底部 | 删除公告 | destructive | hoisted `pendingDelete` confirmationDialog（与原 trash 按钮共用） |
+
+### 8. 日报 / 周报项 (`ReportingListView.swift`)
+
+| 位置 | 项 | 角色 | 备注 |
+|---|---|---|---|
+| 顶部 | 编辑 | 普通 | 弹 `DailyLogEditView` / `WeeklyReportEditView` sheet |
+| 中部 | 复制内容 | 普通 | 日期 + content / 周报多段拼接 |
+| 底部 | 删除 | destructive | hoisted `pendingDeleteDaily` / `pendingDeleteWeekly` confirmationDialog |
+
+之前两段都是 `Button("编辑") { … }` 裸标签 + 直接 inline mutate delete，本轮按规范升级到 `Label(_, systemImage:)` + hoisted dialog + `Haptic.warning/error()` 区段。
+
 ---
 
 ## 已有但本次未改动的长按场景
@@ -132,7 +170,13 @@
 - `Features/OKRs/OKRDetailView.swift` —— KR 行 `.contextMenu`（编辑 / 删除）。
 - `Features/Deliverables/DeliverableListView.swift` —— 行 `.contextMenu`（编辑 / 删除）。
 
-新增 5 项 + 已有 4 项 = **9 处** 长按入口构成 v1 体系。
+v1: 新增 5 项 + 已有 4 项 = 9 处。
+v2 (本轮)：再补 4 处 —— 我提交的 / 审批人 queue / 公告 / 日报+周报 = **13 处** 长按入口构成 v2 体系。
+
+### 仍未实施 (deferred)
+
+- **Avatar 长按**：需要先有 `UserDetailSheet` / `UserPreviewSheet` 组件 + 跳聊天/打电话能力的现成 RPC。当前没有承接 view，留给独立 sprint（与"@提及完整 username 替换"同一批）。
+- **Dashboard widget 卡片整体长按**：`BsWidgetCard` 在 `Shared/`，本轮 hotfix 约束不动 Shared/，没法在 design system 层加 `.contextMenu(menuItems:preview:)`。要做需要先扩展 `BsWidgetCard` 的 API（接收 `@ViewBuilder` menu 闭包），然后 9 个 widget 各自填具体 action。Roadmap：作为 long-press v3 一并升级。
 
 ---
 

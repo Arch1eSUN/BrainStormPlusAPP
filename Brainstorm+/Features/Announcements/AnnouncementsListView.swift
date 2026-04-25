@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 public struct AnnouncementsListView: View {
     @StateObject private var viewModel: AnnouncementsListViewModel
@@ -85,6 +86,10 @@ public struct AnnouncementsListView: View {
                     ForEach(viewModel.items) { item in
                         row(for: item)
                             .padding(.horizontal, BsSpacing.lg)
+                            // Long-press 增强 (longpress-system §3 公告项):
+                            // contextMenu 让公告也具备 iOS 26 list 行的标准长按
+                            // 体感:复制内容 / 置顶 / 删除(管理员)。
+                            .contextMenu { announcementContextMenu(for: item) }
                     }
                 }
                 .padding(.vertical, BsSpacing.md)
@@ -252,6 +257,45 @@ public struct AnnouncementsListView: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.setLocalizedDateFormatFromTemplate("MMMdHHmm")
         return formatter.string(from: date)
+    }
+
+    @ViewBuilder
+    private func announcementContextMenu(for item: Announcement) -> some View {
+        // 中部 mutation 优先 (longpress-system §菜单结构原则)
+        Button {
+            UIPasteboard.general.string = item.content
+            Haptic.light()
+        } label: {
+            Label("复制内容", systemImage: "doc.on.doc")
+        }
+
+        Button {
+            UIPasteboard.general.string = "\(item.title)\n\(item.content)"
+            Haptic.light()
+        } label: {
+            Label("复制标题与内容", systemImage: "text.quote")
+        }
+
+        if canManage {
+            Divider()
+
+            Button {
+                Task { await viewModel.togglePin(item) }
+                Haptic.light()
+            } label: {
+                Label(item.pinned ? "取消置顶" : "置顶", systemImage: item.pinned ? "pin.slash" : "pin")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                // 不真删,等 confirmationDialog 二次确认 (hoisted state)
+                Haptic.warning()
+                pendingDelete = item
+            } label: {
+                Label("删除公告", systemImage: "trash")
+            }
+        }
     }
 
     private var canManage: Bool {

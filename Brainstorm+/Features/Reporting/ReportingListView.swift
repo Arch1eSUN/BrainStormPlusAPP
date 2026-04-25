@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // ══════════════════════════════════════════════════════════════════
 // Batch B.1 — Reporting list with CRUD entry points.
@@ -13,6 +14,11 @@ public struct ReportingListView: View {
 
     @State private var dailyEditTarget: DailyLogEditTarget?
     @State private var weeklyEditTarget: WeeklyEditTarget?
+    // Long-press 增强 (longpress-system §菜单结构原则: hoisted destructive state):
+    // 删除走 confirmationDialog 二次确认而不是 contextMenu 直接 mutate。
+    // hoisted 到 view 根,daily / weekly 共用同一对 state 互不干扰。
+    @State private var pendingDeleteDaily: DailyLog?
+    @State private var pendingDeleteWeekly: WeeklyReport?
 
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
@@ -89,6 +95,42 @@ public struct ReportingListView: View {
                 existingReport: target.report
             )
         }
+        .confirmationDialog(
+            "确认删除",
+            isPresented: Binding(
+                get: { pendingDeleteDaily != nil },
+                set: { if !$0 { pendingDeleteDaily = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeleteDaily
+        ) { target in
+            Button("删除", role: .destructive) {
+                Haptic.error()
+                Task { await viewModel.deleteLog(target) }
+                pendingDeleteDaily = nil
+            }
+            Button("取消", role: .cancel) { pendingDeleteDaily = nil }
+        } message: { _ in
+            Text("将删除该日报,该操作无法撤销。")
+        }
+        .confirmationDialog(
+            "确认删除",
+            isPresented: Binding(
+                get: { pendingDeleteWeekly != nil },
+                set: { if !$0 { pendingDeleteWeekly = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeleteWeekly
+        ) { target in
+            Button("删除", role: .destructive) {
+                Haptic.error()
+                Task { await viewModel.deleteWeeklyReport(target) }
+                pendingDeleteWeekly = nil
+            }
+            Button("取消", role: .cancel) { pendingDeleteWeekly = nil }
+        } message: { _ in
+            Text("将删除该周报,该操作无法撤销。")
+        }
         .zyErrorBanner($viewModel.errorMessage)
     }
 
@@ -113,14 +155,37 @@ public struct ReportingListView: View {
                             dailyEditTarget = .edit(log)
                         }
                         .contextMenu {
-                            Button("编辑") { dailyEditTarget = .edit(log) }
-                            Button("删除", role: .destructive) {
-                                Task { await viewModel.deleteLog(log) }
+                            // Long-press 增强 (longpress-system §5 日报项):
+                            // 编辑 / 复制 / 删除三段式 + Label icon 化。删除走
+                            // hoisted confirmationDialog,不再 inline mutate。
+                            Button {
+                                Haptic.light()
+                                dailyEditTarget = .edit(log)
+                            } label: {
+                                Label("编辑", systemImage: "pencil")
+                            }
+
+                            Button {
+                                let dateStr = log.date.formatted(.dateTime.year().month().day())
+                                let summary = "\(dateStr)\n\(log.content)"
+                                UIPasteboard.general.string = summary
+                                Haptic.light()
+                            } label: {
+                                Label("复制内容", systemImage: "doc.on.doc")
+                            }
+
+                            Divider()
+
+                            Button(role: .destructive) {
+                                Haptic.warning()
+                                pendingDeleteDaily = log
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Task { await viewModel.deleteLog(log) }
+                                pendingDeleteDaily = log
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
@@ -156,14 +221,33 @@ public struct ReportingListView: View {
                             weeklyEditTarget = .edit(r)
                         }
                         .contextMenu {
-                            Button("编辑") { weeklyEditTarget = .edit(r) }
-                            Button("删除", role: .destructive) {
-                                Task { await viewModel.deleteWeeklyReport(r) }
+                            // Long-press 增强 (longpress-system §5 周报项)
+                            Button {
+                                Haptic.light()
+                                weeklyEditTarget = .edit(r)
+                            } label: {
+                                Label("编辑", systemImage: "pencil")
+                            }
+
+                            Button {
+                                UIPasteboard.general.string = weeklyClipboardSummary(r)
+                                Haptic.light()
+                            } label: {
+                                Label("复制内容", systemImage: "doc.on.doc")
+                            }
+
+                            Divider()
+
+                            Button(role: .destructive) {
+                                Haptic.warning()
+                                pendingDeleteWeekly = r
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Task { await viewModel.deleteWeeklyReport(r) }
+                                pendingDeleteWeekly = r
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
@@ -178,6 +262,38 @@ public struct ReportingListView: View {
             }
         }
     }
+}
+
+// MARK: - Long-press clipboard helpers
+
+private func weeklyClipboardSummary(_ r: WeeklyReport) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    let start = f.string(from: r.weekStart)
+    let end = r.weekEnd.map { f.string(from: $0) } ?? ""
+    let header = end.isEmpty ? "周报 \(start)" : "周报 \(start) ~ \(end)"
+
+    var lines: [String] = [header, ""]
+    if let s = r.summary, !s.isEmpty {
+        lines.append("摘要:")
+        lines.append(s)
+        lines.append("")
+    }
+    if let a = r.accomplishments, !a.isEmpty {
+        lines.append("成就:")
+        lines.append(a)
+        lines.append("")
+    }
+    if let p = r.plans, !p.isEmpty {
+        lines.append("计划:")
+        lines.append(p)
+        lines.append("")
+    }
+    if let b = r.blockers, !b.isEmpty {
+        lines.append("阻碍:")
+        lines.append(b)
+    }
+    return lines.joined(separator: "\n")
 }
 
 // ══════════════════════════════════════════════════════════════════

@@ -20,21 +20,23 @@ import Supabase
 public struct FinanceView: View {
     @StateObject private var viewModel: FinanceViewModel
     @Environment(SessionManager.self) private var sessionManager
-    // Bug-fix(财务历史闪一下 + 返回后才显示):
-    // 之前用 .sheet(isPresented:) 嵌内层 NavigationStack 渲染历史列表,在
-    // isEmbedded 模式下(从 Command Palette / Dashboard 进入)外层已有
-    // NavigationStack —— sheet 内的 NavigationLink push 经常被外层 stack 抢断,
-    // 表现就是 sheet 一闪而过、再返回时 sheet 才"补"出来。
-    // 修法:历史列表改成同栈 push (走外层或自己的 NavigationStack),完全消除
-    // sheet ↔ NavStack 双层冲突。`historyRoute` 是 navigationDestination 的 tag,
-    // 用枚举而不是 Bool 是为了 Hashable + 未来还能扩展子分类。
+    // Bug-fix(财务历史:点了停在当前页,返回后才显示):
+    // 上一轮把 sheet 改成 toolbar `NavigationLink(value: HistoryRoute.all)` +
+    // `.navigationDestination(for: HistoryRoute.self)`,但在 isEmbedded=true
+    // (从 BsCommandPalette / DashboardWidget 进入,palette 自己持有 NavStack)
+    // 时,toolbar 的 NavigationLink(value:) 与外层 palette 的 view-based push
+    // 在 iOS 26 上不稳定 —— 用户点了"历史"按钮,push 触发但 destination
+    // body 没渲染 (panel stale state),只能在 pop 回去时 SwiftUI 才补绘出来。
+    //
+    // 改回 sheet pattern + sheet 内自己的 NavigationStack,完全独立于外层
+    // 任何 NavStack 状态;历史列表与 detail 都在 sheet 内 push,不再依赖
+    // 外层 path / destination 注册顺序。这是 iOS 处理"全屏 modal 二级
+    // 列表 + 详情"的最稳路径(Apple Mail / Notes / Reminders 的"标签"列表
+    // 都走 sheet+inner NavStack)。
+    @State private var showHistorySheet: Bool = false
     @State private var navPath = NavigationPath()
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
-
-    /// History 路由 tag。NavigationLink(value:) push 这条 → 触发
-    /// `.navigationDestination(for: HistoryRoute.self)` 渲染全屏历史列表。
-    private enum HistoryRoute: Hashable { case all }
 
     public init(client: SupabaseClient = supabase, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: FinanceViewModel(client: client))
@@ -84,14 +86,14 @@ public struct FinanceView: View {
         .toolbar {
             if canAccess {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    // 用 NavigationLink(value:) 替换原来的 sheet trigger ——
-                    // push 走外层(或自己持有的) NavigationStack,跟 detail push
-                    // 共用同一条 path,iOS 不会再出现"sheet present 中 push 被
-                    // 抢断"的二次 dispatch。
-                    NavigationLink(value: HistoryRoute.all) {
+                    // 改回纯 Button + sheet —— sheet 内嵌自己的 NavigationStack,
+                    // 完全独立于外层 palette/dashboard 的 NavStack 状态。
+                    Button {
+                        Haptic.light()
+                        showHistorySheet = true
+                    } label: {
                         Image(systemName: "clock.arrow.circlepath")
                     }
-                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     .accessibilityLabel("处理历史")
                 }
             }
@@ -102,14 +104,31 @@ public struct FinanceView: View {
         .refreshable {
             if canAccess { await viewModel.fetchHistory() }
         }
-        // 单一 value-based destination 注册一次,同时承接 record push 和
-        // history list push。两个 type 都是 Hashable,SwiftUI 按 type 路由,
-        // 不会冲突。
+        // FinanceAIRecord push 仍然走外层 NavStack(submitAIProcess 成功后
+        // navPath.append 也是同一条),sheet 内的 history 列表自带子 NavStack
+        // 走自己的 detail push,两条路径互不干扰。
         .navigationDestination(for: FinanceAIRecord.self) { record in
             FinanceRecordDetailView(record: record)
         }
-        .navigationDestination(for: HistoryRoute.self) { _ in
-            historyListPage
+        .sheet(isPresented: $showHistorySheet) {
+            // 内嵌 NavigationStack 让 history → detail push 与外层完全
+            // 解耦;sheet 自带 swipe-down 关闭,FinanceRecordDetailView
+            // push 进来后还能继续 swipe-down 整个 sheet 关闭(iOS 原生)。
+            NavigationStack {
+                historyListPage
+                    .navigationDestination(for: FinanceAIRecord.self) { record in
+                        FinanceRecordDetailView(record: record)
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("完成") {
+                                Haptic.light()
+                                showHistorySheet = false
+                            }
+                        }
+                    }
+            }
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -442,11 +461,15 @@ public struct FinanceView: View {
                 Text(viewModel.selectedChain.displayName + " · 最近 5 条")
                     .font(.footnote.weight(.semibold))
                 Spacer()
-                NavigationLink(value: HistoryRoute.all) {
+                Button {
+                    Haptic.light()
+                    showHistorySheet = true
+                } label: {
                     Text("全部历史")
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(BsColor.brandAzure)
                 }
-                // Haptic removed: 用户反馈 navigation link 过密震动
+                .buttonStyle(.plain)
             }
             if viewModel.isLoading && viewModel.records.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)

@@ -69,6 +69,39 @@ public struct ParityBacklogDestination: View {
 //   • hasCap(_:) / isAdminTier（只服务 appsGridSection，一并删除）
 // ══════════════════════════════════════════════════════════════════
 
+// MARK: - Dashboard navigation destinations
+//
+// Bug-fix(返回 4 次回主页) — 真实 root cause:
+//
+// 之前 dashboard widget 卡（ApprovalSummaryCard / TeamMonitorCard /
+// MyTasksSection / ActiveProjectsSection / RecentActivitySection 等）
+// **全部** 渲染在 List 的 **同一个 Section row** 里：
+//
+//     Section { roleBranchedSections }   ← VStack of 5+ widgets in ONE row
+//
+// 每个 widget 内部又有 1~N 个 `BsCtaLink` (= `NavigationLink(destination:)`)
+// + 内嵌的 row NavigationLink（TeamTodoAlertRow / ProjectRowCard / 各 contextMenu
+// NavigationLink 项）。SwiftUI iOS 26 在 List row 含多个 NavigationLink
+// 的场景下会把 row 整体 tap **链式触发所有 NavigationLink**, 4~5 个
+// destination 一次性被 push 进 NavigationStack —— 用户体验就是 "点
+// dashboard 任意位置 → 必须返回 4 次"，匹配 user 截图证据
+// (Project → Task → Team → Approval pop chain)。
+//
+// 修法 (Phase 28 dashboard-nav-fix):
+//   1. NavigationStack 接 `path: NavigationPath`，用 `.navigationDestination(for:)`
+//      做 value-based 路由。AppModule + ProjectDetailDest 两个 hashable target。
+//   2. 把 widget 的 NavigationLink 全部退役 → 改用 closure (`pushModule`/`pushProject`)
+//      把目标 append 到 path。Button 触发 → SwiftUI 不再做隐式 row navigation 链触发。
+//   3. `roleBranchedSections` 拆成多个 List Section，每个 widget 一个 Section row。
+//      即便某个 widget 内部仍有多 button (TeamMonitorCard / ActiveProjectsSection)，
+//      Section 边界让 SwiftUI 不把它们打包当成一个统一 row tap target。
+
+/// Hashable wrapper used to push project detail with project id.
+/// Separate type from AppModule because navigationDestination(for:) needs distinct types.
+struct ProjectDetailDest: Hashable {
+    let projectId: UUID
+}
+
 struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @StateObject private var widgets = DashboardWidgetsViewModel()
@@ -77,6 +110,10 @@ struct DashboardView: View {
     @State private var showProfileSheet = false
     /// Phase 5：wordmark / "所有应用" tile 点击打开命令面板（.fullScreenCover）。
     @State private var showCommandPalette = false
+
+    /// Phase 28: programmatic NavigationStack path —— 把所有 dashboard push 都
+    /// 走 value-based 路由,杜绝 List-row 链式 NavigationLink 触发。
+    @State private var navPath: NavigationPath = NavigationPath()
 
     /// Phase 8：onboarding 结束后首次到达 Dashboard，wordmark 发 3 次脉冲
     /// 提示用户"这里可点"。一次性 @AppStorage 持久化。
@@ -89,7 +126,7 @@ struct DashboardView: View {
     @State private var dayPeek: DayPeekSheetItem?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navPath) {
             mainList
                 .scrollContentBackground(.hidden)
                 .background(BsColor.pageBackground.ignoresSafeArea())
@@ -102,6 +139,14 @@ struct DashboardView: View {
                         notificationButton
                         avatarButton
                     }
+                }
+                .navigationDestination(for: AppModule.self) { module in
+                    ActionItemHelper.destination(for: module)
+                }
+                .navigationDestination(for: ProjectDetailDest.self) { dest in
+                    ProjectDetailView(
+                        viewModel: ProjectDetailViewModel(client: supabase, projectId: dest.projectId)
+                    )
                 }
                 .sheet(isPresented: $showProfileSheet) {
                     NavigationStack { SettingsView() }
@@ -126,6 +171,20 @@ struct DashboardView: View {
             await widgets.fetchAll(isManager: isManagerTier)
             await attendance.loadThisWeek()
         }
+    }
+
+    // MARK: - Programmatic navigation helpers
+    //
+    // 这两个 closure 通过参数下传到 employeeWidgetSections / adminWidgetSections /
+    // superadminWidgetSections 里每个 widget 卡。widget 内部不再用 NavigationLink，
+    // 改用 Button { pushModule(.tasks) } —— 干净的单一 tap target。
+
+    private func pushModule(_ module: AppModule) {
+        navPath.append(module)
+    }
+
+    private func pushProject(_ projectId: UUID) {
+        navPath.append(ProjectDetailDest(projectId: projectId))
     }
 
     // MARK: - Main widget stack
@@ -170,13 +229,11 @@ struct DashboardView: View {
                 .listRowSeparator(.hidden)
             }
 
-            // —— 4. 角色分支 KPI 卡（保留旧 DashboardRoleSections）——
-            Section {
-                roleBranchedSections
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: BsSpacing.sm, leading: BsSpacing.lg, bottom: BsSpacing.sm, trailing: BsSpacing.lg))
-                    .listRowSeparator(.hidden)
-            }
+            // —— 4. 角色分支 KPI 卡 ——
+            // Bug-fix(返回 4 次回主页): roleBranchedSections 不再包成单一 Section row。
+            // 让每个 widget 自己占一个 Section row,Section 边界 = SwiftUI tap-target 边界,
+            // 杜绝 row 内多 NavigationLink 链式触发。详见 DashboardDestination 注释。
+            roleBranchedSectionRows
 
             // —— 5. 今日班次 ——
             Section {
@@ -353,8 +410,13 @@ struct DashboardView: View {
     /// 并在 body 里算 `sin()` —— 这个 view 在整个 app 生命周期内常驻 NavBar，
     /// CPU 从未归 0。改为 `withAnimation.repeatForever` 一次性声明 → SwiftUI
     /// 走 Core Animation 插值（GPU），主线程无负担。
+    ///
+    /// Phase 28: NavigationLink → Button + path append, 跟 dashboard 其他 push
+    /// 一致走 value-based 路由。
     private var notificationButton: some View {
-        NavigationLink(destination: ActionItemHelper.destination(for: .notifications)) {
+        Button {
+            pushModule(.notifications)
+        } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell.fill")
                     .font(.system(.headline, weight: .semibold))
@@ -392,7 +454,10 @@ struct DashboardView: View {
         HStack(alignment: .bottom) {
             BsSectionTitle("今日班次", accent: .coral)
             Spacer()
-            NavigationLink(destination: ScheduleView(isEmbedded: true)) {
+            // Phase 28: NavigationLink → Button programmatic push,跟 dashboard 其他链路保持一致。
+            Button {
+                pushModule(.schedules)
+            } label: {
                 HStack(spacing: 2) {
                     Text("详情")
                     Image(systemName: "chevron.right")
@@ -401,6 +466,7 @@ struct DashboardView: View {
                 .font(BsTypography.captionSmall)
                 .foregroundStyle(BsColor.brandAzure)
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -442,18 +508,107 @@ struct DashboardView: View {
         )
     }
 
-    // MARK: - Role-Branched Sections (unchanged content; 材质 Phase 6 统一改 BsContentCard)
+    // MARK: - Role-Branched Section Rows
+    //
+    // Phase 28: 每个 widget 占一个独立 List Section row,确保 SwiftUI 不会
+    // 把"整组 widget"当成一个 row tap target。每个 widget 内部 navigation
+    // 改用 closure 回调到 dashboard 的 navPath。
 
     @ViewBuilder
-    private var roleBranchedSections: some View {
+    private var roleBranchedSectionRows: some View {
         switch viewModel.dashboardTemplate {
         case .employee:
-            EmployeeDashboardBody(viewModel: viewModel, widgets: widgets)
+            employeeWidgetSections
         case .admin:
-            AdminDashboardBody(viewModel: viewModel, widgets: widgets)
+            adminWidgetSections
         case .superadmin:
-            SuperadminDashboardBody(viewModel: viewModel, widgets: widgets)
+            superadminWidgetSections
         }
+    }
+
+    /// 单 widget 的 listRow 修饰：clear bg + 16pt 水平边 + 8pt 垂直气口 + 隐藏分隔。
+    /// 用 ViewModifier 封装,避免每个 Section 内重复一长串 listRowInsets。
+    private func widgetRowDecor<V: View>(_ view: V) -> some View {
+        view
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: BsSpacing.sm, leading: BsSpacing.lg, bottom: BsSpacing.sm, trailing: BsSpacing.lg))
+            .listRowSeparator(.hidden)
+    }
+
+    @ViewBuilder
+    private var employeeWidgetSections: some View {
+        Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section {
+            widgetRowDecor(
+                ActiveProjectsSection(
+                    projects: widgets.activeProjects,
+                    pushModule: pushModule,
+                    pushProject: pushProject
+                )
+            )
+        }
+        Section { widgetRowDecor(MyOkrSection(objectives: widgets.myOkr, pushModule: pushModule)) }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
+    }
+
+    @ViewBuilder
+    private var adminWidgetSections: some View {
+        Section {
+            widgetRowDecor(
+                HStack(spacing: BsSpacing.md) {
+                    ApprovalSummaryCard(pending: widgets.pendingApprovals, pushModule: pushModule)
+                    RiskOverviewCard(risk: widgets.riskOverview)
+                }
+            )
+        }
+        Section {
+            widgetRowDecor(
+                TeamMonitorCard(stats: widgets.teamStats, alerts: widgets.teamTodoAlerts, pushModule: pushModule)
+            )
+        }
+        Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section {
+            widgetRowDecor(
+                ActiveProjectsSection(
+                    projects: widgets.activeProjects,
+                    pushModule: pushModule,
+                    pushProject: pushProject
+                )
+            )
+        }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
+    }
+
+    @ViewBuilder
+    private var superadminWidgetSections: some View {
+        Section { widgetRowDecor(ExecutiveKPIsCard(kpis: widgets.executiveKpis)) }
+        Section {
+            widgetRowDecor(
+                HStack(spacing: BsSpacing.md) {
+                    ApprovalSummaryCard(pending: widgets.pendingApprovals, pushModule: pushModule)
+                    RiskOverviewCard(risk: widgets.riskOverview)
+                }
+            )
+        }
+        Section {
+            widgetRowDecor(
+                TeamMonitorCard(stats: widgets.teamStats, alerts: widgets.teamTodoAlerts, pushModule: pushModule)
+            )
+        }
+        Section { widgetRowDecor(MyTasksSection(tasks: widgets.myTasks, pushModule: pushModule)) }
+        Section { widgetRowDecor(MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)) }
+        Section {
+            widgetRowDecor(
+                ActiveProjectsSection(
+                    projects: widgets.activeProjects,
+                    pushModule: pushModule,
+                    pushProject: pushProject
+                )
+            )
+        }
+        Section { widgetRowDecor(RecentActivitySection(activity: widgets.recentActivity)) }
     }
 
     private var isManagerTier: Bool {

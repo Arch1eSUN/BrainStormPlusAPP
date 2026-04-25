@@ -73,7 +73,27 @@ public final class MySubmissionsViewModel: ObservableObject {
 
             self.rows = fetched
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Bug-fix(审批中心顶部分类点击红色报错):
+            // mine tab 首屏 / 切回 mine 时同样触发,decode error 不应该弹
+            // banner —— 跟 ApprovalQueueViewModel.load() 同样 pattern。
+            let raw = error.localizedDescription
+            let userFacingKeywords = [
+                "Auth session", "session_not_found", "JWT",
+                "not authenticated", "row-level security",
+                "permission denied", "network", "offline",
+                "timed out", "timeout"
+            ]
+            let shouldShowBanner = userFacingKeywords.contains { keyword in
+                raw.localizedCaseInsensitiveContains(keyword)
+            }
+            if shouldShowBanner {
+                self.errorMessage = ErrorLocalizer.localize(error)
+            } else {
+                #if DEBUG
+                print("[MySubmissionsViewModel] silent listMySubmissions error: \(raw)")
+                #endif
+                self.rows = []
+            }
         }
     }
 }

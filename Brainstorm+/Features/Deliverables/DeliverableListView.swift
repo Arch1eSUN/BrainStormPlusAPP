@@ -27,6 +27,13 @@ public struct DeliverableListView: View {
     @State private var showCreateSheet: Bool = false
     @State private var editTarget: Deliverable? = nil
     @State private var deleteTarget: Deliverable? = nil
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in LazyVStack inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap),
+    /// 滑动不再误触。
+    @State private var pushTarget: Deliverable? = nil
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -81,6 +88,17 @@ public struct DeliverableListView: View {
         }
         .sheet(item: $editTarget) { target in
             DeliverableEditSheet(viewModel: viewModel, deliverable: target)
+        }
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
+        // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
+        .navigationDestination(item: $pushTarget) { target in
+            DeliverableDetailView(
+                viewModel: DeliverableDetailViewModel(
+                    deliverable: target,
+                    client: supabase,
+                    listViewModel: viewModel
+                )
+            )
         }
         .confirmationDialog(
             "删除后该交付物记录无法恢复，确认？",
@@ -309,14 +327,14 @@ public struct DeliverableListView: View {
     private var list: some View {
         LazyVStack(spacing: BsSpacing.smd) {
             ForEach(viewModel.filteredItems) { d in
-                NavigationLink {
-                    DeliverableDetailView(
-                        viewModel: DeliverableDetailViewModel(
-                            deliverable: d,
-                            client: supabase,
-                            listViewModel: viewModel
-                        )
-                    )
+                // Bug-fix(滑动判定为点击 + 震动) Phase 28:
+                // NavigationLink → Button 程序化 push。SwiftUI Button 在
+                // ScrollView 里会用 _PressGesture (tap-on-touch-up + drag-cancel),
+                // 用户横竖滑动时手指 down 不触发 action;NavigationLink 在
+                // LazyVStack 里反而会立即响应 touch-down → contextMenu preview
+                // + 系统 haptic 双重打扰。
+                Button {
+                    pushTarget = d
                 } label: {
                     DeliverableRow(item: d)
                         .padding(.horizontal, BsSpacing.lg)

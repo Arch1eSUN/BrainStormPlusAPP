@@ -22,74 +22,14 @@ import SwiftUI
 // from these widgets; BsWidgetCard owns the material (BsContentCard) + header.
 // ══════════════════════════════════════════════════
 
-// MARK: - Employee Dashboard Body
+// MARK: - Dashboard navigation closure aliases
+//
+// Phase 28 (Bug-fix 返回 4 次回主页): widget 卡不再用 `NavigationLink(destination:)`,
+// 改用 closure 把目标 push 到 DashboardView 持有的 navPath。这样 List row 不会因
+// 为多个 NavigationLink 共存而触发链式 push (SwiftUI iOS 26 已知行为)。
 
-struct EmployeeDashboardBody: View {
-    let viewModel: DashboardViewModel
-    @ObservedObject var widgets: DashboardWidgetsViewModel
-
-    var body: some View {
-        VStack(spacing: BsSpacing.xl) {
-            MyTasksSection(tasks: widgets.myTasks)
-            MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)
-            ActiveProjectsSection(projects: widgets.activeProjects)
-            MyOkrSection(objectives: widgets.myOkr)
-            RecentActivitySection(activity: widgets.recentActivity)
-        }
-    }
-}
-
-// MARK: - Admin Dashboard Body
-
-struct AdminDashboardBody: View {
-    let viewModel: DashboardViewModel
-    @ObservedObject var widgets: DashboardWidgetsViewModel
-
-    var body: some View {
-        VStack(spacing: BsSpacing.xl) {
-            // Admin-only hero row (Web: admin-dashboard.tsx:15-17)
-            HStack(spacing: BsSpacing.md) {
-                ApprovalSummaryCard(pending: widgets.pendingApprovals)
-                RiskOverviewCard(risk: widgets.riskOverview)
-            }
-
-            // Team Monitor (Web: admin-dashboard.tsx:19)
-            TeamMonitorCard(stats: widgets.teamStats, alerts: widgets.teamTodoAlerts)
-
-            MyTasksSection(tasks: widgets.myTasks)
-            MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)
-            ActiveProjectsSection(projects: widgets.activeProjects)
-            RecentActivitySection(activity: widgets.recentActivity)
-        }
-    }
-}
-
-// MARK: - Superadmin Dashboard Body
-
-struct SuperadminDashboardBody: View {
-    let viewModel: DashboardViewModel
-    @ObservedObject var widgets: DashboardWidgetsViewModel
-
-    var body: some View {
-        VStack(spacing: BsSpacing.xl) {
-            // Executive KPIs — superadmin only (Web: superadmin-dashboard.tsx:18)
-            ExecutiveKPIsCard(kpis: widgets.executiveKpis)
-
-            // Admin-tier cards also visible to superadmin
-            HStack(spacing: BsSpacing.md) {
-                ApprovalSummaryCard(pending: widgets.pendingApprovals)
-                RiskOverviewCard(risk: widgets.riskOverview)
-            }
-
-            TeamMonitorCard(stats: widgets.teamStats, alerts: widgets.teamTodoAlerts)
-
-            MyTasksSection(tasks: widgets.myTasks)
-            MonthlySnapshotSection(snapshot: widgets.monthlySnapshot)
-            ActiveProjectsSection(projects: widgets.activeProjects)
-            RecentActivitySection(activity: widgets.recentActivity)
-        }
-    }
-}
+typealias PushModuleHandler = (AppModule) -> Void
+typealias PushProjectHandler = (UUID) -> Void
 
 // MARK: - Quick Actions (per-role)
 //
@@ -305,8 +245,9 @@ private struct EmptyStateCard: View {
 // Mirror of Web `my-tasks-card.tsx`. Phase 15 → BsWidgetCard envelope.
 // ════════════════════════════════════════════════════════
 
-private struct MyTasksSection: View {
+struct MyTasksSection: View {
     let tasks: DashboardWidgetsViewModel.MyTasksSummary
+    let pushModule: PushModuleHandler
 
     // Phase 24 collapse: if there's nothing to show (no active tasks,
     // no todo/inProgress/overdue queue), surface a welcoming placeholder
@@ -319,9 +260,7 @@ private struct MyTasksSection: View {
         if isEmpty {
             BsWidgetCard(
                 label: "我的任务",
-                cta: .link("查看全部") {
-                    AnyView(ActionItemHelper.destination(for: .tasks))
-                }
+                cta: .button("查看全部") { pushModule(.tasks) }
             ) {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: "sparkles")
@@ -341,9 +280,7 @@ private struct MyTasksSection: View {
             BsWidgetCard(
                 label: "我的任务",
                 hero: .number("\(tasks.activeCount)", sublabel: "活跃任务"),
-                cta: .link("查看全部") {
-                    AnyView(ActionItemHelper.destination(for: .tasks))
-                }
+                cta: .button("查看全部") { pushModule(.tasks) }
             ) {
                 BsStatTileRow([
                     .init(value: "\(tasks.inProgress)", label: "进行中", tone: .azure),
@@ -364,7 +301,7 @@ private struct MyTasksSection: View {
 // warning/danger-on-absent).
 // ════════════════════════════════════════════════════════
 
-private struct MonthlySnapshotSection: View {
+struct MonthlySnapshotSection: View {
     let snapshot: DashboardWidgetsViewModel.MonthlySnapshot
 
     private struct Item { let label: String; let value: Int; let icon: String; let fg: Color; let bg: Color }
@@ -435,8 +372,10 @@ private struct MonthlySnapshotSection: View {
 // Mirror of Web `activity-projects.tsx` RealProjectsWidget.
 // ════════════════════════════════════════════════════════
 
-private struct ActiveProjectsSection: View {
+struct ActiveProjectsSection: View {
     let projects: [DashboardWidgetsViewModel.ProjectSummary]
+    let pushModule: PushModuleHandler
+    let pushProject: PushProjectHandler
 
     private func statusColor(_ status: String) -> Color {
         switch status {
@@ -451,16 +390,19 @@ private struct ActiveProjectsSection: View {
     var body: some View {
         BsWidgetCard(
             label: "活跃项目",
-            cta: .link("所有项目") {
-                AnyView(ActionItemHelper.destination(for: .projects))
-            }
+            cta: .button("所有项目") { pushModule(.projects) }
         ) {
             if projects.isEmpty {
                 EmptyStateCard(iconName: "folder", title: "暂无活跃项目", hint: "创建新项目以开始跟踪进度")
             } else {
                 VStack(spacing: BsSpacing.sm + 2) {
                     ForEach(projects) { project in
-                        ProjectRowCard(project: project, accent: statusColor(project.status))
+                        ProjectRowCard(
+                            project: project,
+                            accent: statusColor(project.status),
+                            pushModule: pushModule,
+                            pushProject: pushProject
+                        )
                     }
                 }
             }
@@ -471,31 +413,29 @@ private struct ActiveProjectsSection: View {
 private struct ProjectRowCard: View {
     let project: DashboardWidgetsViewModel.ProjectSummary
     let accent: Color
+    let pushModule: PushModuleHandler
+    let pushProject: PushProjectHandler
 
     var body: some View {
-        // Tap 这一行直接 push 到该 project 的 detail（一层 push，返回一次回 Dashboard）。
-        // 之前错误地跳到 ProjectListView 整个列表 → 用户必须再点一次 list 里的 item 才能
-        // 进 detail，回 Dashboard 要按 2 次返回 —— 用户报"几乎所有点击都跳项目管理"的真因。
-        NavigationLink(destination: ProjectDetailView(
-            viewModel: ProjectDetailViewModel(client: supabase, projectId: project.id)
-        )) {
+        // Phase 28: NavigationLink → Button + programmatic push,跟 dashboard 其他链路对齐。
+        // contextMenu 内部的 NavigationLink 也全部改成 Button + push closure ——
+        // contextMenu 里的 NavigationLink 在 iOS 26 同样会被 List row tap 触发链式 push,
+        // 跟主 row 一起算入"返回 4 次"症状里。
+        Button {
+            pushProject(project.id)
+        } label: {
             rowBody
         }
         .buttonStyle(.plain)
-        // 长按系统设计 (docs/longpress-system.md)：
-        //   • 打开项目详情（与 default tap 等价，长按用户也常按习惯走 menu）
-        //   • 查看相关任务（跳到 TaskList 全量；项目筛选待 sprint）
-        //   • 拷贝项目名（轻量分享 helper）
-        //
-        // 编辑项目入口暂缺 ProjectEditSheet —— 待新 sprint 接入后挂在最底
-        // （destructive role 给"归档/删除"另开）。
         .contextMenu {
-            NavigationLink(destination: ProjectDetailView(
-                viewModel: ProjectDetailViewModel(client: supabase, projectId: project.id)
-            )) {
+            Button {
+                pushProject(project.id)
+            } label: {
                 Label("打开项目详情", systemImage: "arrow.up.forward.app")
             }
-            NavigationLink(destination: ActionItemHelper.destination(for: .tasks)) {
+            Button {
+                pushModule(.tasks)
+            } label: {
                 Label("查看相关任务", systemImage: "checklist")
             }
             Button {
@@ -569,8 +509,9 @@ private struct ProjectRowCard: View {
 // Mirror of Web `activity-projects.tsx` RealOkrWidget.
 // ════════════════════════════════════════════════════════
 
-private struct MyOkrSection: View {
+struct MyOkrSection: View {
     let objectives: [DashboardWidgetsViewModel.ObjectiveSummary]
+    let pushModule: PushModuleHandler
 
     private func statusColor(_ status: String) -> Color {
         switch status {
@@ -584,9 +525,7 @@ private struct MyOkrSection: View {
     var body: some View {
         BsWidgetCard(
             label: "我的 OKR",
-            cta: .link("OKR 详情") {
-                AnyView(ActionItemHelper.destination(for: .okr))
-            }
+            cta: .button("OKR 详情") { pushModule(.okr) }
         ) {
             if objectives.isEmpty {
                 EmptyStateCard(iconName: "target", title: "暂无 OKR 目标", hint: "前往 OKR 页面创建目标")
@@ -652,7 +591,7 @@ private struct ProgressRing: View {
 // Phase 15 → BsWidgetCard envelope; no CTA.
 // ════════════════════════════════════════════════════════
 
-private struct RecentActivitySection: View {
+struct RecentActivitySection: View {
     let activity: [DashboardWidgetsViewModel.ActivityEntry]
 
     var body: some View {
@@ -748,8 +687,9 @@ private struct ActivityRow: View {
 // BsWidgetCard's maxWidth: .infinity flexes to half-width.
 // ════════════════════════════════════════════════════════
 
-private struct ApprovalSummaryCard: View {
+struct ApprovalSummaryCard: View {
     let pending: Int
+    let pushModule: PushModuleHandler
 
     var body: some View {
         if pending == 0 {
@@ -770,9 +710,7 @@ private struct ApprovalSummaryCard: View {
             BsWidgetCard(
                 label: "待审批",
                 hero: .number("\(pending)", sublabel: "待我处理"),
-                cta: .link("查看") {
-                    AnyView(ActionItemHelper.destination(for: .approval))
-                }
+                cta: .button("查看") { pushModule(.approval) }
             ) {
                 EmptyView()
             }
@@ -786,7 +724,7 @@ private struct ApprovalSummaryCard: View {
 // Phase 15 → BsWidgetCard envelope with 2x2 BsStatTile grid + footer hint.
 // ════════════════════════════════════════════════════════
 
-private struct RiskOverviewCard: View {
+struct RiskOverviewCard: View {
     let risk: DashboardWidgetsViewModel.RiskOverview
 
     // Phase 24 collapse: four zeros across 活跃/高优/阻塞/逾期 shouldn't
@@ -847,21 +785,20 @@ private struct RiskOverviewCard: View {
 // `DashboardWidgetsViewModel.loadTeamTodoAlerts` — see that file for
 // the parity notes with Web `dashboard-workbench.ts:217-316`.
 // Visibility gate: this view is only constructed by
-// AdminDashboardBody / SuperadminDashboardBody in DashboardView.swift,
+// adminWidgetSections / superadminWidgetSections in DashboardView.swift,
 // so the admin+ gate is structural, not behavioural.
 // Phase 15 → BsWidgetCard envelope with "管理员+" badge accessory + CTA.
 // ════════════════════════════════════════════════════════
 
-private struct TeamMonitorCard: View {
+struct TeamMonitorCard: View {
     let stats: DashboardWidgetsViewModel.TeamStats
     let alerts: [DashboardWidgetsViewModel.TeamTodoAlert]
+    let pushModule: PushModuleHandler
 
     var body: some View {
         BsWidgetCard(
             label: "团队监控",
-            cta: .link("全部告警") {
-                AnyView(ActionItemHelper.destination(for: .team))
-            },
+            cta: .button("全部告警") { pushModule(.team) },
             accessory: {
                 AnyView(BsBadge("管理员+", tone: .azure, size: .small))
             }
@@ -938,7 +875,7 @@ private struct TeamMonitorCard: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: spacing) {
                         ForEach(visible) { alert in
-                            TeamTodoAlertRow(alert: alert)
+                            TeamTodoAlertRow(alert: alert, pushModule: pushModule)
                         }
                     }
                 }
@@ -950,6 +887,7 @@ private struct TeamMonitorCard: View {
 
 private struct TeamTodoAlertRow: View {
     let alert: DashboardWidgetsViewModel.TeamTodoAlert
+    let pushModule: PushModuleHandler
 
     private var severityColor: Color {
         switch alert.severity {
@@ -975,7 +913,11 @@ private struct TeamTodoAlertRow: View {
     }
 
     var body: some View {
-        NavigationLink(destination: ActionItemHelper.destination(for: destination)) {
+        // Phase 28: NavigationLink → Button + closure push,确保不会跟同 row 内
+        // 其他 NavigationLink 链式 push (TeamMonitorCard CTA + 多条 alert row 共存)。
+        Button {
+            pushModule(destination)
+        } label: {
             HStack(spacing: BsSpacing.sm + 2) {
                 Rectangle()
                     .fill(severityColor)
@@ -1057,7 +999,7 @@ private struct TeamStatTile: View {
 // 3-tile BsStatTileRow (azure/mint/brandAzure tones per spec).
 // ════════════════════════════════════════════════════════
 
-private struct ExecutiveKPIsCard: View {
+struct ExecutiveKPIsCard: View {
     let kpis: DashboardWidgetsViewModel.ExecutiveKpis
 
     // Phase 24 collapse: if all 3 KPI counters are zero, drop the

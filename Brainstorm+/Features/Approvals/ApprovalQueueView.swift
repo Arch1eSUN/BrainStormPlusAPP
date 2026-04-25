@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Supabase
 
 /// Sprint 4.3 — Approver queue screen.
@@ -124,11 +125,61 @@ public struct ApprovalQueueView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                // Long-press 增强 (longpress-system §5 待补):
+                // 审批人 queue 的行长按 = 快速 approve/reject + 复制申请人信息。
+                // 跟 swipeActions 不冲突 —— swipe 也只在写入支持的 kind 上启用。
+                .contextMenu { queueRowContextMenu(row) }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.clear)
+    }
+
+    @ViewBuilder
+    private func queueRowContextMenu(_ row: ApprovalListRow) -> some View {
+        // 顶部:进入详情(同 tap)
+        NavigationLink(value: row.id) {
+            Label("查看详情", systemImage: "arrow.up.forward.square")
+        }
+
+        // 中部:可写入的 kind + pending 状态才显示 approve/reject
+        if row.status == .pending && viewModel.kind.supportsWriteOnIOS {
+            Button {
+                Haptic.success()
+                pendingAction = PendingAction(row: row, decision: .approve)
+            } label: {
+                Label("批准", systemImage: "checkmark.circle")
+            }
+
+            Button(role: .destructive) {
+                Haptic.warning()
+                pendingAction = PendingAction(row: row, decision: .reject)
+            } label: {
+                Label("拒绝", systemImage: "xmark.circle")
+            }
+
+            Divider()
+        }
+
+        // 底部 mutation: 复制申请人姓名 / 编号
+        if let profile = row.requesterProfile,
+           let name = profile.fullName,
+           !name.isEmpty {
+            Button {
+                UIPasteboard.general.string = name
+                Haptic.light()
+            } label: {
+                Label("复制申请人", systemImage: "person")
+            }
+        }
+
+        Button {
+            UIPasteboard.general.string = row.id.uuidString
+            Haptic.light()
+        } label: {
+            Label("复制编号", systemImage: "doc.on.doc")
+        }
     }
 
     @ViewBuilder

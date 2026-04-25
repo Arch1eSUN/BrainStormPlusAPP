@@ -116,7 +116,32 @@ public final class ApprovalQueueViewModel: ObservableObject {
             self.rows = merged
             self.pendingCount = merged.filter { $0.status == .pending }.count
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            // Bug-fix(审批中心顶部分类点击红色报错):
+            // 切 pillBar tab 触发 .task -> load(),decode 失败 / 网络瞬断
+            // 都会让 banner 闪一下;首屏切换 tab 用户预期看到的是"暂无审批"
+            // empty state,而不是顶部红条。区分错误类型:
+            //   • auth / 权限 / 网络 -> 仍设 banner(用户应该看到)
+            //   • decode / 其他 -> silent + console,留 row 空让 empty state 显示
+            // 配合 ErrorLocalizer 的 keyword map,banner 文案命中明确分类才弹。
+            let raw = error.localizedDescription
+            let userFacingKeywords = [
+                "Auth session", "session_not_found", "JWT",
+                "not authenticated", "row-level security",
+                "permission denied", "network", "offline",
+                "timed out", "timeout"
+            ]
+            let shouldShowBanner = userFacingKeywords.contains { keyword in
+                raw.localizedCaseInsensitiveContains(keyword)
+            }
+            if shouldShowBanner {
+                self.errorMessage = ErrorLocalizer.localize(error)
+            } else {
+                #if DEBUG
+                print("[ApprovalQueueViewModel] silent load error (kind=\(kind.rawValue)): \(raw)")
+                #endif
+                self.rows = []
+                self.pendingCount = 0
+            }
         }
     }
 

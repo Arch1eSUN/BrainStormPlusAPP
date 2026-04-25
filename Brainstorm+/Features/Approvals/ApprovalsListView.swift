@@ -235,6 +235,26 @@ public struct ApprovalsListView: View {
             Label("复制编号", systemImage: "doc.on.doc")
         }
 
+        // 复制审批意见 — pending 的没有 reviewer_note,只在已审过的 row 上显示。
+        if let note = row.reviewerNote, !note.isEmpty {
+            Button {
+                UIPasteboard.general.string = note
+                Haptic.light()
+            } label: {
+                Label("复制审批意见", systemImage: "text.quote")
+            }
+        }
+
+        // 复制 type+创建时间 摘要 —— 用户经常需要在 chat 里贴出来问"我提的
+        // 这条审批怎么没人审",直接拿一个可读 summary 比 UUID 友好。
+        Button {
+            let summary = "\(row.requestType.displayLabel) · \(Self.createdAtFormatter.string(from: row.createdAt))"
+            UIPasteboard.general.string = summary
+            Haptic.light()
+        } label: {
+            Label("复制摘要", systemImage: "doc.on.clipboard")
+        }
+
         // 撤回 — intentionally omitted: MySubmissionsViewModel does
         // not own a withdraw mutation. Withdraw stays on
         // ApprovalDetailView where the VM does own it. See file

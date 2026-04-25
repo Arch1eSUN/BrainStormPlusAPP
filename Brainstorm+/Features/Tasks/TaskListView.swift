@@ -109,10 +109,18 @@ public struct TaskListView: View {
         }
         .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("任务管理")
-        .navigationBarTitleDisplayMode(.large)
+        // Bug-fix(任务管理顶部大片空白):
+        // 之前 .large + .navigationBarDrawer(.always) 在 iOS 26 iPhone 17 Pro Max
+        // 会同时渲染 (a) Large title 76pt block (b) 永久 search drawer 52pt block,
+        // 中间标题底部 padding ~30pt + drawer 上 padding ~16pt 累计成 100pt 视觉空白。
+        // 改 .inline + .navigationBarDrawer(.automatic):
+        //   • title 收成 NavBar 内联 ~44pt,不抢竖向空间
+        //   • search drawer 仍紧贴 NavBar,但不再有 large title gap
+        //   • 顶部直接接 statsRow + segmented filter,内容密度回正
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
+            placement: .navigationBarDrawer(displayMode: .automatic),
             prompt: "搜索任务..."
         )
         .toolbar {
