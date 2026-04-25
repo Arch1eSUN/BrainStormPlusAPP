@@ -29,7 +29,10 @@ public struct HiringCandidateDetailView: View {
             if let candidate = viewModel.candidate {
                 candidateScrollView(candidate)
             } else if viewModel.isLoading {
-                ProgressView().padding(.top, 40)
+                // Bug-fix(loading 一致性): full-screen loading 用 .large。
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 BsEmptyState(
                     title: "候选人不存在",

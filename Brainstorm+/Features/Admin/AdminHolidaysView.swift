@@ -136,7 +136,10 @@ public struct AdminHolidaysView: View {
             }
 
             if vm.isLoading && vm.rows.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, alignment: .center)
+                // Bug-fix(loading 一致性): inline section loading 用 .small 圈。
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, alignment: .center)
             } else if vm.rows.isEmpty {
                 Text("暂无该年份的公休记录")
                     .foregroundStyle(BsColor.inkMuted)

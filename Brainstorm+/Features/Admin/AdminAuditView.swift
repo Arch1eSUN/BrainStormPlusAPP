@@ -101,7 +101,10 @@ public struct AdminAuditView: View {
     private var coreContent: some View {
         Group {
             if vm.isLoading && vm.rows.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Bug-fix(loading 一致性): full-screen loading 用 .large 圈。
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if vm.rows.isEmpty {
                 BsEmptyState(
                     title: "暂无审计记录",

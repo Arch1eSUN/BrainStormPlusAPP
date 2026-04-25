@@ -7,15 +7,20 @@ public struct HiringCandidatesView: View {
     public init() {}
 
     public var body: some View {
+        // Bug-fix(Hiring tab jump): ZStack 撑满 + ProgressView 用 .large + frame fill，
+        // 避免 loading/empty 时子 view 高度坍塌,触发外层 Picker 位移 / nav 抖动。
         ZStack {
             if viewModel.isLoading && viewModel.candidates.isEmpty {
-                ProgressView().padding(.top, 40)
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.candidates.isEmpty {
                 BsEmptyState(
                     title: "暂无候选人",
                     systemImage: "person.crop.square.filled.and.at.rectangle",
                     description: "点击右上角「添加候选人」开始录入。"
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     ForEach(viewModel.candidates) { c in

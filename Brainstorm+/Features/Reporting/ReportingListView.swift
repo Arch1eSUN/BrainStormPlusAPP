@@ -103,7 +103,9 @@ public struct ReportingListView: View {
             )
             .padding(.top, 40)
         } else {
-            VStack(alignment: .leading, spacing: 16) {
+            // v1.3.1 perf: VStack → LazyVStack —— daily logs 可能累积到 30-60 条，
+            // 非 lazy 版本开屏会一次性构建所有 card body，在 ProMotion 下明显掉帧
+            LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(viewModel.dailyLogs) { log in
                     DailyLogCardView(log: log)
                         .padding(.horizontal)
@@ -145,7 +147,8 @@ public struct ReportingListView: View {
             )
             .padding(.top, 40)
         } else {
-            VStack(alignment: .leading, spacing: 16) {
+            // v1.3.1 perf: 同 dailySection，改 LazyVStack
+            LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(viewModel.weeklyReports) { r in
                     WeeklyReportCardView(report: r)
                         .padding(.horizontal)

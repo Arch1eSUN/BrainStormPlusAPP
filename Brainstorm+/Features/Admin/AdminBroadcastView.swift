@@ -152,7 +152,8 @@ public struct AdminBroadcastView: View {
                     HStack {
                         Spacer()
                         if vm.isSending {
-                            ProgressView().padding(.trailing, 6)
+                            // Bug-fix(loading 一致性): inline button loading 用 .small。
+                            ProgressView().controlSize(.small).padding(.trailing, 6)
                         }
                         Text(vm.isSending ? "发送中…" : "推送给全体活跃用户")
                             .font(.subheadline.weight(.semibold))

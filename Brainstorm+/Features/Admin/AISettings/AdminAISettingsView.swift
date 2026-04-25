@@ -73,7 +73,11 @@ public struct AdminAISettingsView: View {
     private var activeSection: some View {
         Section {
             if vm.isLoading {
-                HStack { ProgressView(); Text("加载中…").foregroundStyle(BsColor.inkMuted) }
+                // Bug-fix(loading 一致性): inline row loading 用 .small。
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("加载中…").foregroundStyle(BsColor.inkMuted)
+                }
             } else if let p = vm.activeProvider {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {

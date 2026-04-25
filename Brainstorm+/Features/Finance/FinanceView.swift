@@ -21,7 +21,11 @@ public struct FinanceView: View {
     @StateObject private var viewModel: FinanceViewModel
     @Environment(SessionManager.self) private var sessionManager
     @State private var showHistorySheet: Bool = false
-    @State private var pushedRecord: FinanceAIRecord?
+    // 独占的 NavigationPath:当 FinanceView 自带 NavigationStack 时（非 embedded）
+    // 用这条 path 在 submitAIProcess 完成后程序式推 detail 页,避免再加第二条
+    // .navigationDestination(item:) 和 value-based destination 冲突（历史上这个
+    // 双绑就是"点历史闪一下消失"的根因）。
+    @State private var navPath = NavigationPath()
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -50,7 +54,7 @@ public struct FinanceView: View {
             if isEmbedded {
                 coreContent
             } else {
-                NavigationStack { coreContent }
+                NavigationStack(path: $navPath) { coreContent }
             }
         }
         .zyErrorBanner($viewModel.errorMessage)
@@ -92,10 +96,12 @@ public struct FinanceView: View {
         .sheet(isPresented: $showHistorySheet) {
             historySheet
         }
+        // 只保留 value-based navigationDestination —— 之前同时绑 item-based 和
+        // value-based 会导致一次 tap 触发两次 push,系统二次 dispatch 把新 detail
+        // 反弹回来,体感就是"闪一下消失"。NavigationLink(value:) 的首 push 由这
+        // 一条 destination 处理,submitAIProcess 完成后也走 navigation path(见
+        // inputSection: 用 NavigationLink 包装 submit 结果 or 列表项)。
         .navigationDestination(for: FinanceAIRecord.self) { record in
-            FinanceRecordDetailView(record: record)
-        }
-        .navigationDestination(item: $pushedRecord) { record in
             FinanceRecordDetailView(record: record)
         }
     }
@@ -257,7 +263,14 @@ public struct FinanceView: View {
                 Haptic.medium()
                 Task {
                     if let record = await viewModel.submitAIProcess() {
-                        pushedRecord = record
+                        // 程序式 push 到 detail —— 走同一条 value-based
+                        // navigationDestination,不会和 list 的 NavigationLink 互相
+                        // 抢。embedded 模式下外层 NavStack 不由我们持有,这里把
+                        // path 推空会被 SwiftUI 忽略,最坏就是不自动跳转 —— 用户
+                        // 仍然能从列表最新一条进入,不是 regression。
+                        if !isEmbedded {
+                            navPath.append(record)
+                        }
                     }
                 }
             } label: {

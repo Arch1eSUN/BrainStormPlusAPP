@@ -370,11 +370,21 @@ private struct MonthlySnapshotSection: View {
     private struct Item { let label: String; let value: Int; let icon: String; let fg: Color; let bg: Color }
 
     private var items: [Item] {
+        // 口径（与 Web dashboard-workbench.ts 一致）：
+        //   出勤天数 = state ∈ {normal, field_work} 的行数
+        //     normal    = 正常打卡日
+        //     field_work = 外勤打卡（还是"在岗"）
+        //   出差天数 = state = business_trip
+        //   事假天数 = state = personal_leave   ← 公司只有事假 + 调休两种制度，
+        //                                         标签直接写"事假"避免用户误以为
+        //                                         包含调休
+        //   调休天数 = state = comp_time
+        //   旷工天数 = state = absent
         let absentColor: Color = snapshot.absentDays > 0 ? BsColor.danger : BsColor.success
         return [
             Item(label: "出勤天数", value: snapshot.attendanceDays, icon: "checkmark.circle", fg: BsColor.success, bg: BsColor.success.opacity(0.12)),
             Item(label: "出差天数", value: snapshot.businessTripDays, icon: "airplane", fg: BsColor.brandMint, bg: BsColor.brandMint.opacity(0.12)),
-            Item(label: "请假天数", value: snapshot.leaveDays, icon: "doc.text", fg: BsColor.brandAzure, bg: BsColor.brandAzure.opacity(0.12)),
+            Item(label: "事假天数", value: snapshot.leaveDays, icon: "doc.text", fg: BsColor.brandAzure, bg: BsColor.brandAzure.opacity(0.12)),
             Item(label: "调休天数", value: snapshot.compTimeDays, icon: "arrow.triangle.2.circlepath", fg: BsColor.warning, bg: BsColor.warning.opacity(0.12)),
             Item(label: "旷工天数", value: snapshot.absentDays, icon: "exclamationmark.octagon", fg: absentColor, bg: absentColor.opacity(0.12)),
         ]

@@ -229,7 +229,9 @@ public struct SettingsNotificationsView: View {
         } label: {
             HStack(spacing: BsSpacing.sm + 2) {
                 if viewModel.isSaving {
+                    // Bug-fix(loading 一致性): inline 按钮内 loading 一律 .small。
                     ProgressView()
+                        .controlSize(.small)
                         .progressViewStyle(.circular)
                         .tint(.white)
                 } else {

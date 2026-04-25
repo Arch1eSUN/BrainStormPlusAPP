@@ -69,6 +69,12 @@ public struct HiringCenterView: View {
 
     @ViewBuilder
     private var gateContent: some View {
+        // Bug-fix: tab 切换时整条 picker bar 向下 "jump"。
+        // Root cause: 内层子 view（HiringCandidatesView / HiringJobsView / HiringDataView）
+        // 在 loading / empty 状态下只返回 ProgressView 或 BsEmptyState，没有撑满到屏幕底部，
+        // VStack 不带 alignment 会把 Picker 往下推或让 navigationBar large-title collapse 失效。
+        // 修法：VStack 明确 .frame(maxHeight: .infinity, alignment: .top)，让 Picker 钉顶；
+        // 子内容容器在各自 view 里配合 .frame(maxWidth: .infinity, maxHeight: .infinity)。
         VStack(spacing: 0) {
             Picker("视图", selection: $selectedTab) {
                 ForEach(Tab.allCases) { t in
@@ -80,14 +86,18 @@ public struct HiringCenterView: View {
             .padding(.top, 8)
             .onChange(of: selectedTab) { _, _ in Haptic.selection() }
 
-            switch selectedTab {
-            case .candidates:
-                HiringCandidatesView()
-            case .jobs:
-                HiringJobsView()
-            case .data:
-                HiringDataView()
+            Group {
+                switch selectedTab {
+                case .candidates:
+                    HiringCandidatesView()
+                case .jobs:
+                    HiringJobsView()
+                case .data:
+                    HiringDataView()
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }

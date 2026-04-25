@@ -10,6 +10,12 @@ import Supabase
 // `src/lib/actions/leaves.ts::fetchLeaveBalance` /
 // `calculateUserCompTime`.
 //
+// Phase 25.c — 实际请假制度只保留「调休 (comp_time) + 事假 (personal)」两种。
+// 公司没有年假/病假额度，Web 上那 2 张卡是历史占位。iOS 直接裁掉，不再暴露
+// annual / sick 卡片。额度与历史查询仍走原来的两条 pipeline（approvals +
+// rest_records），但只聚合 personal / comp_time 两桶，其他类型落入 "other"
+// 丢弃。
+//
 // Balance computation approach — CLIENT-SIDE (no RPC):
 //   Web intentionally does not provide a `get_leave_balance` RPC.
 //   The formula lives in `lib/actions/leaves.ts:75-170` and runs as a
@@ -23,8 +29,8 @@ import Supabase
 //       needed (no date math the client can't do).
 //
 // Sources joined on the client:
-//   1. `leave_balances` — annual / sick / personal totals (defaults
-//      { 14, 14, 5 } when absent, matching leaves.ts:85-90).
+//   1. `leave_balances` — personal 总额度（默认 5，沿用 Web leaves.ts:87）。
+//      annual / sick 列虽仍存在于 DB，但 iOS 不 SELECT 也不展示。
 //   2. `approval_requests` ⨝ `approval_request_leave` — monthly
 //      approved leave days, bucketed by leave_type. Filter:
 //      `request_type='leave'`, `status='approved'`,
@@ -53,9 +59,9 @@ public final class LeavesViewModel: ObservableObject {
     /// Not a DB column; Phase-3 flexible monthly quota.
     private static let compTimeQuotaPerMonth: Double = 4
 
-    /// Web leaves.ts:85-90 default totals when the row is absent.
-    private static let defaultAnnualDays: Double = 14
-    private static let defaultSickDays: Double = 14
+    /// 事假默认月额度 —— 沿用 Web leaves.ts:87 (personal: 5)。
+    /// 年假 / 病假列已从 iOS 视图裁掉（公司政策只有调休 + 事假），故不再暴露
+    /// defaultAnnualDays / defaultSickDays 常量。
     private static let defaultPersonalDays: Double = 5
 
     public init(client: SupabaseClient) {
@@ -94,19 +100,16 @@ public final class LeavesViewModel: ObservableObject {
 
     // MARK: - Balance
 
-    /// Computes the 4 balance cards (annual / sick / personal / comp_time)
-    /// by replicating Web `calculateUserCompTime` exactly.
+    /// 只组装 事假 (personal) + 调休 (comp_time) 两张卡 —— 公司政策没有年假
+    /// 病假。计算口径仍 1:1 对齐 Web `calculateUserCompTime`；只是最终输出
+    /// 的 LeaveBalance 数组被裁剪成 2 条。
     ///
-    /// Returns in a fixed display order — annual, sick, personal,
-    /// comp_time — so the ForEach layout is stable across reloads.
-    /// Cards with `totalDays == 0` are still returned; the view can
-    /// filter them if needed (for now we always show all 4 to match
-    /// the Web quota page's shape).
+    /// 显示顺序固定：调休 → 事假（用户感知里调休额度更关键，放前面）。
     private func fetchBalance(userId: UUID) async throws -> [LeaveBalance] {
-        // ─── 1. leave_balances (column-per-type) ─────────────────
+        // ─── 1. leave_balances (只读 personal 列；annual/sick 存在但不用) ─
         let balanceRow: LeaveBalanceRow? = try? await client
             .from("leave_balances")
-            .select("annual, sick, personal")
+            .select("personal")
             .eq("user_id", value: userId.uuidString)
             .single()
             .execute()
@@ -114,8 +117,6 @@ public final class LeavesViewModel: ObservableObject {
         // `.single()` throws when 0 rows → we swallow via `try?` so the
         // default-limits branch (leaves.ts:85-87) kicks in.
 
-        let annualTotal  = Double(balanceRow?.annual  ?? Int(Self.defaultAnnualDays))
-        let sickTotal    = Double(balanceRow?.sick    ?? Int(Self.defaultSickDays))
         let personalTotal = Double(balanceRow?.personal ?? Int(Self.defaultPersonalDays))
         let compTimeTotal = Self.compTimeQuotaPerMonth
 
@@ -141,8 +142,6 @@ public final class LeavesViewModel: ObservableObject {
             .execute()
             .value) ?? []
 
-        var usedAnnual: Double = 0
-        var usedSick: Double = 0
         var usedPersonal: Double = 0
         var usedCompTime: Double = 0
 
@@ -152,13 +151,12 @@ public final class LeavesViewModel: ObservableObject {
                 startISO: detail.startDate,
                 endISO: detail.endDate
             )
+            // 历史单据里可能出现 annual / sick / maternity 等；这里只累计
+            // iOS 显示的两桶，其他类型忽略（不再展示为卡片）。
             switch detail.leaveType {
-            case "annual":    usedAnnual += days
-            case "sick":      usedSick += days
             case "personal":  usedPersonal += days
             case "comp_time": usedCompTime += days
-            default: break  // maternity / paternity / bereavement not
-                            // surfaced as cards in the Web /leaves UI
+            default: break
             }
         }
 
@@ -177,12 +175,10 @@ public final class LeavesViewModel: ObservableObject {
             if days > 0 { usedCompTime += days }
         }
 
-        // ─── 4. Assemble the 4 cards ─────────────────────────────
+        // ─── 4. Assemble cards: 调休在前（主要额度），事假在后 ────────
         return [
-            LeaveBalance(leaveType: "annual",    totalDays: annualTotal,   usedDays: usedAnnual),
-            LeaveBalance(leaveType: "sick",      totalDays: sickTotal,     usedDays: usedSick),
-            LeaveBalance(leaveType: "personal",  totalDays: personalTotal, usedDays: usedPersonal),
             LeaveBalance(leaveType: "comp_time", totalDays: compTimeTotal, usedDays: usedCompTime),
+            LeaveBalance(leaveType: "personal",  totalDays: personalTotal, usedDays: usedPersonal),
         ]
     }
 

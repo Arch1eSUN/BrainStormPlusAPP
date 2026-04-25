@@ -91,7 +91,8 @@ public struct AdminAttendanceExemptionView: View {
                     Task { _ = await vm.save() }
                 } label: {
                     if vm.isSaving {
-                        ProgressView()
+                        // Bug-fix(loading 一致性): toolbar button inline loading 用 .small。
+                        ProgressView().controlSize(.small)
                     } else {
                         Text("保存")
                     }

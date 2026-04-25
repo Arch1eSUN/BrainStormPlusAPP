@@ -70,7 +70,8 @@ public struct AdminEvaluationsView: View {
             .listRowBackground(Color.clear)
 
             if vm.isLoading && vm.rows.isEmpty {
-                Section { ProgressView().frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 24) }
+                // Bug-fix(loading 一致性): section-level loading 用 .small（和 inline 风格一致，list 里不要 .large）。
+                Section { ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 24) }
                     .listRowBackground(Color.clear)
             } else if vm.filteredRows.isEmpty {
                 Section {

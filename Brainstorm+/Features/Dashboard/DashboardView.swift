@@ -333,16 +333,27 @@ struct DashboardView: View {
             ZStack {
                 Circle()
                     .fill(BsColor.brandAzure.opacity(0.12))
-                Text(String(viewModel.profile?.fullName?.prefix(1) ?? "U"))
-                    .font(Font.custom("Inter-SemiBold", size: 14, relativeTo: .subheadline))
-                    .foregroundStyle(BsColor.brandAzure)
+                // Bug-fix: 不显示 "U" 占位字符。profile 未到货前只留 halo，
+                // 到货后才渲染姓名首字母，避免顶部 avatar flash "U" → 真名。
+                if let initial = viewModel.profile?.fullName?.prefix(1), !initial.isEmpty {
+                    Text(String(initial))
+                        .font(Font.custom("Inter-SemiBold", size: 14, relativeTo: .subheadline))
+                        .foregroundStyle(BsColor.brandAzure)
+                        .transition(.opacity)
+                }
             }
             .frame(width: 32, height: 32)
+            .animation(BsMotion.Anim.smooth, value: viewModel.profile?.fullName)
         }
         .accessibilityLabel("个人中心")
     }
 
     /// Trailing: 通知 bell，未读 Coral dot + 呼吸脉冲（尊重 Reduce Motion）
+    ///
+    /// v1.3.1 perf：原版用 `TimelineView(.animation(1/30))` 每秒重建 30 次 dot
+    /// 并在 body 里算 `sin()` —— 这个 view 在整个 app 生命周期内常驻 NavBar，
+    /// CPU 从未归 0。改为 `withAnimation.repeatForever` 一次性声明 → SwiftUI
+    /// 走 Core Animation 插值（GPU），主线程无负担。
     private var notificationButton: some View {
         NavigationLink(destination: ActionItemHelper.destination(for: .notifications)) {
             ZStack(alignment: .topTrailing) {
@@ -351,22 +362,28 @@ struct DashboardView: View {
                     .foregroundStyle(BsColor.ink)
                     .frame(width: 32, height: 32)
 
-                // v1.2: Coral 未读 dot + 呼吸脉冲（opacity 0.65-1.0 周期 1.5s）
-                // 目的：把 Coral 分布到 toolbar 持续可见位置，不是只靠"被点击才出现"
-                TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
-                    let t = CGFloat(ctx.date.timeIntervalSinceReferenceDate)
-                    let pulse = reduceMotion ? 1.0 : (0.825 + 0.175 * sin(t * 4.2))
-                    Circle()
-                        .fill(BsColor.unreadBadge)
-                        .frame(width: 7, height: 7)
-                        .scaleEffect(reduceMotion ? 1.0 : (0.94 + 0.06 * sin(t * 4.2)))
-                        .opacity(pulse)
-                        .offset(x: -6, y: 6)
-                }
+                // Coral 未读 dot + 呼吸脉冲（opacity 0.65→1.0，周期 1.5s）
+                // 目的：把 Coral 分布到 toolbar 持续可见位置，不只靠"被点击才出现"
+                Circle()
+                    .fill(BsColor.unreadBadge)
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(reduceMotion ? 1.0 : (bellPulseActive ? 1.0 : 0.88))
+                    .opacity(reduceMotion ? 1.0 : (bellPulseActive ? 1.0 : 0.65))
+                    .offset(x: -6, y: 6)
+                    .onAppear {
+                        guard !reduceMotion else { return }
+                        withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
+                            bellPulseActive = true
+                        }
+                    }
             }
         }
         .accessibilityLabel("通知")
     }
+
+    /// Bell dot 呼吸脉冲的布尔锚点；withAnimation 绑定此值后 SwiftUI
+    /// 自动在两端点反复 tween，不需要 TimelineView 每帧重建 view。
+    @State private var bellPulseActive: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

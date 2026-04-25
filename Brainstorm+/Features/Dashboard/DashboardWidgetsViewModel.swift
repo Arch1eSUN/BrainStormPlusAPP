@@ -234,6 +234,12 @@ public final class DashboardWidgetsViewModel: ObservableObject {
     }
 
     private func loadMonthlySnapshot(userId: UUID) async {
+        // 时区口径（Phase 25.c 复核）：
+        //   • `Calendar.current` + `isoFormatter.timeZone = .current` 双用设备本地
+        //     时区，保证北京 00:00~08:00 期间的"今天"不会被算成 UTC 前一天。
+        //   • Web dashboard-workbench.ts 用 `new Date().toISOString().split('T')[0]`
+        //     —— 实际跟 UTC 对齐，跨时区时 Web 与 iOS 结果可能差 1 天；以 iOS
+        //     本地口径为准（用户身处 CNST）。
         let cal = Calendar(identifier: .gregorian)
         let now = Date()
         guard let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) else {

@@ -64,7 +64,8 @@ public struct AdminGeofenceView: View {
                         Task { _ = await vm.save() }
                     } label: {
                         if vm.isSaving {
-                            ProgressView()
+                            // Bug-fix(loading 一致性): inline button loading 用 .small。
+                            ProgressView().controlSize(.small)
                         } else {
                             Label("保存多点规则", systemImage: "checkmark.seal.fill")
                                 .font(.subheadline.weight(.semibold))

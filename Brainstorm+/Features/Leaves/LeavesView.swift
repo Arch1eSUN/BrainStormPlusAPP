@@ -84,10 +84,10 @@ public struct LeavesView: View {
     private var headerSection: some View {
         HStack(alignment: .center, spacing: BsSpacing.md) {
             VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                Text("假期与调休额度")
+                Text("调休与事假")
                     .font(BsTypography.brandWordmark)
                     .foregroundStyle(BsColor.ink)
-                Text("查看您的假期余额及休假记录")
+                Text("查看您的月度额度与休假记录")
                     .font(.caption)
                     .foregroundStyle(BsColor.inkMuted.opacity(0.7))
             }
@@ -126,7 +126,7 @@ public struct LeavesView: View {
     @ViewBuilder
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: BsSpacing.md) {
-            sectionHeader(icon: "clock.badge.checkmark", title: "本月余额")
+            sectionHeader(icon: "clock.badge.checkmark", title: "本月额度")
 
             if viewModel.isLoading && viewModel.balances.isEmpty {
                 balanceSkeletonGrid
@@ -150,6 +150,8 @@ public struct LeavesView: View {
 
     @ViewBuilder
     private var balanceSkeletonGrid: some View {
+        // Phase 25.c — 公司政策只有调休 + 事假两类，骨架数量跟 VM 组装的卡片
+        // 数一致（2 张）。
         LazyVGrid(
             columns: [
                 GridItem(.flexible(), spacing: BsSpacing.md),
@@ -157,7 +159,7 @@ public struct LeavesView: View {
             ],
             spacing: BsSpacing.md
         ) {
-            ForEach(0..<4, id: \.self) { _ in
+            ForEach(0..<2, id: \.self) { _ in
                 RoundedRectangle(cornerRadius: BsRadius.xl, style: .continuous)
                     .fill(BsColor.surfacePrimary)
                     .frame(height: 120)

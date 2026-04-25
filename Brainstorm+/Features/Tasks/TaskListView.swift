@@ -147,10 +147,11 @@ public struct TaskListView: View {
     // MARK: - Loading / Empty wrappers
 
     private var loadingView: some View {
+        // Bug-fix(loading 一致性): 丢 scaleEffect(1.5),改 .controlSize(.large)。
         VStack {
             Spacer()
             ProgressView()
-                .scaleEffect(1.5)
+                .controlSize(.large)
                 .tint(BsColor.brandAzure)
             Spacer()
         }
@@ -341,16 +342,22 @@ public struct TaskListView: View {
     // MARK: - Kanban mode body (UNCHANGED logic, only dropped the old header wrapper)
 
     private var kanbanBody: some View {
-        // Horizontal swipeable columns — each card is .draggable, each
-        // column is .dropDestination. Reordering across columns fires
-        // the status update via the view model (which owns the done→*
-        // revert guard).
-        VStack(alignment: .leading, spacing: 0) {
+        // Bug-fix(Kanban 横向视图奇怪):
+        // 问题 1 — 每列宽 280 但整行 HStack 内 column 高度由各自内容决定,
+        //          .alignment(.top) 让顶部对齐,但空列 vs 满列会有强烈锯齿。
+        // 问题 2 — column 内套 ScrollView(垂直) + .frame(minHeight: 200) 造成
+        //          双层 ScrollView (外横/内竖) 嵌套,iPhone 17 Pro Max 触摸
+        //          手势冲突,横向拖拽偶尔抢不到。
+        // 修法:外层 GeometryReader 取可用高度作为 column maxHeight,column 内部
+        //       改用 LazyVStack 不再嵌 ScrollView —— 让外层横向 ScrollView
+        //       只管横向滚,垂直滚交给每列自己的 ScrollView(但由 maxHeight 锚定)。
+        GeometryReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { column in
                         kanbanColumn(for: column)
                             .frame(width: 280)
+                            .frame(height: max(proxy.size.height - 24, 200), alignment: .top)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -424,7 +431,7 @@ public struct TaskListView: View {
                 }
                 .padding(BsSpacing.sm)
             }
-            .frame(minHeight: 200)
+            .frame(maxHeight: .infinity)
             .background(BsColor.surfaceSecondary.opacity(0.3))
             .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             .overlay(
@@ -603,18 +610,9 @@ public struct CreateTaskView: View {
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
                 }
             }
-            .overlay {
-                if isSubmitting {
-                    ZStack {
-                        Color.black.opacity(0.4).ignoresSafeArea()
-                        ProgressView()
-                            .padding()
-                            .background(BsColor.surfacePrimary)
-                            .cornerRadius(BsRadius.md)
-                            .shadow(radius: 10)
-                    }
-                }
-            }
+            // Bug-fix(loading 一致性): 全屏提交 overlay 改用统一的 BsLoadingOverlay,
+            // 和其他 submit sheet 对齐（同款 dim + ultraThinMaterial pill + .large 圈）。
+            .bsLoadingOverlay(isLoading: isSubmitting, label: "提交中…")
         }
     }
 

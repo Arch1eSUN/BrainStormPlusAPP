@@ -51,8 +51,6 @@ public struct ScheduleView: View {
                             myModeSection
                         case .list:
                             listModeSection
-                        case .timeline, .calendar:
-                            stubModeSection(for: viewModel.viewMode)
                         }
                     }
                     .padding(.top, BsSpacing.xl)
@@ -315,82 +313,9 @@ public struct ScheduleView: View {
         return "\(f) → \(t)"
     }
 
-    // MARK: - Timeline / Calendar stubs
-
-    @ViewBuilder
-    private func stubModeSection(for mode: ScheduleViewMode) -> some View {
-        VStack(alignment: .leading, spacing: BsSpacing.lg) {
-            // Keep the today card context while the full chrome ships later.
-            Text("今日状态")
-                .font(BsTypography.sectionTitle)
-                .foregroundStyle(BsColor.ink)
-
-            if viewModel.isLoading && viewModel.selectedDayState == nil {
-                RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                    .fill(BsColor.surfacePrimary)
-                    .frame(height: 100)
-                    .shimmer()
-            } else if let err = viewModel.errorMessage {
-                errorBanner(err)
-            } else if viewModel.selectedDayState == nil {
-                emptyState
-            } else {
-                DayStateCardView(dws: viewModel.selectedDayState, date: viewModel.selectedDate)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            BsContentCard(padding: .none) {
-                VStack(spacing: BsSpacing.md) {
-                    Image(systemName: mode.systemImage)
-                        .font(.system(.largeTitle, weight: .light))
-                        .foregroundStyle(BsColor.brandMint)
-                    Text("\(mode.displayLabel) 视图仅支持桌面端")
-                        .font(Font.custom("Outfit-Medium", size: 16, relativeTo: .body))
-                        .foregroundStyle(BsColor.ink)
-                        .multilineTextAlignment(.center)
-                    Text("iOS 仅支持查看当日班次与本人 14 天排班。排班编辑、团队时间线请前往 Web 端。")
-                        .font(BsTypography.captionSmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, BsSpacing.md)
-
-                    webLinkButton
-                        .padding(.top, BsSpacing.xs)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(BsSpacing.xl + 4)
-            }
-        }
-    }
-
-    /// Deep-link 到 Web 排班管理页。域名取 `AppEnvironment.webAPIBaseURL`
-    /// 的 host（DEBUG=本地 dev，RELEASE=zyoffice.me），避免硬编码。
-    /// 路由是 Web `src/app/dashboard/schedules/`。
-    @ViewBuilder
-    private var webLinkButton: some View {
-        if let url = Self.webScheduleURL {
-            Link(destination: url) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(.caption, weight: .medium))
-                    Text("打开 Web 排班")
-                        .font(BsTypography.bodySmall)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, BsSpacing.lg)
-                .padding(.vertical, BsSpacing.sm)
-                .background(BsColor.brandAzure)
-                .clipShape(Capsule())
-            }
-            .accessibilityHint("在默认浏览器中打开 Web 端排班页面")
-        }
-    }
-
-    private static let webScheduleURL: URL? = {
-        // 复用 AppEnvironment 的 host，避免 debug / release 写死不同域名。
-        let base = AppEnvironment.webAPIBaseURL
-        return base.appendingPathComponent("dashboard/schedules")
-    }()
+    // Phase 25.c — timeline / calendar 占位卡整块移除（对应 stubModeSection /
+    // webLinkButton / webScheduleURL 在移除 tab 后无消费者）。iOS 现仅保留
+    // my + list 两种视图模式，其他模式请前往 Web 端。
 
     // MARK: - Shared bits
 
@@ -410,31 +335,8 @@ public struct ScheduleView: View {
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
     }
 
-    private var emptyState: some View {
-        BsContentCard(padding: .none) {
-            VStack(spacing: BsSpacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(BsColor.brandMint.opacity(0.08))
-                        .frame(width: 80, height: 80)
-                    Image(systemName: "calendar")
-                        .font(.system(.largeTitle, weight: .light))
-                        .foregroundStyle(BsColor.brandMint)
-                }
-
-                Text("当天无排班记录")
-                    .font(Font.custom("Outfit-Medium", size: 16, relativeTo: .body))
-                    .foregroundStyle(BsColor.ink)
-
-                Text("请联系管理员或等待 HR 排班")
-                    .font(BsTypography.caption)
-                    .foregroundStyle(BsColor.inkMuted)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-        }
-    }
+    // Phase 25.c — 旧的"当天无排班记录" emptyState 仅被 stubModeSection 使用；
+    // 随 stub 视图一起删除（my + list 有各自的 skeleton / placeholder）。
 
     // MARK: - Quick-apply sheet wiring
 

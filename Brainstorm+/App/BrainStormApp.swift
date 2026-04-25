@@ -69,6 +69,15 @@ struct BrainStormApp: App {
 private struct AuthenticatedRoot: View {
     @AppStorage("bs_has_seen_onboarding") private var hasSeenOnboarding: Bool = false
 
+    // Phase 25.c — 外观偏好（跟随系统 / 浅色 / 深色）持久在 AppStorage。
+    // 把 override 套在 AuthenticatedRoot 而不是 @main 级别，是因为登录前
+    // （SplashView / LoginView）保持跟随系统可以少一次 color scheme 跳动。
+    @AppStorage("bs_color_scheme") private var appearanceRaw: String = BsAppearanceMode.system.rawValue
+
+    private var appearance: BsAppearanceMode {
+        BsAppearanceMode(rawValue: appearanceRaw) ?? .system
+    }
+
     var body: some View {
         MainTabView()
             .overlay {
@@ -82,6 +91,7 @@ private struct AuthenticatedRoot: View {
                     .zIndex(100)
                 }
             }
+            .preferredColorScheme(appearance.preferredColorScheme)
     }
 }
 

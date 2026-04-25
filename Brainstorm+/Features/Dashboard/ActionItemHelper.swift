@@ -40,7 +40,9 @@ public struct ActionItemHelper {
             // (mine + 6 approver queues). ApprovalsListView (4.1) is
             // now the "我提交的" body *inside* the center, not a
             // top-level destination.
-            ApprovalCenterView(client: supabase)
+            // Phase 3 isEmbedded: 从 Dashboard 卡片 / ActionItemHelper 进入
+            // 时借用外层 NavigationStack,避免双层 push。
+            ApprovalCenterView(client: supabase, isEmbedded: true)
         case .knowledge:
             KnowledgeListView(viewModel: KnowledgeListViewModel(client: supabase), isEmbedded: true)
         case .team:

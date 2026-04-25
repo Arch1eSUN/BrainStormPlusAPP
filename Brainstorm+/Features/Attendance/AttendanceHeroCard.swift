@@ -50,6 +50,17 @@ public struct AttendanceHeroCard: View {
     @StateObject private var motion = BsMotionManager()
     @State private var lowPowerActive: Bool = ProcessInfo.processInfo.isLowPowerModeEnabled
 
+    // ─── v1.3.1 perf：液体 TimelineView 的刷新频率 ─────────────────────
+    // ProMotion（iPhone 13 Pro+）下 `.animation` 默认跑 120 Hz，叠加 4 个
+    // LiquidFillShape + 每 shape 80 采样 Catmull-Rom + 3 波叠加 + blur/shadow，
+    // 实测 iPhone 17 Pro Max 仍掉帧。水波动画人眼对 30→60 Hz 察觉不到差别，
+    // 30 Hz 下 CPU/GPU 成本直接砍半。Low Power 或 Reduce Motion 进一步降到
+    // 12 Hz（相当于维持"活着"的微动，完全够用）。
+    private var liquidRefreshInterval: Double {
+        if reduceMotion || lowPowerActive { return 1.0 / 12 }
+        return 1.0 / 30
+    }
+
     // MARK: - v1.3 色彩状态机（overtime + 跨日重置）
     //
     // 状态图：
@@ -84,11 +95,14 @@ public struct AttendanceHeroCard: View {
                 //   Layer 0: outer halo — stateColor 在液体外扩散 neon glow
                 //   Layer 1: body gradient — 亮度 0.45–0.85 能量感
                 //   Layer 2: neon surface line — 白 stroke + stateColor 双层 shadow glow
-                TimelineView(.animation) { ctx in
+                TimelineView(.animation(minimumInterval: liquidRefreshInterval)) { ctx in
+                    // Low Power / Reduce Motion：amp 置 0，液面定格为平直；
+                    //   - 仍然保留 TimelineView（@12Hz）以便 progress 动画插值能跑
+                    //   - tilt 也置 0 —— motion manager 此时已停止订阅
                     let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 1.4
-                    let amp: CGFloat = reduceMotion ? 0 : 9
+                    let amp: CGFloat = (reduceMotion || lowPowerActive) ? 0 : 9
                     let freq: CGFloat = 1.2
-                    let tilt: CGFloat = reduceMotion ? 0 : motion.tiltX
+                    let tilt: CGFloat = (reduceMotion || lowPowerActive) ? 0 : motion.tiltX
 
                     ZStack {
                         // Layer 0: 外层发光 halo（stateColor 决定远场身份感）
@@ -242,26 +256,68 @@ public struct AttendanceHeroCard: View {
     }
 
     private var ctaRow: some View {
-        HStack(spacing: 10) {
-            BsPrimaryButton(ctaLabel, isLoading: viewModel.isLoading, isDisabled: ctaDisabled) {
-                Task { await viewModel.punch() }
-            }
-            Spacer()
-            if let clockIn = viewModel.today?.clockIn {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(formatTime(clockIn) + (viewModel.today?.clockOut.map { " – \(formatTime($0))" } ?? ""))
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(BsColor.inkMuted)
-                        .monospacedDigit()
-                    if viewModel.hasLocation,
-                       let loc = viewModel.currentLocationName,
-                       !loc.isEmpty {
-                        Text(loc)
-                            .font(.system(.caption2))
-                            .foregroundStyle(BsColor.inkFaint)
-                            .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                BsPrimaryButton(ctaLabel, isLoading: viewModel.isLoading, isDisabled: ctaDisabled) {
+                    // CTA 按下仅触发 punch()；BsPrimaryButton 已含 Haptic.medium()。
+                    // punch() 内部自己根据 state → success/error 弹对应 banner。
+                    Task { await viewModel.punch() }
+                }
+                Spacer()
+                if let clockIn = viewModel.today?.clockIn {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(formatTime(clockIn) + (viewModel.today?.clockOut.map { " – \(formatTime($0))" } ?? ""))
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(BsColor.inkMuted)
+                            .monospacedDigit()
+                        if viewModel.hasLocation,
+                           let loc = viewModel.currentLocationName,
+                           !loc.isEmpty {
+                            Text(loc)
+                                .font(.system(.caption2))
+                                .foregroundStyle(BsColor.inkFaint)
+                                .lineLimit(1)
+                        }
                     }
                 }
+            }
+
+            // v1.3 · 打卡反馈 banner —— Hero Card 以前完全丢弃 viewModel.errorMessage
+            // / successMessage，用户点按钮后若 currentLocation 还没拿到，punch()
+            // 会 silently 设置 errorMessage 但 UI 上什么都不显示 → "按了没反应"。
+            // 这里以最小面积贴近 CTA 呈现状态，避免用户困惑。
+            if let success = viewModel.successMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(.caption2))
+                    Text(success)
+                        .font(BsTypography.captionSmall)
+                        .lineLimit(2)
+                }
+                .foregroundStyle(BsColor.success)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            } else if let err = viewModel.errorMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(.caption2, weight: .semibold))
+                    Text(err)
+                        .font(BsTypography.captionSmall)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    if viewModel.clockState != .done {
+                        Button {
+                            Haptic.light()
+                            Task { await viewModel.punch() }
+                        } label: {
+                            Text("重试")
+                                .font(BsTypography.captionSmall.weight(.semibold))
+                                .foregroundStyle(BsColor.brandAzure)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .foregroundStyle(BsColor.danger)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -411,14 +467,32 @@ public struct AttendanceHeroCard: View {
     }
 
     private var ctaLabel: String {
+        // v1.3 · 把加载/等待定位态也表达在 label 上,避免用户按了"上班打卡"
+        // 却因为 `currentLocation == nil` 被 punch() silently return。
+        if viewModel.isInitializing { return "加载中…" }
         switch viewModel.clockState {
-        case .ready:     return "上班打卡"
-        case .clockedIn: return "下班打卡"
-        case .done:      return "已完成"
+        case .ready:
+            return viewModel.hasLocation ? "上班打卡" : "等待定位"
+        case .clockedIn:
+            return "下班打卡"
+        case .done:
+            return "已完成"
         }
     }
 
-    private var ctaDisabled: Bool { viewModel.clockState == .done }
+    /// CTA 禁用条件:
+    /// - 已完成(.done)
+    /// - 还在初始化(拉 today 记录中)
+    /// - 定位还没拿到(hasLocation == false)→ 否则点击后 punch() 只会
+    ///   silently 落到 "定位未就绪" errorMessage,用户体感"点了没反应"。
+    /// 下班打卡(.clockedIn)时,即使定位突然丢失仍允许点击,
+    /// punch() 会把 error 显示在 banner 里,让用户能感知。
+    private var ctaDisabled: Bool {
+        if viewModel.clockState == .done { return true }
+        if viewModel.isInitializing { return true }
+        if viewModel.clockState == .ready && !viewModel.hasLocation { return true }
+        return false
+    }
 
     // MARK: - Formatter
 

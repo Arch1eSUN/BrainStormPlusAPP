@@ -206,13 +206,15 @@ public final class ScheduleViewModel {
 }
 
 /// Schedule view modes — mirrors Web
-/// `_components/view-switcher.tsx`:
-///   calendar | timeline | list | my
+/// `_components/view-switcher.tsx` (calendar | timeline | list | my).
+///
+/// Phase 25.c — iOS 移除 timeline / calendar 两个 tab。iPhone 实机上这两个
+/// 入口原本只会渲染「视图仅支持桌面端」的占位卡；用户反馈这比没有入口更差。
+/// 保留在 Web 端的映射不变（Web 侧 4 tab 仍全量可用），iOS 只暴露 my + list。
+/// 如果后续 iOS 做了只读 timeline / month，把 case 加回即可。
 public enum ScheduleViewMode: String, CaseIterable, Identifiable, Hashable {
     case my
     case list
-    case timeline
-    case calendar
 
     public var id: String { rawValue }
 
@@ -220,8 +222,6 @@ public enum ScheduleViewMode: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .my:       return "我的"
         case .list:     return "列表"
-        case .timeline: return "时间线"
-        case .calendar: return "月视图"
         }
     }
 
@@ -229,8 +229,6 @@ public enum ScheduleViewMode: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .my:       return "person.fill"
         case .list:     return "list.bullet"
-        case .timeline: return "clock.fill"
-        case .calendar: return "calendar"
         }
     }
 }

@@ -56,13 +56,18 @@ public struct ApprovalQueueView: View {
         Group {
             if viewModel.isLoading && viewModel.rows.isEmpty {
                 ProgressView()
+                    .controlSize(.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.rows.isEmpty {
+                // Bug-fix(审批中心视图奇怪): empty state 也要撑满,否则 tab 切换
+                // 到空队列时内容高度坍塌,外层 ApprovalCenterView 的 pillBar 会
+                // 被居中推位,看起来像 tab 栏下掉。
                 BsEmptyState(
                     title: "暂无审批",
                     systemImage: "checkmark.seal",
                     description: emptyDescription
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 queueList
             }

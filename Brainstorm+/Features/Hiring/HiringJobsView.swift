@@ -7,15 +7,19 @@ public struct HiringJobsView: View {
     public init() {}
 
     public var body: some View {
+        // Bug-fix(Hiring tab jump): loading/empty 也要撑满，避免 tab 切换时父 Picker 位移。
         ZStack {
             if viewModel.isLoading && viewModel.positions.isEmpty {
-                ProgressView().padding(.top, 40)
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.positions.isEmpty {
                 BsEmptyState(
                     title: "暂无岗位",
                     systemImage: "briefcase",
                     description: "点击右上角「新建岗位」发布第一个招聘岗位。"
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     ForEach(viewModel.positions) { pos in

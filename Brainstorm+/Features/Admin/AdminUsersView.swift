@@ -129,7 +129,10 @@ public struct AdminUsersView: View {
                 .padding(.bottom, 12)
 
             if viewModel.isLoading && viewModel.users.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Bug-fix(loading 一致性): full-screen loading 用 .large 圈。
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.filteredUsers.isEmpty {
                 BsEmptyState(
                     title: "暂无用户",

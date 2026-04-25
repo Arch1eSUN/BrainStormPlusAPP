@@ -51,6 +51,8 @@ public struct MessagesView: View {
                 .tint(BsColor.brandAzure)
                 .accessibilityLabel("消息分类")
                 .accessibilityHint("聊天或通知")
+                // 仅保留一条 onChange —— 之前 top-level 也有一条 Haptic.light()
+                // 和这里的 Haptic.selection() 同时触发,每次切换响两下。
                 .onChange(of: selected) { _, _ in Haptic.selection() }
 
                 Divider()
@@ -76,9 +78,6 @@ public struct MessagesView: View {
             .background(BsColor.pageBackground.ignoresSafeArea())
             .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.large)
-            .onChange(of: selected) { _, _ in
-                Haptic.light()
-            }
         }
     }
 }

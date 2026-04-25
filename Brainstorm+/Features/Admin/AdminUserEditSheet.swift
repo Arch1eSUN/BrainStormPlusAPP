@@ -48,7 +48,10 @@ public struct AdminUserEditSheet: View {
         NavigationStack {
             Group {
                 if loading {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Bug-fix(loading 一致性): full-screen loading 用 .large 圈。
+                    ProgressView()
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let detail = detail {
                     form(detail: detail)
                 } else {

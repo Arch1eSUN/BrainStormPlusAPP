@@ -62,6 +62,8 @@ public struct HiringDataView: View {
     }
 
     public var body: some View {
+        // Bug-fix(Hiring tab jump): 同 HiringCenterView，picker 固定顶部，
+        // loading/empty 子 view 撑满高度避免高度坍塌引起 nav bar / 外层 picker 跳动。
         VStack(spacing: 0) {
             Picker("数据", selection: $selectedSection) {
                 ForEach(Section.allCases) { s in Text(s.title).tag(s) }
@@ -73,7 +75,8 @@ public struct HiringDataView: View {
 
             Group {
                 if viewModel.isLoading && viewModel.contracts.isEmpty && viewModel.seniority.isEmpty {
-                    ProgressView().padding(.top, 40)
+                    ProgressView()
+                        .controlSize(.large)
                 } else {
                     switch selectedSection {
                     case .contracts: contractsList
@@ -81,7 +84,9 @@ public struct HiringDataView: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
         .zyErrorBanner($viewModel.errorMessage)

@@ -75,8 +75,14 @@ public struct ApprovalCenterView: View {
     // meant we'd lose the just-submitted row's visibility on switch.
     @StateObject private var mineViewModel: MySubmissionsViewModel
 
-    public init(client: SupabaseClient = supabase) {
+    /// Phase 3 isEmbedded：从 Dashboard 卡片 / ActionItemHelper 进入时借用
+    /// caller 的 NavigationStack，避免内外双层 NavStack 导致"返回要按两次"。
+    /// Tab 入口（MainTabView）仍然 default false —— tab 自带 NavStack。
+    public let isEmbedded: Bool
+
+    public init(client: SupabaseClient = supabase, isEmbedded: Bool = false) {
         self.client = client
+        self.isEmbedded = isEmbedded
         _mineViewModel = StateObject(wrappedValue: MySubmissionsViewModel(client: client))
     }
 
@@ -112,66 +118,78 @@ public struct ApprovalCenterView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ZStack {
-                BsColor.pageBackground
-                    .ignoresSafeArea()
-                VStack(spacing: 0) {
-                    tabPillBar
-                    Divider().opacity(0.4)
-                    tabContent
+        if isEmbedded {
+            coreContent
+        } else {
+            NavigationStack { coreContent }
+        }
+    }
+
+    @ViewBuilder
+    private var coreContent: some View {
+        ZStack {
+            BsColor.pageBackground
+                .ignoresSafeArea()
+            // Bug-fix(审批中心视图奇怪): VStack 不带 alignment 时,若当前 tab
+            // 内容 (空/loading) 高度收缩,pillBar 会被垂直居中,视觉上像"tab 栏
+            // 往下掉"。钉顶 + tabContent 撑满,保证 pillBar 始终贴在 nav 下方。
+            VStack(spacing: 0) {
+                tabPillBar
+                Divider().opacity(0.4)
+                tabContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .navigationTitle("审批中心")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    Haptic.light()
+                    showTypePicker = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(.body, weight: .semibold))
+                        .foregroundStyle(BsColor.brandAzure)
+                        .frame(width: 32, height: 32)
+                        .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(), in: Circle())
                 }
+                .accessibilityLabel("新建审批")
             }
-            .navigationTitle("审批中心")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        Haptic.light()
-                        showTypePicker = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(.body, weight: .semibold))
-                            .foregroundStyle(BsColor.brandAzure)
-                            .frame(width: 32, height: 32)
-                            .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(), in: Circle())
-                    }
-                    .accessibilityLabel("新建审批")
+        }
+        .navigationDestination(for: UUID.self) { id in
+            ApprovalDetailView(requestId: id, client: client)
+                .navigationTransition(.zoom(sourceID: id, in: zoomNamespace))
+        }
+        // Type picker → sets `pendingSubmitKind` on selection; that
+        // drives the per-type sheet below via `.sheet(item:)`.
+        // Using two separate sheets (rather than one with inner
+        // switch) avoids a jarring same-sheet content swap.
+        .sheet(isPresented: $showTypePicker) {
+            ApprovalSubmitTypePickerSheet { kind in
+                pendingSubmitKind = kind
+            }
+        }
+        .sheet(item: $pendingSubmitKind) { kind in
+            submitSheet(for: kind)
+        }
+        .task {
+            // Default-tab parity: Web (page.tsx:54) lands approvers
+            // on the first pending queue and non-approvers on
+            // `mine`. We apply this once on first appearance — a
+            // subsequent capability toggle shouldn't silently jump
+            // the user off their current tab.
+            if !didApplyInitialDefault {
+                didApplyInitialDefault = true
+                if canApprove, let firstQueue = visibleQueueKinds.first {
+                    selectedTab = .queue(firstQueue)
                 }
-            }
-            .navigationDestination(for: UUID.self) { id in
-                ApprovalDetailView(requestId: id, client: client)
-                    .navigationTransition(.zoom(sourceID: id, in: zoomNamespace))
-            }
-            // Type picker → sets `pendingSubmitKind` on selection; that
-            // drives the per-type sheet below via `.sheet(item:)`.
-            // Using two separate sheets (rather than one with inner
-            // switch) avoids a jarring same-sheet content swap.
-            .sheet(isPresented: $showTypePicker) {
-                ApprovalSubmitTypePickerSheet { kind in
-                    pendingSubmitKind = kind
-                }
-            }
-            .sheet(item: $pendingSubmitKind) { kind in
-                submitSheet(for: kind)
-            }
-            .task {
-                // Default-tab parity: Web (page.tsx:54) lands approvers
-                // on the first pending queue and non-approvers on
-                // `mine`. We apply this once on first appearance — a
-                // subsequent capability toggle shouldn't silently jump
-                // the user off their current tab.
-                if !didApplyInitialDefault {
-                    didApplyInitialDefault = true
-                    if canApprove, let firstQueue = visibleQueueKinds.first {
-                        selectedTab = .queue(firstQueue)
-                    }
-                    await refreshAllPendingCounts()
-                }
-            }
-            .refreshable {
                 await refreshAllPendingCounts()
             }
+        }
+        .refreshable {
+            await refreshAllPendingCounts()
         }
     }
 

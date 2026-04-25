@@ -52,13 +52,17 @@ public struct ApprovalsListView: View {
         Group {
             if viewModel.isLoading && viewModel.rows.isEmpty {
                 ProgressView()
+                    .controlSize(.large)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.rows.isEmpty {
+                // Bug-fix(审批中心视图奇怪): 同 ApprovalQueueView，empty 撑满避免
+                // pillBar 被居中推位。
                 BsEmptyState(
                     title: "暂无提交记录",
                     systemImage: "tray",
                     description: "你还没有提交过审批申请。"
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 submissionsList
             }

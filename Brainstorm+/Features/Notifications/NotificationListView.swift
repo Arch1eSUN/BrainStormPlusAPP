@@ -106,7 +106,11 @@ public struct NotificationListView: View {
                 }
             }
         }
-        .navigationTitle("通知")
+        // embedded（MessagesView 通知 sub-tab）时,外层 NavStack 的标题由
+        // MessagesView 控制（"消息"）,child 再 set title 会导致 iOS 26 nav
+        // bar 出现 replay / layout 塌陷。用 modifier 条件应用,而不是 set ""
+        // —— set "" 会把外层 title 覆盖成空,出现"消息"title 突然消失的闪烁。
+        .modifier(ConditionalNavTitleN(isEmbedded: isEmbedded, title: "通知"))
         .toolbar {
             if unreadCount > 0 {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -234,5 +238,22 @@ public struct NotificationListView: View {
                     }
                   ]
         )
+    }
+}
+
+// MARK: - ConditionalNavTitleN
+// embedded 时完全跳过 `.navigationTitle`,让外层容器独占 nav bar 标题。
+// 命名带 N 后缀避免与 ChatListView 的同名 helper 冲突（同一 target 下
+// private 名字作用域按文件隔离,但显式区分便于 grep）。
+private struct ConditionalNavTitleN: ViewModifier {
+    let isEmbedded: Bool
+    let title: String
+
+    func body(content: Content) -> some View {
+        if isEmbedded {
+            content
+        } else {
+            content.navigationTitle(title)
+        }
     }
 }

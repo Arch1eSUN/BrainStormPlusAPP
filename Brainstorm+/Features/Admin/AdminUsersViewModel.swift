@@ -103,9 +103,13 @@ public final class AdminUsersViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
+            // Bug-fix: 列表过滤掉 status='deleted' 的软删用户，否则点"删除"后
+            // 该行仍留在列表里（只是 pill 变"已删除"），视觉上像没生效。
+            // 物理清理仍需 Web 侧 super admin 完成（同文件注释说明）。
             let base = client
                 .from("profiles")
                 .select("id, full_name, display_name, email, role, department, position, status, created_at")
+                .neq("status", value: "deleted")
 
             let rows: [AdminUserRow]
             if roleFilter.isEmpty {
@@ -205,6 +209,21 @@ public final class AdminUsersViewModel: ObservableObject {
                 .update(Payload(status: "inactive"))
                 .eq("id", value: userId.uuidString)
                 .execute()
+            // Bug-fix: optimistic —— 本地更新 status pill，立即反馈到 UI。
+            if let idx = users.firstIndex(where: { $0.id == userId }) {
+                let u = users[idx]
+                users[idx] = AdminUserRow(
+                    id: u.id,
+                    fullName: u.fullName,
+                    displayName: u.displayName,
+                    email: u.email,
+                    role: u.role,
+                    department: u.department,
+                    position: u.position,
+                    status: "inactive",
+                    createdAt: u.createdAt
+                )
+            }
             await writeAudit(action: "user_deactivate", description: "停用用户", targetId: userId)
             return true
         } catch {
@@ -222,6 +241,9 @@ public final class AdminUsersViewModel: ObservableObject {
                 .update(Payload(status: "deleted"))
                 .eq("id", value: userId.uuidString)
                 .execute()
+            // Bug-fix: optimistic UI —— 立即从列表移除，不等 load() 回来。
+            // load() 现在会过滤 status='deleted'，此处为即时反馈。
+            users.removeAll { $0.id == userId }
             await writeAudit(
                 action: "user_deactivate",
                 description: "标记删除用户 \(targetName)（iOS 软删，物理清理请在 Web 端完成）",

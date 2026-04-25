@@ -22,7 +22,8 @@ public struct AdminLeaveQuotaView: View {
             monthSection
             if vm.isLoading && vm.rows.isEmpty {
                 Section {
-                    ProgressView().frame(maxWidth: .infinity, alignment: .center)
+                    // Bug-fix(loading 一致性): section-level loading 用 .small。
+                    ProgressView().controlSize(.small).frame(maxWidth: .infinity, alignment: .center)
                 }
             } else if vm.rows.isEmpty {
                 Section {

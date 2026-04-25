@@ -48,8 +48,14 @@ public struct ChatListView: View {
                         channelList
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // MessagesView 包裹本 view 时（isEmbedded=true）外层已有 NavStack +
+        // segmented picker + 自己的 navigationTitle。再在 child 里 set 一次
+        // navigationTitle("消息") 会被 MessagesView 的覆盖,但 toolbar / search
+        // 仍然指向外层 stack,不冲突。
         // Sprint 3.4: value-based navigation. `ChatRoomViewModel` is only
         // constructed when the destination actually renders, not once per
         // list row — previous eager pattern was instantiating a Supabase
@@ -58,8 +64,11 @@ public struct ChatListView: View {
         .navigationDestination(for: ChatChannel.self) { channel in
             ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
         }
-        .navigationTitle("消息")
-        .navigationBarTitleDisplayMode(.large)
+        // 只在非 embedded 时才挂 nav title —— MessagesView 外层已经设置了
+        // "消息"的 large title,若 child 在同一条 NavStack 上 又 `.navigationTitle`
+        // 一次 SwiftUI 会在 child appear 的一瞬把外层 title 替换成 child 的值
+        // （iOS 26 Liquid Glass 下这个替换有可见闪烁 / nav bar collapse）。
+        .modifier(ConditionalNavTitle(isEmbedded: isEmbedded, title: "消息", display: .large))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -283,6 +292,26 @@ public struct ChatListView: View {
         case .direct: return "person.fill"
         case .group: return "person.3.fill"
         case .announcement: return "megaphone.fill"
+        }
+    }
+}
+
+// MARK: - ConditionalNavTitle
+// 只在 !isEmbedded 时应用 `.navigationTitle`/`.navigationBarTitleDisplayMode`,
+// embedded 场景下完全不挂 title modifier —— 让外层容器（MessagesView）
+// 独占导航栏标题控制。
+private struct ConditionalNavTitle: ViewModifier {
+    let isEmbedded: Bool
+    let title: String
+    let display: NavigationBarItem.TitleDisplayMode
+
+    func body(content: Content) -> some View {
+        if isEmbedded {
+            content
+        } else {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(display)
         }
     }
 }
