@@ -33,7 +33,17 @@ public enum MessagesSubTab: String, CaseIterable, Identifiable, Hashable {
 public struct MessagesView: View {
     @AppStorage("messagesSubTab") private var selected: MessagesSubTab = .chat
 
-    public init() {}
+    // VM hoist 到 MessagesView 持有 —— 之前在 body switch 里 `ChatListViewModel(client:)`
+    // 每次 picker 切换 / view 重建都新建 VM，channels 列表清零、realtime 订阅断
+    // 重连、fetch 重跑 —— 用户感觉"切换 tab 数据消失 / 闪烁不可用"。
+    // 用 @StateObject 把 VM 生命周期挂到 MessagesView 本身，segment 切换不重建。
+    @StateObject private var chatVM: ChatListViewModel
+    @StateObject private var notifVM: NotificationListViewModel
+
+    public init() {
+        _chatVM = StateObject(wrappedValue: ChatListViewModel(client: supabase))
+        _notifVM = StateObject(wrappedValue: NotificationListViewModel(client: supabase))
+    }
 
     public var body: some View {
         NavigationStack {
@@ -51,26 +61,19 @@ public struct MessagesView: View {
                 .tint(BsColor.brandAzure)
                 .accessibilityLabel("消息分类")
                 .accessibilityHint("聊天或通知")
-                // 仅保留一条 onChange —— 之前 top-level 也有一条 Haptic.light()
-                // 和这里的 Haptic.selection() 同时触发,每次切换响两下。
                 .onChange(of: selected) { _, _ in Haptic.selection() }
 
                 Divider()
                     .opacity(0.4)
 
-                // Content swap — 两个 view 都以 isEmbedded: true 借用外层 NavStack
+                // Content swap — 两个 view 都以 isEmbedded: true 借用外层 NavStack。
+                // VM 由 MessagesView @StateObject 持有，segment 切换不会重建。
                 Group {
                     switch selected {
                     case .chat:
-                        ChatListView(
-                            viewModel: ChatListViewModel(client: supabase),
-                            isEmbedded: true
-                        )
+                        ChatListView(viewModel: chatVM, isEmbedded: true)
                     case .notifications:
-                        NotificationListView(
-                            viewModel: NotificationListViewModel(client: supabase),
-                            isEmbedded: true
-                        )
+                        NotificationListView(viewModel: notifVM, isEmbedded: true)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
