@@ -35,6 +35,14 @@ public struct FinanceView: View {
     // 都走 sheet+inner NavStack)。
     @State private var showHistorySheet: Bool = false
     @State private var navPath = NavigationPath()
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in LazyVStack inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
+    /// 注意:这只覆盖 recentRecordsSection 的 LazyVStack 行;sheet 内的 history
+    /// List 是原生 List,自带正确手势分离,保持不变。
+    @State private var recentPushTarget: FinanceAIRecord? = nil
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -108,6 +116,13 @@ public struct FinanceView: View {
         // navPath.append 也是同一条),sheet 内的 history 列表自带子 NavStack
         // 走自己的 detail push,两条路径互不干扰。
         .navigationDestination(for: FinanceAIRecord.self) { record in
+            FinanceRecordDetailView(record: record)
+        }
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 recent
+        // records LazyVStack 内 Button + recentPushTarget binding,替代旧
+        // NavigationLink(value:) 的过敏感 tap 触发。与上面的 value-based
+        // for: 注册并存 —— submitAIProcess 仍可用 navPath.append。
+        .navigationDestination(item: $recentPushTarget) { record in
             FinanceRecordDetailView(record: record)
         }
         .sheet(isPresented: $showHistorySheet) {
@@ -482,7 +497,12 @@ public struct FinanceView: View {
             } else {
                 LazyVStack(spacing: 10) {
                     ForEach(Array(viewModel.filteredRecords.prefix(5))) { record in
-                        NavigationLink(value: record) {
+                        // Bug-fix(滑动判定为点击 + 震动): 用 Button + recentPushTarget
+                        // 替代 NavigationLink(value:)。Button 在 ScrollView 里正确
+                        // 处理 tap-vs-drag (drag 超过阈值会自动 cancel tap)。
+                        Button {
+                            recentPushTarget = record
+                        } label: {
                             FinanceRecordRow(record: record)
                         }
                         .buttonStyle(.plain)

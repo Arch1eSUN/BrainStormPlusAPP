@@ -24,6 +24,13 @@ public struct ProjectListView: View {
     /// dialog (`BrainStorm+-Web/src/app/dashboard/projects/page.tsx` line 31).
     @State private var isShowingCreateSheet: Bool = false
 
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in LazyVStack inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
+    @State private var pushTarget: Project? = nil
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -135,6 +142,22 @@ public struct ProjectListView: View {
                 }
             )
         }
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
+        // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
+        .navigationDestination(item: $pushTarget) { project in
+            ProjectDetailView(
+                viewModel: ProjectDetailViewModel(
+                    client: supabase,
+                    initialProject: project
+                ),
+                onProjectUpdated: { _ in
+                    Task { await reload() }
+                },
+                onProjectDeleted: { id in
+                    viewModel.removeProjectLocally(id: id)
+                }
+            )
+        }
         // 2.0: row-level delete confirmation. Mirrors Web `confirm('确定删除这个项目吗？')`
         // semantics via the native `.confirmationDialog` + `Button(role: .destructive)`
         // pattern. The destructive action is gated behind `isDeleting` to prevent double-taps.
@@ -210,24 +233,10 @@ public struct ProjectListView: View {
                 ScrollView {
                     LazyVStack(spacing: BsSpacing.lg) {
                         ForEach(rows) { project in
-                            NavigationLink {
-                                ProjectDetailView(
-                                    viewModel: ProjectDetailViewModel(
-                                        client: supabase,
-                                        initialProject: project
-                                    ),
-                                    // 1.9: when edit succeeds inside the pushed detail view,
-                                    // reload the list so the updated row reflects the save.
-                                    onProjectUpdated: { _ in
-                                        Task { await reload() }
-                                    },
-                                    // 2.0: when delete succeeds inside the pushed detail view,
-                                    // drop the row locally (no extra PostgREST round-trip — the
-                                    // detail has already confirmed the server-side delete).
-                                    onProjectDeleted: { id in
-                                        viewModel.removeProjectLocally(id: id)
-                                    }
-                                )
+                            // Bug-fix(滑动判定为点击 + 震动): 用 Button + pushTarget 替代
+                                // NavigationLink。Button 在 ScrollView 里正确处理 tap-vs-drag。
+                            Button {
+                                pushTarget = project
                             } label: {
                                 ProjectCardView(
                                     project: project,

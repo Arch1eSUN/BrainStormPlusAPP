@@ -16,6 +16,13 @@ public struct TeamDirectoryView: View {
     @State private var startingChatFor: UUID? = nil
     @State private var chatError: String? = nil
 
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in LazyVGrid inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
+    @State private var memberPushTarget: UUID? = nil
+
     private let gridColumns: [GridItem] = [
         GridItem(.adaptive(minimum: 160), spacing: BsSpacing.md)
     ]
@@ -49,7 +56,10 @@ public struct TeamDirectoryView: View {
         .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("团队")
         .navigationBarTitleDisplayMode(.large)
-        .navigationDestination(for: UUID.self) { userId in
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 grid 内
+        // Button + memberPushTarget binding,替代旧 NavigationLink(value:) 的
+        // 过敏感 tap 触发。
+        .navigationDestination(item: $memberPushTarget) { userId in
             TeamMemberDetailView(userId: userId)
         }
         .navigationDestination(item: $chatDestination) { channel in
@@ -194,7 +204,12 @@ public struct TeamDirectoryView: View {
     }
 
     private func memberCard(_ m: TeamMember) -> some View {
-        NavigationLink(value: m.id) {
+        // Bug-fix(滑动判定为点击 + 震动): 用 Button + memberPushTarget 替代
+        // NavigationLink(value:)。Button 在 ScrollView/LazyVGrid 里正确
+        // 处理 tap-vs-drag (drag 超过阈值会自动 cancel tap)。
+        Button {
+            memberPushTarget = m.id
+        } label: {
             BsContentCard(padding: .medium) {
                 VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
                     HStack(spacing: BsSpacing.sm + 2) {

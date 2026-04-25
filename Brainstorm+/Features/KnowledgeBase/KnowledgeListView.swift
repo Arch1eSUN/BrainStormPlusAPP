@@ -40,6 +40,13 @@ public struct KnowledgeListView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showFileImporter: Bool = false
 
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in LazyVStack inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
+    @State private var pushTarget: KnowledgeArticle? = nil
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -115,6 +122,19 @@ public struct KnowledgeListView: View {
             KnowledgeEditView(
                 viewModel: viewModel,
                 existingArticle: target.article
+            )
+        }
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 list 内
+        // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
+        .navigationDestination(item: $pushTarget) { article in
+            KnowledgeDetailView(
+                article: article,
+                viewModel: viewModel,
+                canEdit: isAdmin,
+                onEdit: isAdmin ? { editTarget = .edit(article) } : nil,
+                onDelete: isAdmin
+                    ? { Task { await viewModel.deleteArticle(article) } }
+                    : nil
             )
         }
         .sheet(isPresented: $showUploadSheet) {
@@ -207,16 +227,10 @@ public struct KnowledgeListView: View {
     private var articleList: some View {
         LazyVStack(spacing: BsSpacing.md) {
             ForEach(viewModel.articles) { article in
-                NavigationLink {
-                    KnowledgeDetailView(
-                        article: article,
-                        viewModel: viewModel,
-                        canEdit: isAdmin,
-                        onEdit: isAdmin ? { editTarget = .edit(article) } : nil,
-                        onDelete: isAdmin
-                            ? { Task { await viewModel.deleteArticle(article) } }
-                            : nil
-                    )
+                // Bug-fix(滑动判定为点击 + 震动): 用 Button + pushTarget 替代
+                // NavigationLink。Button 在 ScrollView 里正确处理 tap-vs-drag。
+                Button {
+                    pushTarget = article
                 } label: {
                     KnowledgeCardView(article: article)
                         .padding(.horizontal)

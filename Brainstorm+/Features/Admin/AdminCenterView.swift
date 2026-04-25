@@ -12,6 +12,44 @@ public struct AdminCenterView: View {
     @StateObject private var viewModel = AdminCenterViewModel()
     @Environment(SessionManager.self) private var sessionManager
 
+    /// Bug-fix(滑动判定为点击 + 震动): NavigationLink in VStack inside ScrollView
+    /// 在 iOS 26 触发太敏感 —— 手指放上去稍微停留就触发 tap (NavigationLink push +
+    /// contextMenu preview haptic),用户想滑动反馈成"点击"。
+    /// 改用 Button + .navigationDestination(item:) 的程序化导航:Button 在
+    /// ScrollView 里有正确的 tap-vs-drag 判定 (drag 超过阈值会自动 cancel tap)。
+    @State private var pushTarget: AdminModuleRoute? = nil
+
+    /// Identifiable enum for programmatic admin module navigation. Each case
+    /// resolves to a distinct AdminXxxView destination in the central
+    /// `.navigationDestination(item:)` modifier below.
+    fileprivate enum AdminModuleRoute: Identifiable, Hashable {
+        case users
+        case evaluations
+        case org
+        case holidays
+        case geofence
+        case attendanceExemption
+        case leaveQuota
+        case broadcast
+        case aiSettings
+        case audit
+
+        var id: String {
+            switch self {
+            case .users: return "users"
+            case .evaluations: return "evaluations"
+            case .org: return "org"
+            case .holidays: return "holidays"
+            case .geofence: return "geofence"
+            case .attendanceExemption: return "attendanceExemption"
+            case .leaveQuota: return "leaveQuota"
+            case .broadcast: return "broadcast"
+            case .aiSettings: return "aiSettings"
+            case .audit: return "audit"
+            }
+        }
+    }
+
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
 
@@ -54,6 +92,32 @@ public struct AdminCenterView: View {
             }
         }
         .zyErrorBanner($viewModel.errorMessage)
+        // Bug-fix(滑动判定为点击 + 震动): 程序化导航 destination,配合 modulesList 内
+        // Button + pushTarget binding,替代旧 NavigationLink 的过敏感 tap 触发。
+        .navigationDestination(item: $pushTarget) { route in
+            switch route {
+            case .users:
+                AdminUsersView(canAssignPrivileges: viewModel.canAssignPrivileges, isEmbedded: true)
+            case .evaluations:
+                AdminEvaluationsView()
+            case .org:
+                AdminOrgConfigView(isEmbedded: true)
+            case .holidays:
+                AdminHolidaysView(isEmbedded: true)
+            case .geofence:
+                AdminGeofenceView()
+            case .attendanceExemption:
+                AdminAttendanceExemptionView()
+            case .leaveQuota:
+                AdminLeaveQuotaView()
+            case .broadcast:
+                AdminBroadcastView(isEmbedded: true)
+            case .aiSettings:
+                AdminAISettingsView()
+            case .audit:
+                AdminAuditView(isEmbedded: true)
+            }
+        }
     }
 
     @ViewBuilder
@@ -148,10 +212,9 @@ public struct AdminCenterView: View {
                         icon: "person.2.fill",
                         color: BsColor.brandAzure,
                         title: "用户管理",
-                        subtitle: "创建 · 编辑 · 角色 · 能力包"
-                    ) {
-                        AdminUsersView(canAssignPrivileges: viewModel.canAssignPrivileges, isEmbedded: true)
-                    }
+                        subtitle: "创建 · 编辑 · 角色 · 能力包",
+                        route: .users
+                    )
                     divider()
                 }
 
@@ -160,10 +223,9 @@ public struct AdminCenterView: View {
                         icon: "sparkles",
                         color: .purple,
                         title: "AI 评分中心",
-                        subtitle: "月度评估 · 五维评分 · 风险复核"
-                    ) {
-                        AdminEvaluationsView()
-                    }
+                        subtitle: "月度评估 · 五维评分 · 风险复核",
+                        route: .evaluations
+                    )
                     divider()
                 }
 
@@ -172,10 +234,9 @@ public struct AdminCenterView: View {
                         icon: "building.2.fill",
                         color: .teal,
                         title: "组织架构",
-                        subtitle: "部门 · 职位"
-                    ) {
-                        AdminOrgConfigView(isEmbedded: true)
-                    }
+                        subtitle: "部门 · 职位",
+                        route: .org
+                    )
                     divider()
                 }
 
@@ -184,10 +245,9 @@ public struct AdminCenterView: View {
                         icon: "calendar.badge.plus",
                         color: .orange,
                         title: "公休日历",
-                        subtitle: "添加 · 删除 · 分区域"
-                    ) {
-                        AdminHolidaysView(isEmbedded: true)
-                    }
+                        subtitle: "添加 · 删除 · 分区域",
+                        route: .holidays
+                    )
                     divider()
                 }
 
@@ -196,19 +256,17 @@ public struct AdminCenterView: View {
                         icon: "location.circle.fill",
                         color: .mint,
                         title: "地理围栏",
-                        subtitle: "多点打卡中心 · 半径 · 地图预览"
-                    ) {
-                        AdminGeofenceView()
-                    }
+                        subtitle: "多点打卡中心 · 半径 · 地图预览",
+                        route: .geofence
+                    )
                     divider()
                     row(
                         icon: "shield.lefthalf.filled",
                         color: .cyan,
                         title: "弹性考勤豁免",
-                        subtitle: "部门 / 员工 · 免围栏 · 弹性工时"
-                    ) {
-                        AdminAttendanceExemptionView()
-                    }
+                        subtitle: "部门 / 员工 · 免围栏 · 弹性工时",
+                        route: .attendanceExemption
+                    )
                     divider()
                 }
 
@@ -217,10 +275,9 @@ public struct AdminCenterView: View {
                         icon: "calendar.badge.clock",
                         color: .indigo,
                         title: "调休额度",
-                        subtitle: "按员工月度额度 · 批量设置"
-                    ) {
-                        AdminLeaveQuotaView()
-                    }
+                        subtitle: "按员工月度额度 · 批量设置",
+                        route: .leaveQuota
+                    )
                     divider()
                 }
 
@@ -229,10 +286,9 @@ public struct AdminCenterView: View {
                         icon: "megaphone.fill",
                         color: .pink,
                         title: "广播通知",
-                        subtitle: "向全员推送系统消息"
-                    ) {
-                        AdminBroadcastView(isEmbedded: true)
-                    }
+                        subtitle: "向全员推送系统消息",
+                        route: .broadcast
+                    )
                     divider()
                 }
 
@@ -241,10 +297,9 @@ public struct AdminCenterView: View {
                         icon: "cpu",
                         color: .indigo,
                         title: "AI 设置",
-                        subtitle: "供应商 · 默认模型 · 降级链 · 月度评分"
-                    ) {
-                        AdminAISettingsView()
-                    }
+                        subtitle: "供应商 · 默认模型 · 降级链 · 月度评分",
+                        route: .aiSettings
+                    )
                     divider()
                 }
 
@@ -253,25 +308,29 @@ public struct AdminCenterView: View {
                         icon: "list.bullet.clipboard.fill",
                         color: .purple,
                         title: "操作审计",
-                        subtitle: "查看管理操作日志"
-                    ) {
-                        AdminAuditView(isEmbedded: true)
-                    }
+                        subtitle: "查看管理操作日志",
+                        route: .audit
+                    )
                 }
                 }
             }
         }
     }
 
+    /// Bug-fix(滑动判定为点击 + 震动): 用 Button + pushTarget 替代
+    /// NavigationLink。Button 在 ScrollView/VStack 里正确处理 tap-vs-drag,
+    /// 滑动手指超过阈值时自动 cancel tap,避免误推 destination。
     @ViewBuilder
-    private func row<Destination: View>(
+    private func row(
         icon: String,
         color: Color,
         title: String,
         subtitle: String,
-        @ViewBuilder destination: () -> Destination
+        route: AdminModuleRoute
     ) -> some View {
-        NavigationLink(destination: destination()) {
+        Button {
+            pushTarget = route
+        } label: {
             HStack(spacing: BsSpacing.md + 2) {
                 ZStack {
                     Circle()

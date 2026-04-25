@@ -43,23 +43,24 @@ public struct BsAppTile: View {
     }
 
     public var body: some View {
+        // Tile 内容用 NavigationLink 但 press feedback 走 SwiftUI 标准
+        // ButtonStyle —— 不再用 simultaneousGesture(DragGesture(minimumDistance:0))
+        // 触发 isPressed + Haptic.light()。这是用户报"手指放上去就震+滑动也震"的
+        // root cause：minimumDistance:0 让 finger touch down 即触发，scroll
+        // 时也连发 haptic。
         NavigationLink(destination: destination()) {
             VStack(spacing: 8) {
                 ZStack(alignment: .topTrailing) {
-                    // 5 人评审修正：iOS 2024+ app tile 是**圆角方**，不是圆形。
-                    // 饱和度 0.18 让 icon 有精神（之前 0.14 奶乎乎）。
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(tint.opacity(0.18))
                         .frame(width: 50, height: 50)
 
-                    // icon 本身 —— palette 双色渲染
                     Image(systemName: systemImage)
                         .font(.system(size: 22, weight: .semibold))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(tint, tint.opacity(0.55))
                         .frame(width: 50, height: 50)
 
-                    // badge —— 有数字显数字，否则小红点
                     if let badge, badge > 0 {
                         Text(badge > 99 ? "99+" : "\(badge)")
                             .font(.system(size: 10, weight: .bold))
@@ -80,21 +81,19 @@ public struct BsAppTile: View {
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 4)
-            .scaleEffect(isPressed ? 0.94 : 1.0)
-            .animation(BsMotion.Anim.overshoot, value: isPressed)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !isPressed {
-                        isPressed = true
-                        Haptic.light()
-                    }
-                }
-                .onEnded { _ in isPressed = false }
-        )
+        .buttonStyle(BsAppTilePressStyle())
+    }
+}
+
+// SwiftUI 标准 ButtonStyle —— ScrollView 内 drag exceed threshold 时
+// 自动 cancel press（不会误判滑动为 tap）+ 不在 touch-down 触发 haptic。
+private struct BsAppTilePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .animation(BsMotion.Anim.overshoot, value: configuration.isPressed)
     }
 }
 
