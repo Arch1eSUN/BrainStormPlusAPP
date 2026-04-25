@@ -2,5 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	APNS aps-environment 暂时关闭。需要满足以下两个条件后再开启：
+	1. Apple Developer Program 付费账号（$99/年），免费 personal team 无 push 能力
+	2. Apple Developer Portal 上的 App ID `com.samuraiplus.brainstormplus` 勾选
+	   "Push Notifications" capability 并重新下载 provisioning profile
+
+	代码侧 APNS 链路完整就绪：
+	  • iOS BsAppDelegate 注册 + ApnsTokenSyncer 上传 token
+	  • Web sendApnsPushToTokens + dispatcher 接入 + apns_device_tokens 表
+	  • docs/APNS_SETUP.md 用户配置指引
+	打开 aps-environment 即激活推送链路。
+	-->
 </dict>
 </plist>

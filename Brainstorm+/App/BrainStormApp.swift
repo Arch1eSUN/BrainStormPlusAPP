@@ -1,10 +1,15 @@
 import SwiftUI
 import Combine
 import Supabase
+import UIKit
 import UserNotifications
 
 @main
 struct BrainStormApp: App {
+    // AppDelegate 适配器 —— SwiftUI App 模式下接管 APNS 注册/回调。
+    // iOS 26 SwiftUI 没有原生 push hook，必须借 UIApplicationDelegate。
+    @UIApplicationDelegateAdaptor(BsAppDelegate.self) private var appDelegate
+
     @State private var sessionManager = SessionManager()
     @StateObject private var realtimeSync = RealtimeSyncManager.shared
     @State private var minSplashHeld = false
@@ -12,12 +17,6 @@ struct BrainStormApp: App {
     init() {
         // v1.2: TabBar badge 全局走 Coral（unreadBadge = brandCoral）
         UITabBarItem.appearance().badgeColor = UIColor(BsColor.unreadBadge)
-
-        // 请求 iOS home screen app icon badge 权限 —— 仅 .badge scope，
-        // 会弹"允许通知"prompt（iOS 把 badge 归为 notification 子集）。
-        // 拒绝时 setBadgeCount silent fail，降级到 tab bar badge 继续工作，
-        // 不阻塞任何业务流程。
-        UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
     }
 
     var body: some Scene {
@@ -151,5 +150,86 @@ struct SplashView: View {
                 }
             }
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BsAppDelegate — APNS 注册 + 通知前台展示 + tap 深链 hook
+// ------------------------------------------------------------------
+// 1. didFinishLaunchingWithOptions:
+//    - 接管 UNUserNotificationCenter delegate
+//    - 请求 [.alert, .badge, .sound] 权限（替代原 init 里的 .badge-only）
+//    - granted 后 main thread 调 registerForRemoteNotifications
+//
+// 2. didRegisterForRemoteNotificationsWithDeviceToken:
+//    - 拿到 Data → hex 字符串 → ApnsTokenSyncer 写入 apns_device_tokens
+//    - 注：用户必须已登录，否则 syncer 内部 supabase.auth.session 抛错
+//      会 swallow，不影响业务。app 下次冷启动 / 登录后会再次注册触发上传。
+//
+// 3. willPresent (foreground):
+//    - 默认 iOS 在前台 silently 收 push，不弹 banner。这里强制显示。
+//
+// 4. didReceive (tap):
+//    - userInfo["link"] 是 dispatcher 写进 payload 的深链 path
+//    - 现在只 console 打印作 hook，等 router 接好再换成 NotificationCenter post
+// ══════════════════════════════════════════════════════════════════
+final class BsAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .badge, .sound]
+        ) { granted, error in
+            if let error {
+                print("[APNS] authorization error:", error)
+            }
+            if granted {
+                DispatchQueue.main.async {
+                    application.registerForRemoteNotifications()
+                }
+            } else {
+                print("[APNS] authorization denied")
+            }
+        }
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        print("[APNS] device token:", token.prefix(8), "…")
+        Task { await ApnsTokenSyncer.shared.upload(token: token) }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[APNS] registration failed:", error)
+    }
+
+    // foreground 收到 push 时强制显示 banner —— 否则 iOS 默认 silent。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge, .list])
+    }
+
+    // 用户 tap 通知时，解析 userInfo["link"] 跳对应深链。目前先打印作占位 hook，
+    // 后续接上 router/NotificationCenter post 时这里发 deeplink 事件。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        print("[APNS] tapped userInfo:", userInfo)
+        completionHandler()
     }
 }
