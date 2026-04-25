@@ -119,10 +119,10 @@ public struct ActivityFeedView: View {
         if viewModel.isLoading && viewModel.items.isEmpty {
             skeletonList
         } else if viewModel.filteredItems.isEmpty {
-            BsEmptyState(
-                title: "暂无动态",
+            ContentUnavailableView(
+                "暂无动态",
                 systemImage: "bolt.circle",
-                description: "还没有任何活动记录"
+                description: Text("还没有任何活动记录")
             )
             .padding(.top, BsSpacing.xxxl)
         } else {

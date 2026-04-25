@@ -40,6 +40,9 @@ public final class SettingsProfileViewModel: ObservableObject {
     @Published public private(set) var isSaving: Bool = false
     @Published public private(set) var errorMessage: String?
     @Published public var savedSuccessfully: Bool = false
+    /// True 当字段值来自 ProfileCache（旧的快照），网络 fetch 还没回来。
+    /// View 层用它给字段 row 加 .redacted(.placeholder) 提示这是占位。
+    @Published public private(set) var isStale: Bool = false
 
     private let client: SupabaseClient
 
@@ -50,6 +53,15 @@ public final class SettingsProfileViewModel: ObservableObject {
     // MARK: - Load
 
     public func load() async {
+        // 1) Cache-first hydrate —— 提前把上次成功的 profile 填进字段，
+        //    用户进资料页就立刻看见自己的名字/部门，不再等网络 1-2s。
+        if let session = try? await client.auth.session {
+            if let cached = ProfileCache.load(userId: session.user.id) {
+                applyProfile(cached)
+                self.isStale = true
+            }
+        }
+
         isLoading = true
         errorMessage = nil
 
@@ -65,20 +77,36 @@ public final class SettingsProfileViewModel: ObservableObject {
                 .execute()
                 .value
 
-            self.fullName = profile.fullName ?? ""
-            self.displayName = profile.displayName ?? ""
-            self.phone = profile.phone ?? ""
-            self.department = profile.department ?? ""
-            self.position = profile.position ?? ""
-            self.email = profile.email
-            self.avatarUrl = profile.avatarUrl
-            self.role = profile.role
-            self.canEditProfile = Self.resolveCanEditProfile(profile: profile)
+            applyProfile(profile)
+            self.isStale = false
+            ProfileCache.save(profile)
         } catch {
-            self.errorMessage = "加载个人资料失败：\(ErrorLocalizer.localize(error))"
+            // Cancellation 静默 —— SwiftUI .task 重入会 cancel 当前 fetch。
+            if ErrorLocalizer.isCancellation(error) {
+                isLoading = false
+                return
+            }
+            // 如果 cache 已经填上字段，仅在没有任何快照时才 banner，
+            // 避免遮住 stale 数据让用户更困惑。
+            if !isStale {
+                self.errorMessage = "加载个人资料失败：\(ErrorLocalizer.localize(error))"
+            }
         }
 
         isLoading = false
+    }
+
+    /// 共用 setter —— cache hydrate 与 fetch 成功都走这里。
+    private func applyProfile(_ profile: Profile) {
+        self.fullName = profile.fullName ?? ""
+        self.displayName = profile.displayName ?? ""
+        self.phone = profile.phone ?? ""
+        self.department = profile.department ?? ""
+        self.position = profile.position ?? ""
+        self.email = profile.email
+        self.avatarUrl = profile.avatarUrl
+        self.role = profile.role
+        self.canEditProfile = Self.resolveCanEditProfile(profile: profile)
     }
 
     // MARK: - Save

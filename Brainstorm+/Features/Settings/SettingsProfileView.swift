@@ -120,6 +120,10 @@ public struct SettingsProfileView: View {
         } header: {
             Text("个人资料")
         }
+        // iter6 §A.3 — cache 命中后立刻有内容，但服务器返回前给一层
+        // skeleton 让用户感知"在刷新"，到货时 .smooth 过渡到真值。
+        .redacted(reason: viewModel.isStale && viewModel.isLoading ? .placeholder : [])
+        .animation(BsMotion.Anim.smooth, value: viewModel.isStale)
     }
 
     @ViewBuilder

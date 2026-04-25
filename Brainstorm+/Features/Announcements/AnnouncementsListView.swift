@@ -77,10 +77,10 @@ public struct AnnouncementsListView: View {
         if viewModel.isLoading && viewModel.items.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.items.isEmpty {
-            BsEmptyState(
-                title: "暂无公告",
+            ContentUnavailableView(
+                "暂无公告",
                 systemImage: "megaphone",
-                description: "还没有发布任何公告"
+                description: Text("还没有发布任何公告")
             )
         } else {
             ScrollView {

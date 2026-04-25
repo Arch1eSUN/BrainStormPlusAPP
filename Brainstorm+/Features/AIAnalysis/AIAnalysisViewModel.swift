@@ -9,6 +9,19 @@ public final class AIAnalysisViewModel: ObservableObject {
     @Published public var inputUrl: String = ""
     @Published public var imageUrlsText: String = ""
 
+    // Iter 6 §A.9 — picked screenshots (PhotosPicker fallback for when
+    // platform scrapers hit anti-bot). Each entry holds local thumbnail
+    // bytes for preview + the eventual public URL once uploaded. Upload
+    // happens lazily on `submit()` so the user can prune before sending.
+    public struct PickedScreenshot: Identifiable, Equatable {
+        public let id: UUID = UUID()
+        public let imageData: Data
+        public var uploadedURL: String? = nil
+    }
+    @Published public var pickedScreenshots: [PickedScreenshot] = []
+    /// Surfaces upload progress to the UI without polluting `pageState`.
+    @Published public var isUploadingScreenshots: Bool = false
+
     // Page / stream state
     @Published public var pageState: AIAnalysisPageState = .idle
     @Published public var progress: AIAnalysisProgress? = nil
@@ -63,14 +76,35 @@ public final class AIAnalysisViewModel: ObservableObject {
     // MARK: - Parse helpers
 
     public var parsedImageUrls: [String] {
-        imageUrlsText
+        let textUrls = imageUrlsText
             .split(whereSeparator: { $0 == "\n" || $0 == "," })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && ($0.hasPrefix("http://") || $0.hasPrefix("https://")) }
+        let uploadedUrls = pickedScreenshots.compactMap { $0.uploadedURL }
+        return textUrls + uploadedUrls
     }
 
     public var canSubmit: Bool {
-        !inputUrl.trimmingCharacters(in: .whitespaces).isEmpty && provider != nil && pageState != .streaming
+        !inputUrl.trimmingCharacters(in: .whitespaces).isEmpty && provider != nil
+            && pageState != .streaming && !isUploadingScreenshots
+    }
+
+    // MARK: - Screenshot management (PhotosPicker fallback)
+
+    /// Append picked image bytes from PhotosPicker. Upload is deferred until
+    /// `submit()` so the user can preview / prune first.
+    public func addScreenshot(data: Data) {
+        guard data.count <= 5 * 1024 * 1024 else {
+            // 5MB hard cap — Supabase free tier has 50MB request limit but
+            // we keep AI vision payload reasonable for 4G/弱网.
+            errorMessage = "截图超过 5MB,请压缩后再试"
+            return
+        }
+        pickedScreenshots.append(PickedScreenshot(imageData: data))
+    }
+
+    public func removeScreenshot(id: UUID) {
+        pickedScreenshots.removeAll { $0.id == id }
     }
 
     // MARK: - Submit
@@ -89,6 +123,40 @@ public final class AIAnalysisViewModel: ObservableObject {
             return
         }
 
+        // Iter 6 §A.9 — upload any picked screenshots before opening the SSE
+        // pipe. We upload sequentially (one at a time) so users see clear
+        // progress; total wait < 3 screenshots × ~1s upload each on 4G.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.uploadPendingScreenshots()
+            self.startStream(url: url, provider: provider)
+        }
+    }
+
+    /// Upload screenshots that haven't been pushed to storage yet. Stops on
+    /// first failure (rare — Supabase storage is solid) and surfaces via
+    /// `errorMessage`; `submit()` will still proceed using whatever uploaded.
+    private func uploadPendingScreenshots() async {
+        let pending = pickedScreenshots.enumerated().filter { $1.uploadedURL == nil }
+        guard !pending.isEmpty else { return }
+
+        isUploadingScreenshots = true
+        defer { isUploadingScreenshots = false }
+
+        for (idx, shot) in pending {
+            do {
+                let result = try await AIAnalysisStorageClient.uploadScreenshot(data: shot.imageData)
+                if idx < pickedScreenshots.count {
+                    pickedScreenshots[idx].uploadedURL = result.publicURL
+                }
+            } catch {
+                errorMessage = "截图上传失败: \(ErrorLocalizer.localize(error))"
+                break
+            }
+        }
+    }
+
+    private func startStream(url: String, provider: AIAnalysisProvider) {
         // Reset
         streamTask?.cancel()
         pageState = .streaming
@@ -154,6 +222,10 @@ public final class AIAnalysisViewModel: ObservableObject {
         scrapedData = nil
         errorMessage = nil
         clientStrip = ClientThinkStripState()
+        // Drop picked screenshots — a brand-new run shouldn't reuse stale
+        // images. Uploaded ones stay in `chat-files` storage but we lose
+        // the local handle, which is fine for "新的分析" semantics.
+        pickedScreenshots = []
     }
 
     // MARK: - Event handler

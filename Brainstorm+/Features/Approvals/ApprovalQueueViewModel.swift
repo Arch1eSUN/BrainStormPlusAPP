@@ -116,13 +116,22 @@ public final class ApprovalQueueViewModel: ObservableObject {
             self.rows = merged
             self.pendingCount = merged.filter { $0.status == .pending }.count
         } catch {
-            // Bug-fix(审批中心顶部分类点击红色报错):
-            // 切 pillBar tab 触发 .task -> load(),decode 失败 / 网络瞬断
-            // 都会让 banner 闪一下;首屏切换 tab 用户预期看到的是"暂无审批"
-            // empty state,而不是顶部红条。区分错误类型:
-            //   • auth / 权限 / 网络 -> 仍设 banner(用户应该看到)
-            //   • decode / 其他 -> silent + console,留 row 空让 empty state 显示
-            // 配合 ErrorLocalizer 的 keyword map,banner 文案命中明确分类才弹。
+            // iter6 §B.2 — 走 ErrorPresenter 分级。CancellationError 直接
+            // silent；非 fullscreen/banner tier 也降级为 silent + 空列表，
+            // 避免切 tab 时顶部短暂红条骚扰。
+            let tier = ErrorPresenter.tier(for: error)
+            switch tier {
+            case .silent:
+                return
+            case .fullscreen, .banner:
+                // banner 仅给用户应当看到的类别 —— auth/RLS/网络。
+                self.errorMessage = ErrorLocalizer.localize(error)
+            case .inline:
+                self.errorMessage = ErrorLocalizer.localize(error)
+            }
+            // decode / 其它内部错误 —— ErrorPresenter 把它判成 banner，但
+            // 历史上这里希望 silent。补一层启发式：raw 不含明显用户线索时
+            // 转成 silent + 空列表。
             let raw = error.localizedDescription
             let userFacingKeywords = [
                 "Auth session", "session_not_found", "JWT",
@@ -130,15 +139,14 @@ public final class ApprovalQueueViewModel: ObservableObject {
                 "permission denied", "network", "offline",
                 "timed out", "timeout"
             ]
-            let shouldShowBanner = userFacingKeywords.contains { keyword in
-                raw.localizedCaseInsensitiveContains(keyword)
+            let isUserFacing = userFacingKeywords.contains { kw in
+                raw.localizedCaseInsensitiveContains(kw)
             }
-            if shouldShowBanner {
-                self.errorMessage = ErrorLocalizer.localize(error)
-            } else {
+            if !isUserFacing {
                 #if DEBUG
                 print("[ApprovalQueueViewModel] silent load error (kind=\(kind.rawValue)): \(raw)")
                 #endif
+                self.errorMessage = nil
                 self.rows = []
                 self.pendingCount = 0
             }

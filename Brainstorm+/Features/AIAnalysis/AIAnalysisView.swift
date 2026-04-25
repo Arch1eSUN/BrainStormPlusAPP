@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import PhotosUI
 
 // ══════════════════════════════════════════════════
 // AIAnalysisView — 1:1 port of
@@ -14,6 +15,11 @@ public struct AIAnalysisView: View {
 
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
+
+    /// Iter 6 §A.9 — PhotosPicker selection. Up to 4 screenshots per run.
+    /// We translate `PhotosPickerItem` → `Data` via `loadTransferable` and
+    /// hand off to `viewModel.addScreenshot(data:)` so the VM owns lifecycle.
+    @State private var pickerSelection: [PhotosPickerItem] = []
 
     @MainActor
     public init(isEmbedded: Bool = false) {
@@ -89,6 +95,162 @@ public struct AIAnalysisView: View {
         switch viewModel.pageState {
         case .idle, .error: return true
         case .streaming, .done: return false
+        }
+    }
+
+    // MARK: - Screenshot picker (Iter 6 §A.9)
+    //
+    // PhotosPicker is the iOS-26-native primitive for image selection — we
+    // grab raw bytes via `loadTransferable(type: Data.self)` and forward to
+    // the VM, which uploads to `chat-files` on submit. Total UX:
+    //   1. Tap "上传截图" → system PhotosPicker sheet
+    //   2. Pick up to 4 images
+    //   3. Inline thumbnails appear with "X" remove buttons
+    //   4. On 开始分析 → uploads run sequentially → SSE stream opens
+    //
+    // The legacy "截图链接" text-URL input is hidden behind a DisclosureGroup
+    // so power users (web pasting Imgur URLs etc.) keep parity with web.
+
+    @State private var showAdvancedImageURLs: Bool = false
+
+    private var screenshotPickerSection: some View {
+        VStack(alignment: .leading, spacing: BsSpacing.sm) {
+            label("截图（可选 · AI 视觉分析备用）", systemImage: "photo.on.rectangle.angled")
+
+            // Picker button — system native, glass-effect button style.
+            HStack(spacing: BsSpacing.sm) {
+                PhotosPicker(
+                    selection: $pickerSelection,
+                    maxSelectionCount: 4,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    HStack(spacing: BsSpacing.xs + 2) {
+                        if viewModel.isUploadingScreenshots {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "photo.badge.plus").font(.caption)
+                        }
+                        Text(viewModel.isUploadingScreenshots ? "上传中…" : "上传截图")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, BsSpacing.md)
+                    .padding(.vertical, BsSpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                            .fill(BsColor.brandAzure.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                    .strokeBorder(BsColor.brandAzure.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                    .foregroundStyle(BsColor.brandAzure)
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isUploadingScreenshots)
+                .accessibilityLabel("从相册选择截图")
+
+                if !viewModel.pickedScreenshots.isEmpty {
+                    Text("已选 \(viewModel.pickedScreenshots.count) 张")
+                        .font(.caption2)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            // Inline thumbnail strip
+            if !viewModel.pickedScreenshots.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: BsSpacing.sm) {
+                        ForEach(viewModel.pickedScreenshots) { shot in
+                            screenshotThumbnail(shot)
+                        }
+                    }
+                }
+            }
+
+            // Power-user URL fallback (collapsed by default) — keeps web parity.
+            DisclosureGroup(isExpanded: $showAdvancedImageURLs) {
+                VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                    TextEditor(text: $viewModel.imageUrlsText)
+                        .frame(minHeight: 60)
+                        .padding(BsSpacing.sm)
+                        .background(
+                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                .fill(BsColor.inkMuted.opacity(0.08))
+                        )
+                    Text("每行一个 http(s) URL 或以逗号分隔。AI 会直接读取截图中的用户名、点赞 / 收藏 / 评论 / 分享 / 播放等数据。")
+                        .font(.caption2)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                .padding(.top, BsSpacing.xs)
+            } label: {
+                HStack(spacing: BsSpacing.xs) {
+                    Image(systemName: "link").font(.caption2)
+                    Text("或粘贴截图 URL").font(.caption.weight(.medium))
+                }
+                .foregroundStyle(BsColor.inkMuted)
+            }
+
+            Text("Tip：当 AI 抓不到链接内容时（短链反爬 / 登录墙），上传截图让 AI 视觉读取数据。")
+                .font(.caption2)
+                .foregroundStyle(BsColor.inkMuted)
+        }
+        .onChange(of: pickerSelection) { _, newItems in
+            handlePickerChange(newItems)
+        }
+    }
+
+    private func screenshotThumbnail(_ shot: AIAnalysisViewModel.PickedScreenshot) -> some View {
+        ZStack(alignment: .topTrailing) {
+            if let img = UIImage(data: shot.imageData) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
+                            .strokeBorder(BsColor.inkMuted.opacity(0.2), lineWidth: 1)
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: BsRadius.sm, style: .continuous)
+                    .fill(BsColor.inkMuted.opacity(0.1))
+                    .frame(width: 72, height: 72)
+                    .overlay(Image(systemName: "photo").foregroundStyle(BsColor.inkMuted))
+            }
+
+            // Remove "X" — top-right, ~22pt glass dot per design system.
+            Button {
+                Haptic.light()
+                viewModel.removeScreenshot(id: shot.id)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white, BsColor.danger)
+                    .background(Circle().fill(.white).frame(width: 14, height: 14))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 6, y: -6)
+            .accessibilityLabel("移除截图")
+        }
+    }
+
+    /// Translate `PhotosPickerItem` → `Data` and forward to VM. We avoid
+    /// concurrent `loadTransferable` calls (PhotosPicker can deadlock if
+    /// you fire many in parallel on the same backing store) by `await`ing
+    /// each one in turn — typical 1-4 picks finish in <500ms total.
+    private func handlePickerChange(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task { @MainActor in
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    viewModel.addScreenshot(data: data)
+                }
+            }
+            // Reset selection so re-picking the same photo retriggers onChange.
+            pickerSelection = []
         }
     }
 
@@ -204,20 +366,8 @@ public struct AIAnalysisView: View {
                     )
                 }
 
-                // Image URLs
-                VStack(alignment: .leading, spacing: BsSpacing.sm) {
-                    label("截图链接（可选）", systemImage: "photo")
-                    TextEditor(text: $viewModel.imageUrlsText)
-                        .frame(minHeight: 72)
-                        .padding(BsSpacing.sm)
-                        .background(
-                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                                .fill(BsColor.inkMuted.opacity(0.08))
-                        )
-                    Text("AI 会直接读取截图中的用户名、发布时间、点赞 / 收藏 / 评论 / 分享 / 播放等数据。每行一个链接或以逗号分隔。")
-                        .font(.caption2)
-                        .foregroundStyle(BsColor.inkMuted)
-                }
+                // Screenshots (Iter 6 §A.9 — fallback for anti-bot scrape)
+                screenshotPickerSection
 
                 if case let .error(msg) = viewModel.pageState, !msg.isEmpty {
                     errorRow(msg)

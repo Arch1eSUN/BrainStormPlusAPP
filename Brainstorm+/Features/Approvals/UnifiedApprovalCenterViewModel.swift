@@ -302,6 +302,8 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
     /// surface auth / network / RLS errors via the banner, swallow decode
     /// noise so empty state shows instead of a red bar.
     private func handleSilentlyOrSurface(_ error: Error) {
+        // iter6 §B.2 — Cancellation 永远 silent (避免 .task 重入红条)。
+        if ErrorLocalizer.isCancellation(error) { return }
         let raw = error.localizedDescription
         let userFacingKeywords = [
             "Auth session", "session_not_found", "JWT",

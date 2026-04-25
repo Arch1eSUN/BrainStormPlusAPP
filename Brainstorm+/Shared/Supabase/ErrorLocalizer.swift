@@ -17,6 +17,38 @@ import Foundation
 // ══════════════════════════════════════════════════════════════════
 
 public enum ErrorLocalizer {
+    // ── Cancellation 检测 ──────────────────────────────────────────
+    // iter6 §A.5 — 用户反馈 "the operation could not be completed
+    // swift cancellation error 1"。这是 SwiftUI .task 在 view 消失或
+    // .onChange 重置时主动 cancel 当前 Task 抛出的 CancellationError。
+    // 它属于"框架内部噪声"，不该让用户看见 banner。所有 catch 块都
+    // 应该先用 isCancellation 过滤；保留 localize 老接口对历史调用
+    // 兼容（cancellation → "请求已取消" 仍会出错时透传），但新增
+    // localizeOrNil 给希望直接吞掉 cancellation 的 VM 用。
+    public static func isCancellation(_ error: Error) -> Bool {
+        if Swift.Task.isCancelled { return true }
+        if error is CancellationError { return true }
+        if let urlErr = error as? URLError, urlErr.code == .cancelled { return true }
+        let ns = error as NSError
+        // NSURLErrorCancelled = -999；CancellationError 在某些桥接路径下
+        // 以 NSCocoaErrorDomain code 1 / "cancellation" 字面量出现，用户
+        // 截图里就是 "swift cancellation error 1"。
+        if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return true }
+        if ns.domain == "Swift.CancellationError" { return true }
+        let raw = error.localizedDescription.lowercased()
+        if raw.contains("cancellation") || raw.contains("cancelled") || raw.contains("canceled") {
+            return true
+        }
+        return false
+    }
+
+    /// Cancellation-aware variant. 返回 nil 时调用方应直接 return,
+    /// 不要赋值给 errorMessage —— 这就是"silent tier"的核心实现。
+    public static func localizeOrNil(_ error: Error) -> String? {
+        if isCancellation(error) { return nil }
+        return localize(error)
+    }
+
     /// 精确匹配优先，命中则返回对应中文。
     private static let exactMap: [String: String] = [
         // Supabase Auth

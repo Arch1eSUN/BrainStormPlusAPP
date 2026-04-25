@@ -16,11 +16,45 @@ public class ChatRoomViewModel: ObservableObject {
     /// we backfill it best-effort).
     @Published public var replyLookup: [UUID: ChatMessage] = [:]
 
+    // MARK: - Phase 1.1 (slack-grade) state
+
+    /// 未读分隔线锚点 —— 进入频道时记下当前 last_read_at,在第一条
+    /// created_at > unreadAnchor 的消息上方插 UnreadDividerView。进入后我们
+    /// 不实时更新 anchor(否则 divider 会跳),只在用户下次进入时刷新。
+    @Published public var unreadAnchor: Date? = nil
+
+    /// 输入栏当前文本(草稿) —— View 把 TextEditor 绑到这里。debounced 写入
+    /// @AppStorage + chat_save_draft RPC。
+    @Published public var draft: String = ""
+
+    /// 频道内可 mention 成员清单 —— 进入频道时拉一次,@ 触发 sheet 时不再
+    /// 发请求。Web 行为相同(预拉成员)。
+    @Published public var mentionCandidates: [Profile] = []
+
+    /// 用户是否处于"贴底"状态。新消息到达时若 isAtBottom == true,自动滚动到
+    /// 底;否则显示 "新消息 ↓" pill。View 通过 ScrollView geometry 推送状态。
+    @Published public var isAtBottom: Bool = true
+
+    /// 用户离开底部后到达的新消息累计计数 —— 显示在 "新消息 ↓" pill 上。
+    @Published public var pendingBelowCount: Int = 0
+
+    /// Phase 1.1: 当前用户在该 channel 的 member 行 —— 只用 last_read_at。
+    /// announcement / created_by 频道用户可能没显式 member 行,此时为 nil
+    /// (chat_mark_read RPC 会 upsert 出来)。
+    @Published public var memberRow: ChatChannelMember? = nil
+
     private let client: SupabaseClient
     public let channel: ChatChannel
 
     private var realtimeChannel: RealtimeChannelV2?
     private var realtimeTask: Task<Void, Never>?
+
+    /// Phase 1.1: 草稿写入 debounce —— 用户连续敲键盘时,500ms idle 后才推。
+    private var draftSaveTask: Task<Void, Never>?
+
+    /// Phase 1.1: chat_mark_read 的 debounce —— 用户在 viewport 内滑过 divider,
+    /// 1s idle 后才推。避免每条新消息都打一发 RPC。
+    private var markReadTask: Task<Void, Never>?
 
     public init(client: SupabaseClient, channel: ChatChannel) {
         self.client = client
@@ -45,15 +79,18 @@ public class ChatRoomViewModel: ObservableObject {
         }
 
         if channel.type == .announcement || channel.createdBy == userId {
+            await loadMemberRow(userId: userId)  // 可能为 nil(announcement)
             await fetchMessages()
             await subscribeRealtime()
+            await loadDraft()
+            await loadMentionCandidates()
             return
         }
 
         do {
             let rows: [ChatChannelMember] = try await client
                 .from("chat_channel_members")
-                .select("id,channel_id,user_id,role,joined_at")
+                .select("id,channel_id,user_id,role,joined_at,last_read_at")
                 .eq("channel_id", value: channel.id.uuidString)
                 .eq("user_id", value: userId.uuidString)
                 .limit(1)
@@ -63,6 +100,8 @@ public class ChatRoomViewModel: ObservableObject {
                 accessDenied = true
                 return
             }
+            memberRow = rows.first
+            unreadAnchor = rows.first?.lastReadAt
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
             accessDenied = true
@@ -71,6 +110,29 @@ public class ChatRoomViewModel: ObservableObject {
 
         await fetchMessages()
         await subscribeRealtime()
+        await loadDraft()
+        await loadMentionCandidates()
+    }
+
+    /// Phase 1.1 — 加载 announcement / created_by 频道下的隐式 member 行(可能不存在)。
+    private func loadMemberRow(userId: UUID) async {
+        do {
+            let rows: [ChatChannelMember] = try await client
+                .from("chat_channel_members")
+                .select("id,channel_id,user_id,role,joined_at,last_read_at")
+                .eq("channel_id", value: channel.id.uuidString)
+                .eq("user_id", value: userId.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            memberRow = rows.first
+            unreadAnchor = rows.first?.lastReadAt
+        } catch {
+            // 非致命:announcement 频道 RLS 下可能查不到 —— 走 nil(整 channel
+            // 视为已读,不画 divider)。
+            memberRow = nil
+            unreadAnchor = nil
+        }
     }
 
     /// Matches Web `fetchMessages` (src/lib/actions/chat.ts:539-576):
@@ -88,10 +150,14 @@ public class ChatRoomViewModel: ObservableObject {
                 .limit(50)
                 .execute()
                 .value
-            self.messages = rows
+            // Phase 1.1: 主流不展示 thread 子消息(reply_to 非空)。子消息进
+            // ChatThreadView 展示。父消息保留,显示 thread footer "n 条回复 →"。
+            self.messages = rows.filter { $0.replyTo == nil }
             await hydrateReplyLookup(for: rows)
         } catch {
-            self.errorMessage = ErrorLocalizer.localize(error)
+            if let msg = ErrorPresenter.userFacingMessage(error) {
+                self.errorMessage = msg
+            }
         }
     }
 
@@ -221,7 +287,10 @@ public class ChatRoomViewModel: ObservableObject {
                 .eq("id", value: channel.id.uuidString)
                 .execute()
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // iter6 §B.2 — silent on cancellation (view leave / re-task).
+            if let msg = ErrorPresenter.userFacingMessage(error) {
+                errorMessage = msg
+            }
         }
     }
 
@@ -333,12 +402,33 @@ public class ChatRoomViewModel: ObservableObject {
     }
 
     private func handleRealtimeInsert(_ row: ChatMessage) {
+        // Phase 1.1: thread 回复(reply_to 非空)不进入主流,但需要把父消息的
+        // thread_reply_count 乐观 +1 让 footer 立即更新。
+        if let parentId = row.replyTo {
+            if let idx = messages.firstIndex(where: { $0.id == parentId }) {
+                let m = messages[idx]
+                messages[idx] = ChatMessage(
+                    id: m.id, channelId: m.channelId, senderId: m.senderId,
+                    content: m.content, type: m.type, replyTo: m.replyTo,
+                    attachments: m.attachments, reactions: m.reactions,
+                    isWithdrawn: m.isWithdrawn, withdrawnAt: m.withdrawnAt,
+                    createdAt: m.createdAt,
+                    threadReplyCount: m.threadReplyCount + 1
+                )
+            }
+            if replyLookup[parentId] == nil {
+                Task { await self.hydrateReplyLookup(for: [row]) }
+            }
+            return
+        }
+
         // Dedupe against optimistic append from `sendMessage`.
         guard !messages.contains(where: { $0.id == row.id }) else { return }
         messages.append(row)
-        // Backfill parent if this is a reply we haven't seen yet.
-        if let parentId = row.replyTo, replyLookup[parentId] == nil {
-            Task { await self.hydrateReplyLookup(for: [row]) }
+
+        // Phase 1.1: 用户不在底部时,累计 "新消息 ↓" pill 计数。本人发的不计。
+        if !isAtBottom && row.senderId != currentUserId {
+            pendingBelowCount += 1
         }
     }
 
@@ -477,9 +567,131 @@ public class ChatRoomViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Phase 1.1: Drafts
+
+    /// 启动 / 视图重入时调用 —— 优先取 RPC 跨设备值,RPC 失败则保持空(View
+    /// 那边的 @AppStorage per-device 值已经填进 draft binding 之前)。
+    public func loadDraft() async {
+        struct Params: Encodable { let p_channel_id: String }
+        do {
+            let content: String = try await client
+                .rpc("chat_get_draft", params: Params(p_channel_id: channel.id.uuidString))
+                .execute()
+                .value
+            // 仅当本地还没草稿时才覆盖,避免压掉用户刚刚在另一设备开始打的字。
+            if draft.isEmpty && !content.isEmpty {
+                draft = content
+            }
+        } catch {
+            // 非致命:草稿是 best-effort,失败让 View 保持空 / @AppStorage 值。
+        }
+    }
+
+    /// View 监听 draft 变化时调用(debounced 500ms)。
+    public func saveDraftDebounced(_ text: String) {
+        draftSaveTask?.cancel()
+        let channelId = channel.id.uuidString
+        draftSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let self = self, !Task.isCancelled else { return }
+            struct Params: Encodable {
+                let p_channel_id: String
+                let p_content: String
+            }
+            do {
+                try await self.client
+                    .rpc("chat_save_draft", params: Params(p_channel_id: channelId, p_content: text))
+                    .execute()
+            } catch {
+                // best-effort
+            }
+        }
+    }
+
+    /// Send 成功后调用,清掉服务端草稿(同时 View 那边也会清 @AppStorage)。
+    public func clearDraftRemote() async {
+        struct Params: Encodable { let p_channel_id: String }
+        do {
+            try await client
+                .rpc("chat_clear_draft", params: Params(p_channel_id: channel.id.uuidString))
+                .execute()
+        } catch { /* best-effort */ }
+    }
+
+    // MARK: - Phase 1.1: Mark read
+
+    /// 用户停留在底部 / 视图在前台时,1s idle 推进 last_read_at 到 messages.last.id。
+    public func markReadDebounced() {
+        markReadTask?.cancel()
+        guard let lastMessage = messages.last else { return }
+        let channelId = channel.id.uuidString
+        let messageId = lastMessage.id.uuidString
+        markReadTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard let self = self, !Task.isCancelled else { return }
+            struct Params: Encodable {
+                let p_channel_id: String
+                let p_message_id: String
+            }
+            do {
+                try await self.client
+                    .rpc("chat_mark_read",
+                         params: Params(p_channel_id: channelId, p_message_id: messageId))
+                    .execute()
+                // 不更新 unreadAnchor —— 下次进入频道时再 refresh,以免本次 session
+                // 内 divider 突然消失。
+            } catch {
+                // best-effort
+            }
+        }
+    }
+
+    // MARK: - Phase 1.1: Mention candidates
+
+    /// 拉频道内的成员 + 兜底 active profiles(announcement 频道下没显式 member 行)。
+    /// 50 条上限,UI 侧再做模糊过滤。
+    public func loadMentionCandidates() async {
+        do {
+            // 先拿 channel members 的 user_id
+            let memberRows: [ChatChannelMember] = try await client
+                .from("chat_channel_members")
+                .select("id,channel_id,user_id,role,joined_at")
+                .eq("channel_id", value: channel.id.uuidString)
+                .limit(200)
+                .execute()
+                .value
+
+            let memberIds = memberRows.map { $0.userId.uuidString }
+            if memberIds.isEmpty {
+                // 全频道(announcement) —— 退而拉前 50 个 active profiles。
+                let profiles: [Profile] = try await client
+                    .from("profiles")
+                    .select("id,full_name,display_name,email,avatar_url,department,position")
+                    .order("full_name", ascending: true)
+                    .limit(50)
+                    .execute()
+                    .value
+                self.mentionCandidates = profiles.filter { $0.id != currentUserId }
+                return
+            }
+
+            let profiles: [Profile] = try await client
+                .from("profiles")
+                .select("id,full_name,display_name,email,avatar_url,department,position")
+                .in("id", values: memberIds)
+                .execute()
+                .value
+            self.mentionCandidates = profiles.filter { $0.id != currentUserId }
+        } catch {
+            // 非致命 —— @ sheet 会显示空态。
+        }
+    }
+
     public func teardown() {
         realtimeTask?.cancel()
         realtimeTask = nil
+        draftSaveTask?.cancel()
+        markReadTask?.cancel()
         if let ch = realtimeChannel {
             Task { [client] in await client.removeChannel(ch) }
             realtimeChannel = nil
@@ -488,5 +700,7 @@ public class ChatRoomViewModel: ObservableObject {
 
     deinit {
         realtimeTask?.cancel()
+        draftSaveTask?.cancel()
+        markReadTask?.cancel()
     }
 }

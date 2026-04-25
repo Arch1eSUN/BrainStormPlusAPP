@@ -11,6 +11,14 @@ import UIKit
 
 public struct ReportingListView: View {
     @StateObject private var viewModel: ReportingViewModel
+    /// iter6 §A.3 — "全员" 视图的 VM。delay 创建：只在 admin/HR 切到全员 tab
+    /// 时才 .task fire load,避免普通员工的视图额外打一次 RLS 受限请求。
+    @StateObject private var teamViewModel = AdminTeamReportsViewModel()
+    /// iter6 §A.3 — 顶层 scope picker。"我的" 默认；"全员" 仅在
+    /// canViewTeam = true 时露出（admin/HR）。
+    @State private var scope: Scope = .mine
+
+    @Environment(SessionManager.self) private var sessionManager
 
     @State private var dailyEditTarget: DailyLogEditTarget?
     @State private var weeklyEditTarget: WeeklyEditTarget?
@@ -22,6 +30,17 @@ public struct ReportingListView: View {
 
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
+
+    public enum Scope: String, CaseIterable, Identifiable {
+        case mine, team
+        public var id: String { rawValue }
+        public var title: String {
+            switch self {
+            case .mine: return "我的"
+            case .team: return "全员"
+            }
+        }
+    }
 
     public init(viewModel: ReportingViewModel, isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -36,52 +55,73 @@ public struct ReportingListView: View {
         }
     }
 
+    /// 是否露出"全员"入口。RBAC 镜像 AdminCenterViewModel.canManagePeople /
+    /// canEnterAdmin —— admin / superadmin 或持有 hr_ops cap 的员工。
+    /// 普通员工根本看不到 segmented control 的"全员"段,UI 不需多余 disable
+    /// 态。
+    private var canViewTeam: Bool {
+        guard let profile = sessionManager.currentProfile else { return false }
+        let migration = RBACManager.shared.migrateLegacyRole(profile.role)
+        if migration.primaryRole == .admin || migration.primaryRole == .superadmin {
+            return true
+        }
+        let caps = RBACManager.shared.getEffectiveCapabilities(for: profile)
+        return caps.contains(.hr_ops)
+    }
+
     private var coreContent: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Picker("视图", selection: $viewModel.selectedTab) {
-                    ForEach(ReportingViewModel.Tab.allCases) { tab in
-                        Text(tab.title).tag(tab)
+                if canViewTeam {
+                    // iter6 §A.3 — 顶层 scope picker（我的 / 全员）。
+                    Picker("范围", selection: $scope) {
+                        ForEach(Scope.allCases) { s in
+                            Text(s.title).tag(s)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                // Haptic removed: 用户反馈 picker 切换过密震动
 
-                if viewModel.isLoading {
-                    ProgressView()
-                        .padding(.top, 40)
-                } else {
-                    switch viewModel.selectedTab {
-                    case .daily:
-                        dailySection
-                    case .weekly:
-                        weeklySection
-                    }
+                switch scope {
+                case .mine:
+                    mineContent
+                case .team:
+                    teamContent
                 }
             }
             .padding(.vertical)
         }
         .navigationTitle("报告")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
-                    switch viewModel.selectedTab {
-                    case .daily:  dailyEditTarget = .new
-                    case .weekly: weeklyEditTarget = .new
+            // 新建按钮只在 "我的" tab 露出 —— 全员视图是只读聚合。
+            if scope == .mine {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        // Haptic removed: 用户反馈 toolbar 按钮过密震动
+                        switch viewModel.selectedTab {
+                        case .daily:  dailyEditTarget = .new
+                        case .weekly: weeklyEditTarget = .new
+                        }
+                    } label: {
+                        Label("新建", systemImage: "plus")
                     }
-                } label: {
-                    Label("新建", systemImage: "plus")
+                    .accessibilityLabel("新建报告")
                 }
-                .accessibilityLabel("新建报告")
             }
         }
         .refreshable {
-            await viewModel.fetchReports()
+            switch scope {
+            case .mine: await viewModel.fetchReports()
+            case .team: await teamViewModel.load()
+            }
         }
         .task {
             await viewModel.fetchReports()
+        }
+        .task(id: scope) {
+            // 切到 team 时延迟加载（首次切才 fetch）。
+            if scope == .team { await teamViewModel.load() }
         }
         .sheet(item: $dailyEditTarget) { target in
             DailyLogEditView(
@@ -132,6 +172,230 @@ public struct ReportingListView: View {
             Text("将删除该周报,该操作无法撤销。")
         }
         .zyErrorBanner($viewModel.errorMessage)
+        .zyErrorBanner($teamViewModel.errorMessage)
+    }
+
+    // ── 我的 (个人日报/周报) ──────────────────────────────────────
+    @ViewBuilder
+    private var mineContent: some View {
+        VStack(spacing: 16) {
+            Picker("视图", selection: $viewModel.selectedTab) {
+                ForEach(ReportingViewModel.Tab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
+            if viewModel.isLoading {
+                ProgressView()
+                    .padding(.top, 40)
+            } else {
+                switch viewModel.selectedTab {
+                case .daily:  dailySection
+                case .weekly: weeklySection
+                }
+            }
+        }
+    }
+
+    // ── 全员 (admin/HR 聚合视图) ──────────────────────────────────
+    @ViewBuilder
+    private var teamContent: some View {
+        VStack(spacing: BsSpacing.md) {
+            BsContentCard(padding: .medium) {
+                VStack(alignment: .leading, spacing: BsSpacing.md) {
+                    Picker("视图", selection: $teamViewModel.segment) {
+                        ForEach(AdminTeamReportsViewModel.Segment.allCases) { s in
+                            Text(s.title).tag(s)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: teamViewModel.segment) { _, _ in
+                        Task { await teamViewModel.load() }
+                    }
+
+                    HStack(spacing: BsSpacing.sm) {
+                        DatePicker("起", selection: $teamViewModel.rangeStart, displayedComponents: .date)
+                            .labelsHidden()
+                        Text("→").foregroundStyle(BsColor.inkMuted)
+                        DatePicker("止", selection: $teamViewModel.rangeEnd, displayedComponents: .date)
+                            .labelsHidden()
+                        Spacer()
+                    }
+                    .font(BsTypography.caption)
+                    .onChange(of: teamViewModel.rangeStart) { _, _ in
+                        Task { await teamViewModel.load() }
+                    }
+                    .onChange(of: teamViewModel.rangeEnd) { _, _ in
+                        Task { await teamViewModel.load() }
+                    }
+
+                    // iter6 §A.3 — 人员筛选改原生 Menu+Picker，不再水平滑动 chip。
+                    memberFilterMenu
+                }
+            }
+            .padding(.horizontal)
+
+            if teamViewModel.isLoading && teamCurrentRowsEmpty {
+                ProgressView()
+                    .padding(.top, 40)
+            } else if teamCurrentRowsEmpty {
+                BsEmptyState(
+                    title: "暂无报告",
+                    systemImage: teamViewModel.segment == .daily ? "doc.text" : "calendar",
+                    description: "调整成员或日期范围试试"
+                )
+                .padding(.top, 40)
+            } else {
+                LazyVStack(spacing: BsSpacing.md) {
+                    switch teamViewModel.segment {
+                    case .daily:
+                        ForEach(teamViewModel.dailyRows) { row in
+                            teamDailyCard(row).padding(.horizontal)
+                        }
+                    case .weekly:
+                        ForEach(teamViewModel.weeklyRows) { row in
+                            teamWeeklyCard(row).padding(.horizontal)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var teamCurrentRowsEmpty: Bool {
+        switch teamViewModel.segment {
+        case .daily:  return teamViewModel.dailyRows.isEmpty
+        case .weekly: return teamViewModel.weeklyRows.isEmpty
+        }
+    }
+
+    @ViewBuilder
+    private var memberFilterMenu: some View {
+        // iter6 §A.3 —— iOS-native 写法：Menu { Picker } 让系统画全屏弹层 +
+        // 自带搜索+滚动；优于横向 chip 滚动条（chip 滚动在 100+ 人公司体验
+        // 极差，找人靠肉眼）。
+        let selectedLabel: String = {
+            if let uid = teamViewModel.memberFilter,
+               let m = teamViewModel.members.first(where: { $0.id == uid }) {
+                return m.fullName
+            }
+            return "全部成员"
+        }()
+        Menu {
+            Picker("成员", selection: $teamViewModel.memberFilter) {
+                Text("全部成员").tag(UUID?.none)
+                ForEach(teamViewModel.members, id: \.id) { m in
+                    if let dept = m.department, !dept.isEmpty {
+                        Text("\(m.fullName) · \(dept)").tag(UUID?.some(m.id))
+                    } else {
+                        Text(m.fullName).tag(UUID?.some(m.id))
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Label(selectedLabel, systemImage: "person.2.fill")
+                    .font(BsTypography.bodyMedium)
+                    .foregroundStyle(BsColor.ink)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.footnote)
+                    .foregroundStyle(BsColor.inkFaint)
+            }
+            .padding(.horizontal, BsSpacing.md)
+            .padding(.vertical, BsSpacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(BsColor.inkMuted.opacity(0.08))
+            )
+        }
+        .onChange(of: teamViewModel.memberFilter) { _, _ in
+            Task { await teamViewModel.load() }
+        }
+    }
+
+    @ViewBuilder
+    private func teamDailyCard(_ row: AdminTeamReportsViewModel.DailyRow) -> some View {
+        BsContentCard(padding: .medium) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                HStack(spacing: BsSpacing.sm) {
+                    Text(row.author?.fullName ?? "未知作者")
+                        .font(BsTypography.cardSubtitle)
+                        .foregroundStyle(BsColor.ink)
+                    if let dept = row.author?.department, !dept.isEmpty {
+                        Text(dept)
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                    }
+                    Spacer()
+                    Text(row.log.date.formatted(.dateTime.month().day()))
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                Text(row.log.content)
+                    .font(BsTypography.bodySmall)
+                    .foregroundStyle(BsColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let progress = row.log.progress, !progress.isEmpty {
+                    Label(progress, systemImage: "checkmark.circle")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.success)
+                }
+                if let blockers = row.log.blockers, !blockers.isEmpty {
+                    Label(blockers, systemImage: "exclamationmark.triangle")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.warning)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func teamWeeklyCard(_ row: AdminTeamReportsViewModel.WeeklyRow) -> some View {
+        BsContentCard(padding: .medium) {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                HStack(spacing: BsSpacing.sm) {
+                    Text(row.author?.fullName ?? "未知作者")
+                        .font(BsTypography.cardSubtitle)
+                        .foregroundStyle(BsColor.ink)
+                    if let dept = row.author?.department, !dept.isEmpty {
+                        Text(dept)
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                    }
+                    Spacer()
+                    Text(row.report.weekStart.formatted(.dateTime.month().day()))
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                if let summary = row.report.summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(BsTypography.bodySmall)
+                        .foregroundStyle(BsColor.ink)
+                        .lineLimit(8)
+                }
+                if let acc = row.report.accomplishments, !acc.isEmpty {
+                    Text("成就：\(acc)")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.success)
+                        .lineLimit(4)
+                }
+                if let plans = row.report.plans, !plans.isEmpty {
+                    Text("计划：\(plans)")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.brandAzure)
+                        .lineLimit(4)
+                }
+                if let blockers = row.report.blockers, !blockers.isEmpty {
+                    Text("阻碍：\(blockers)")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.warning)
+                        .lineLimit(4)
+                }
+            }
+        }
     }
 
     // ── Daily ────────────────────────────────────────────────────

@@ -2,40 +2,34 @@ import SwiftUI
 import Combine
 
 // ══════════════════════════════════════════════════════════════════
-// AttendanceView —— 用户自己的考勤主页（重新设计 v1.5）
+// AttendanceView — v2 (Iter6 §A.1 全面重构, 2026-04-25)
 //
-// v1.5 ("Apple Health daily summary" pivot, 2026-04-25)
+// ── 改动核心 ──────────────────────────────────────────────────────
+// 用户反馈（CRITICAL）：
+//   • 流体设计是 app 的设计语言（不是不喜欢液体动画）
+//   • Dashboard 已经有 AttendanceHeroCard 那张液体打卡卡 —— 考勤页
+//     不要再复刻一遍那张卡
+//   • 但要保留"流体感觉"（其他形态：曲线 / 动态填充进度条等）
+//   • app 内无需导出，但要显示**所有数据**：
+//       - 当日 / 当周 / 当月 / 当年 segmented 切换
+//       - 每天的状态：正常 / 请假 / 公休 / 外勤 / 出差 / 异常
+//       - 详细 timeline（上下班时间 / 异常类型 / 备注）
 //
-// 5 轮迭代后用户仍然觉得 hero 下方信息太挤、有重复。本轮把 v1.4
-// 的 "Timeline card + Status footer + 单独 Week strip 段" 三段
-// 合并成 一张 "Today + Week" content card：
-//
-//   ┌── HERO（保留 Liquid-Fill）──────────────────────┐
-//   │ statusPill · 8h 12m · subtitle · CTA           │
-//   └────────────────────────────────────────────────┘
-//
-//   ┌── BsContentCard ────────────────────────────────┐
-//   │ 上班 09:02  ─────[ 8h 12m pill ]─────  下班 18:14│
-//   │                                                 │
-//   │ ── 本周 ─────────────────────────────────────── │
-//   │  ▇  ▆  ▅  ▄  ▃    ·  ·                          │
-//   │  一 二 三 四 五   六 日                          │
-//   └─────────────────────────────────────────────────┘
-//
-// 关键删减（vs v1.4）：
-//   • 去掉 "今日时间线" 卡标题 + statusFooter —— hero 的 statusPill 已表达
-//   • 去掉 timeline header 的 "8h 12m" digital readout —— hero heroNumber
-//     已是同一个数字的 48pt 正文，二次显示纯属噪音
-//   • 把 punch endpoints 收紧到一行 + 中央 duration pill,liquid-fill 进度
-//     已经在 hero 表达，timeline 不再二次画 progressFraction
-//   • 周条改成 Apple Fitness Activity 风格的 hours bar chart —— 直接消化
-//     Attendance.workHours 数据，带"本周累计/工作日完成数"副标
-//
-// 嵌入模式（isEmbedded=true）：去掉 NavigationStack 包壳，由父级提供
+// ── Layout（top → bottom）─────────────────────────────────────────
+//   1. Segmented：本日 / 本周 / 本月 / 本年
+//   2. AttendanceKPIRow：随 range 切换的大数字 + 多 stat tile
+//   3. LiquidProgressBar：保留流体设计语言（横向流体填充进度条，
+//      重用 LiquidFillShape 但水平布局，sin 曲线 60Hz 控制波纹）
+//   4. AttendanceCalendarView：月历 / 年历 heat-map（month/year 视图）
+//   5. AttendanceTimelineRow 列表（today/week 视图）
+//   6. 异常修正 CTA：当 range 内有异常 → "申请补卡 / 修正异常" 按钮
 // ══════════════════════════════════════════════════════════════════
 
 public struct AttendanceView: View {
     @StateObject private var viewModel = AttendanceViewModel()
+    @State private var selectedDay: AttendanceDay? = nil
+    @State private var showFixSheet: Bool = false
+    @State private var fixTargetDay: AttendanceDay? = nil
 
     public let isEmbedded: Bool
 
@@ -54,15 +48,16 @@ public struct AttendanceView: View {
     private var coreContent: some View {
         ScrollView {
             VStack(spacing: BsSpacing.lg) {
-                // ─── 1. Signature Hero —— 液体打卡卡 ─────────────────
-                AttendanceHeroCard(
-                    viewModel: viewModel,
-                    isEmbedded: true,
-                    todayState: nil
-                )
-
-                // ─── 2. 今日 + 本周 合并卡 ──────────────────────────
-                summaryCard
+                rangePicker
+                kpiCard
+                liquidProgressCard
+                if viewModel.selectedRange == .month || viewModel.selectedRange == .year {
+                    calendarCard
+                }
+                timelineCard
+                if exceptionCount > 0 {
+                    exceptionCTA
+                }
             }
             .padding(.horizontal, BsSpacing.lg)
             .padding(.top, BsSpacing.md)
@@ -74,393 +69,493 @@ public struct AttendanceView: View {
         .navigationBarTitleDisplayMode(.large)
         .refreshable {
             await viewModel.loadToday()
-            await viewModel.loadThisWeek()
+            await viewModel.loadRange(viewModel.selectedRange)
         }
-        .task(id: "attendance-load") {
+        .task(id: "attendance-load-v2") {
             await viewModel.loadToday()
-            await viewModel.loadThisWeek()
+            await viewModel.loadRange(viewModel.selectedRange)
+        }
+        .sheet(item: $selectedDay) { day in
+            AttendanceDayDetailSheet(day: day)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
-    // MARK: - Combined summary card (Today punch strip + Week activity bars)
+    // MARK: - Range picker (segmented)
 
-    private var summaryCard: some View {
-        BsContentCard {
-            VStack(alignment: .leading, spacing: BsSpacing.lg) {
-                punchStripRow
-                Divider()
-                    .background(BsColor.borderSubtle)
-                weekActivitySection
+    private var rangePicker: some View {
+        Picker("", selection: Binding(
+            get: { viewModel.selectedRange },
+            set: { newValue in
+                viewModel.setRange(newValue)
+                Haptic.selection()
+            }
+        )) {
+            ForEach(AttendanceRange.allCases) { range in
+                Text(range.label).tag(range)
             }
         }
+        .pickerStyle(.segmented)
     }
 
-    // MARK: - Today punch strip
-    //
-    // 一行：上班时间 ─── [duration pill] ─── 下班时间
-    //   • 未打卡        → 空 endpoints + dashed line
-    //   • clockedIn     → 左 endpoint Azure 实，右 endpoint 镂空（脉动）+ 实时累计 pill
-    //   • done          → 双端 endpoints 实 Mint，pill 显示总工时
+    // MARK: - KPI card
 
-    @ViewBuilder
-    private var punchStripRow: some View {
-        HStack(alignment: .center, spacing: BsSpacing.sm) {
-            punchEndpoint(label: "上班", time: viewModel.today?.clockIn, alignment: .leading)
-            punchTrack
-            punchEndpoint(label: "下班", time: viewModel.today?.clockOut, alignment: .trailing)
-        }
-    }
-
-    @ViewBuilder
-    private func punchEndpoint(label: String, time: Date?, alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 2) {
-            Text(label)
-                .font(BsTypography.label)
-                .foregroundStyle(BsColor.inkMuted)
-                .textCase(.uppercase)
-            Text(Self.fmtTime(time))
-                .font(.system(.title3, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(time == nil ? BsColor.inkFaint : BsColor.ink)
-                .contentTransition(.numericText())
-        }
-        .frame(minWidth: 56, alignment: alignment == .leading ? .leading : .trailing)
-    }
-
-    /// 中央 track：dashed/solid line + duration pill 浮于中央
-    @ViewBuilder
-    private var punchTrack: some View {
-        ZStack {
-            // line —— 未打卡 dashed，已打卡渐变
-            GeometryReader { geo in
-                let mid = geo.size.height / 2
-                if viewModel.clockState == .ready {
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: mid))
-                        p.addLine(to: CGPoint(x: geo.size.width, y: mid))
-                    }
-                    .stroke(
-                        BsColor.inkFaint.opacity(0.35),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 5])
-                    )
-                } else {
-                    LinearGradient(
-                        colors: [BsColor.brandAzure.opacity(0.55), trackTone.opacity(0.55)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(height: 2)
-                    .clipShape(Capsule())
-                    .position(x: geo.size.width / 2, y: mid)
-                }
-            }
-            .frame(height: 24)
-
-            // 中央 duration pill
-            durationPill
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private var durationPill: some View {
-        HStack(spacing: 4) {
-            Image(systemName: durationIcon)
-                .font(.system(.caption2, weight: .semibold))
-            Text(durationText)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .monospacedDigit()
-        }
-        .foregroundStyle(trackTone)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(BsColor.surfacePrimary)
-                .shadow(color: trackTone.opacity(0.18), radius: 6, y: 1)
-        )
-        .overlay(
-            Capsule().stroke(trackTone.opacity(0.25), lineWidth: 0.5)
-        )
-    }
-
-    private var durationIcon: String {
-        switch viewModel.clockState {
-        case .ready:     return "circle.dashed"
-        case .clockedIn: return "hourglass"
-        case .done:      return "checkmark"
-        }
-    }
-
-    private var durationText: String {
-        switch viewModel.clockState {
-        case .ready:
-            return "未开始"
-        case .clockedIn:
-            if let inDate = viewModel.today?.clockIn {
-                return Self.fmtDuration(Date().timeIntervalSince(inDate))
-            }
-            return "进行中"
-        case .done:
-            if let h = viewModel.today?.workHours {
-                return Self.fmtHoursCompact(h)
-            }
-            if let inDate = viewModel.today?.clockIn,
-               let outDate = viewModel.today?.clockOut {
-                return Self.fmtDuration(outDate.timeIntervalSince(inDate))
-            }
-            return "已完成"
-        }
-    }
-
-    private var trackTone: Color {
-        switch viewModel.clockState {
-        case .ready:     return BsColor.inkFaint
-        case .clockedIn: return BsColor.brandAzure
-        case .done:      return BsColor.brandMint
-        }
-    }
-
-    // MARK: - Week activity (Apple Fitness 风格 bar chart)
-
-    @ViewBuilder
-    private var weekActivitySection: some View {
-        VStack(alignment: .leading, spacing: BsSpacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("本周")
-                    .font(BsTypography.cardTitle)
-                    .foregroundStyle(BsColor.ink)
-                Spacer(minLength: 0)
-                Text(weekSubtitle)
-                    .font(BsTypography.captionSmall)
-                    .monospacedDigit()
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-
-            WeekActivityBars(days: weekActivityDays)
-                .frame(height: 84)
-        }
-    }
-
-    /// "本周已完成 4/5 · 累计 32.5h" 副标
-    private var weekSubtitle: String {
-        let completed = weekActivityDays.prefix(5).filter { $0.workHours > 0 }.count
-        let totalHours = weekActivityDays.reduce(0) { $0 + $1.workHours }
-        let totalStr: String = {
-            guard totalHours > 0 else { return "未累计" }
-            let whole = Int(totalHours)
-            let mins = Int(round((totalHours - Double(whole)) * 60))
-            if mins == 0 { return "累计 \(whole)h" }
-            return "累计 \(whole)h \(mins)m"
-        }()
-        return "\(completed)/5 个工作日 · \(totalStr)"
-    }
-
-    /// 7-day cadence bars from viewModel.thisWeek (Mon-Sun).
-    /// 高度 = workHours / 8h，封顶 1.0；今日高亮，过去未打卡 = 空白 baseline。
-    private var weekActivityDays: [WeekActivityDay] {
-        let cal = Calendar(identifier: .gregorian)
-        let today = Date()
-        let weekday = cal.component(.weekday, from: today)
-        let mondayOffset = (weekday + 5) % 7
-        let labels = ["一", "二", "三", "四", "五", "六", "日"]
-
-        return (0..<7).map { idx in
-            let dayDiff = idx - mondayOffset
-            let isToday = (dayDiff == 0)
-            let isFuture = dayDiff > 0
-            let date = cal.date(byAdding: .day, value: dayDiff, to: today) ?? today
-            let iso = Self.isoDate(date)
-            let record = viewModel.thisWeek[iso]
-
-            // 计算 workHours：优先取 server 的 workHours，否则按 clockIn/clockOut 补算；
-            // 进行中（today + clockedIn）按当前 elapsed 估算，让今日 bar 实时跟随。
-            let computedHours: Double = {
-                if let h = record?.workHours, h > 0 { return h }
-                if let inD = record?.clockIn {
-                    if let outD = record?.clockOut {
-                        return max(0, outD.timeIntervalSince(inD)) / 3600
-                    }
-                    if isToday {
-                        return max(0, Date().timeIntervalSince(inD)) / 3600
-                    }
-                }
-                return 0
-            }()
-
-            return WeekActivityDay(
-                id: iso,
-                shortLabel: labels[idx],
-                workHours: computedHours,
-                isToday: isToday,
-                isInFuture: isFuture
+    private var kpiCard: some View {
+        BsContentCard(padding: .large) {
+            AttendanceKPIRow(
+                range: viewModel.selectedRange,
+                days: rangeDaysSorted,
+                today: todayDay
             )
         }
+        .animation(.smooth(duration: 0.25), value: viewModel.selectedRange)
     }
 
-    // MARK: - Formatting helpers
+    // MARK: - Liquid progress card (流体设计语言保留位)
 
-    private static func fmtTime(_ date: Date?) -> String {
-        guard let date else { return "—" }
+    private var liquidProgressCard: some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(progressTitle)
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(BsColor.ink)
+                    Spacer(minLength: 0)
+                    Text(progressSubtitle)
+                        .font(BsTypography.captionSmall)
+                        .monospacedDigit()
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+
+                LiquidProgressBar(progress: progressValue, tone: progressTone)
+                    .frame(height: 28)
+            }
+        }
+    }
+
+    // MARK: - Calendar card (month / year heat-map)
+
+    private var calendarCard: some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.md) {
+                BsSectionTitle(viewModel.selectedRange == .year ? "年度热力图" : "本月热力图", accent: .azure)
+
+                AttendanceCalendarView(
+                    range: viewModel.selectedRange,
+                    days: viewModel.rangeDays,
+                    rangeFromISO: viewModel.rangeFromISO,
+                    rangeToISO: viewModel.rangeToISO,
+                    onSelectDay: { day in
+                        selectedDay = day
+                    }
+                )
+
+                AttendanceCalendarLegend()
+            }
+        }
+    }
+
+    // MARK: - Timeline card (today / week list)
+
+    private var timelineCard: some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                BsSectionTitle(timelineTitle, accent: .coral)
+
+                let visible = visibleTimelineDays
+                if visible.isEmpty {
+                    Text("暂无数据")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkFaint)
+                        .padding(.vertical, BsSpacing.md)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(visible.enumerated()), id: \.element.id) { idx, day in
+                            AttendanceTimelineRow(
+                                day: day,
+                                onDetail: { selectedDay = $0 },
+                                onRequestFix: { d in
+                                    fixTargetDay = d
+                                    showFixSheet = true
+                                }
+                            )
+                            if idx < visible.count - 1 {
+                                Divider().background(BsColor.borderSubtle)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Exception CTA (bottom)
+
+    private var exceptionCTA: some View {
+        BsContentCard {
+            HStack(spacing: BsSpacing.md) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(BsColor.danger)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("有 \(exceptionCount) 条考勤异常")
+                        .font(BsTypography.cardTitle)
+                        .foregroundStyle(BsColor.ink)
+                    Text("可申请补卡或修正异常")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+                Spacer()
+                Button {
+                    Haptic.medium()
+                    // Navigate to fix flow — placeholder. Real route is
+                    // owned by Approvals feature (申请补卡审批单).
+                    // 留给后续接 ApprovalsCreate flow 时填入 NavigationLink。
+                    if let firstException = rangeDaysSorted.first(where: { $0.isException }) {
+                        fixTargetDay = firstException
+                        showFixSheet = true
+                    }
+                } label: {
+                    Text("处理")
+                        .font(BsTypography.captionSmall.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, BsSpacing.md)
+                        .padding(.vertical, BsSpacing.sm)
+                        .background(BsColor.brandAzure, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .alert("申请补卡 / 异常修正", isPresented: $showFixSheet, presenting: fixTargetDay) { _ in
+            Button("好的", role: .cancel) {}
+        } message: { day in
+            Text("该功能将打开审批中心创建补卡申请：\(day.iso)")
+        }
+    }
+
+    // MARK: - Derived
+
+    private var rangeDaysSorted: [AttendanceDay] {
+        viewModel.rangeDays.values.sorted { $0.iso < $1.iso }
+    }
+
+    private var todayDay: AttendanceDay? {
+        let cal = Calendar(identifier: .gregorian)
+        return rangeDaysSorted.first(where: { cal.isDateInToday($0.date) })
+            ?? rangeDaysSorted.last
+    }
+
+    private var visibleTimelineDays: [AttendanceDay] {
+        switch viewModel.selectedRange {
+        case .today:
+            // Single row, but show a small back-history of the past week
+            // for context (Apple Health daily summary feel).
+            return rangeDaysSorted.suffix(7).reversed()
+        case .week:
+            return rangeDaysSorted.reversed()
+        case .month, .year:
+            // Calendar handles bulk display — only show exceptions in timeline.
+            return rangeDaysSorted.filter { $0.isException }.reversed()
+        }
+    }
+
+    private var timelineTitle: String {
+        switch viewModel.selectedRange {
+        case .today: return "近 7 日 timeline"
+        case .week:  return "本周 timeline"
+        case .month, .year:
+            return "异常列表"
+        }
+    }
+
+    private var exceptionCount: Int {
+        rangeDaysSorted.filter { $0.isException }.count
+    }
+
+    // MARK: - Liquid progress derivation
+
+    private var progressTitle: String {
+        switch viewModel.selectedRange {
+        case .today: return "今日工时"
+        case .week:  return "本周工作日"
+        case .month: return "本月工作日"
+        case .year:  return "本年工作日"
+        }
+    }
+
+    private var progressSubtitle: String {
+        switch viewModel.selectedRange {
+        case .today:
+            let target = 8.0
+            let h = todayDay?.workHours ?? 0
+            return "\(Self.fmtHoursCompact(h)) / \(Int(target))h"
+        case .week, .month, .year:
+            let workDays = rangeDaysSorted.filter { $0.workState?.isWorkDay == true || $0.status == .normal || $0.status == .workingNow }
+            let completed = workDays.filter { $0.workHours > 0 }.count
+            let total = max(1, workDays.count)
+            return "\(completed) / \(total) 工作日"
+        }
+    }
+
+    private var progressValue: CGFloat {
+        switch viewModel.selectedRange {
+        case .today:
+            let target = 8.0
+            let h = todayDay?.workHours ?? 0
+            return CGFloat(min(1.0, h / target))
+        case .week, .month, .year:
+            let workDays = rangeDaysSorted.filter { $0.workState?.isWorkDay == true || $0.status == .normal || $0.status == .workingNow }
+            let completed = workDays.filter { $0.workHours > 0 }.count
+            let total = max(1, workDays.count)
+            return CGFloat(Double(completed) / Double(total))
+        }
+    }
+
+    private var progressTone: Color {
+        if progressValue >= 1.0 { return BsColor.brandMint }
+        if progressValue > 0 { return BsColor.brandAzure }
+        return BsColor.inkFaint
+    }
+
+    // MARK: - Format helpers
+
+    private static func fmtHoursCompact(_ h: Double) -> String {
+        guard h.isFinite, h >= 0 else { return "0h" }
+        let whole = Int(h)
+        let mins = Int(round((h - Double(whole)) * 60))
+        if mins == 0 { return "\(whole)h" }
+        return "\(whole)h \(mins)m"
+    }
+}
+
+// MARK: - LiquidProgressBar (横向流体进度条 — 流体设计语言保留位)
+//
+// 重用 LiquidFillShape，但水平展开 —— 把 shape 旋转 90° 让"水位"
+// 从左→右流动。60Hz TimelineView 驱 phase。Reduce Motion 下 amp=0
+// 退化为静态填充，仍保留色彩。
+
+public struct LiquidProgressBar: View {
+    let progress: CGFloat
+    let tone: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    public init(progress: CGFloat, tone: Color) {
+        self.progress = progress
+        self.tone = tone
+    }
+
+    public var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                // Track
+                Capsule()
+                    .fill(BsColor.inkFaint.opacity(0.15))
+
+                // Liquid fill (rotated 90° so "progress" reads as horizontal)
+                TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
+                    let phase = CGFloat(ctx.date.timeIntervalSinceReferenceDate) * 1.4
+                    let amp: CGFloat = reduceMotion ? 0 : 4
+                    let width = max(0, min(1, progress)) * geo.size.width
+                    LiquidFillShape(
+                        progress: 1.0,
+                        phase: phase,
+                        tiltX: 0,
+                        amplitude: amp,
+                        frequency: 1.6
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [tone.opacity(0.95), tone.opacity(0.65)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: width, height: geo.size.height)
+                    .rotationEffect(.degrees(-90), anchor: .center)
+                    .frame(width: width, height: geo.size.height)
+                    .clipShape(Capsule())
+                }
+            }
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(BsColor.borderSubtle, lineWidth: 0.5)
+            )
+        }
+        .animation(.smooth(duration: 0.6), value: progress)
+        .accessibilityElement()
+        .accessibilityLabel("进度 \(Int(progress * 100)) percent")
+    }
+}
+
+// MARK: - AttendanceDayDetailSheet
+//
+// 点击日历格子 / timeline 行 → 弹出 detail sheet 显示这一天的全部
+// 信息：上下班时间 / 备注 / 异常 / 排班 / 请假等。
+
+public struct AttendanceDayDetailSheet: View {
+    let day: AttendanceDay
+
+    public init(day: AttendanceDay) {
+        self.day = day
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: BsSpacing.lg) {
+                header
+                clockTimes
+                if day.isException, let exc = day.exceptionLabel {
+                    exceptionBlock(exc)
+                }
+                if let dws = day.workState {
+                    scheduleBlock(dws)
+                }
+                if let notes = day.attendance?.notes, !notes.isEmpty {
+                    notesBlock(notes)
+                }
+            }
+            .padding(BsSpacing.lg)
+        }
+        .background(BsColor.pageBackground.ignoresSafeArea())
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(formattedDate)
+                .font(BsTypography.largeTitle)
+                .foregroundStyle(BsColor.ink)
+            HStack(spacing: BsSpacing.sm) {
+                BsTagPill(day.label, tone: pillTone, icon: pillIcon)
+                if day.workHours > 0 {
+                    Text(Self.fmtHoursCompact(day.workHours))
+                        .font(BsTypography.bodyMedium)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .monospacedDigit()
+                }
+            }
+        }
+    }
+
+    private var clockTimes: some View {
+        BsContentCard {
+            HStack(spacing: BsSpacing.lg) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("上班")
+                        .font(BsTypography.label)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .textCase(.uppercase)
+                    Text(day.clockIn.map { Self.fmtTime($0) } ?? "—")
+                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(BsColor.ink)
+                        .monospacedDigit()
+                }
+                Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("下班")
+                        .font(BsTypography.label)
+                        .foregroundStyle(BsColor.inkMuted)
+                        .textCase(.uppercase)
+                    Text(day.clockOut.map { Self.fmtTime($0) } ?? "—")
+                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .foregroundStyle(BsColor.ink)
+                        .monospacedDigit()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func exceptionBlock(_ msg: String) -> some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                BsSectionTitle("异常", accent: .coral)
+                Text(msg)
+                    .font(BsTypography.body)
+                    .foregroundStyle(BsColor.danger)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func scheduleBlock(_ dws: DailyWorkState) -> some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                BsSectionTitle("排班", accent: .azure)
+                if let s = dws.expectedStart, let e = dws.expectedEnd {
+                    Text("应班 \(s.prefix(5)) - \(e.prefix(5))")
+                        .font(BsTypography.body)
+                        .foregroundStyle(BsColor.ink)
+                }
+                Text("状态：\(WorkStateLabels.label(state: dws.state, leaveType: dws.leaveType))")
+                    .font(BsTypography.bodySmall)
+                    .foregroundStyle(BsColor.inkMuted)
+                if let src = WorkStateSource.label(dws.source) {
+                    Text("来源：\(src)")
+                        .font(BsTypography.captionSmall)
+                        .foregroundStyle(BsColor.inkFaint)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func notesBlock(_ notes: String) -> some View {
+        BsContentCard {
+            VStack(alignment: .leading, spacing: BsSpacing.sm) {
+                BsSectionTitle("备注", accent: .mint)
+                Text(notes)
+                    .font(BsTypography.body)
+                    .foregroundStyle(BsColor.ink)
+            }
+        }
+    }
+
+    private var pillTone: BsTagTone {
+        switch day.status {
+        case .normal, .fieldWork:    return .success
+        case .workingNow:            return .brand
+        case .onLeave:               return .warning
+        case .businessTrip:          return .admin
+        case .publicHoliday, .weekendRest: return .neutral
+        case .absent, .late, .earlyLeave: return .danger
+        case .future, .unknown:      return .neutral
+        }
+    }
+
+    private var pillIcon: String? {
+        switch day.status {
+        case .normal:        return "checkmark.circle.fill"
+        case .workingNow:    return "clock.fill"
+        case .onLeave:       return "calendar.badge.minus"
+        case .businessTrip:  return "airplane"
+        case .fieldWork:     return "figure.walk"
+        case .publicHoliday: return "sun.max.fill"
+        case .weekendRest:   return "bed.double.fill"
+        case .absent, .late, .earlyLeave: return "exclamationmark.triangle.fill"
+        default:             return nil
+        }
+    }
+
+    private var formattedDate: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "yyyy 年 M 月 d 日 EEEE"
+        return f.string(from: day.date)
+    }
+
+    private static func fmtTime(_ date: Date) -> String {
+        let f = DateFormatter()
         f.dateFormat = "HH:mm"
         return f.string(from: date)
     }
 
     private static func fmtHoursCompact(_ h: Double) -> String {
-        guard h.isFinite, h >= 0 else { return "—" }
-        let clamped = min(h, 99.9)
-        let whole = Int(clamped)
-        let mins = Int(round((clamped - Double(whole)) * 60))
-        if mins == 60 { return "\(whole + 1)h 0m" }
+        let whole = Int(h)
+        let mins = Int(round((h - Double(whole)) * 60))
+        if mins == 0 { return "\(whole)h" }
         return "\(whole)h \(mins)m"
-    }
-
-    private static func fmtDuration(_ seconds: TimeInterval) -> String {
-        let safe = max(0, seconds)
-        let h = Int(safe) / 3600
-        let m = (Int(safe) % 3600) / 60
-        return "\(h)h \(m)m"
-    }
-
-    private static let isoDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    private static func isoDate(_ date: Date) -> String {
-        isoDayFormatter.string(from: date)
-    }
-}
-
-// MARK: - WeekActivityDay model
-//
-// 比 WeekDayCadence 多带 workHours 数据；保留为 fileprivate（非 design-system
-// 候选 —— 仅 Attendance 自己消费，不需要进 Shared/DesignSystem）。
-
-private struct WeekActivityDay: Identifiable, Hashable {
-    let id: String
-    let shortLabel: String
-    let workHours: Double
-    let isToday: Bool
-    let isInFuture: Bool
-}
-
-// MARK: - WeekActivityBars
-//
-// Apple Fitness Activity-strip 灵感的 7 列竖 bar：
-//   • 高度 = workHours / 8h（封顶 1.0），有最小可见高度（>0 时至少 8% 满）
-//   • 颜色：今日 → Azure 实色 + 顶端 highlight；过去 → Mint；未来 → 空白圆角
-//   • Reduce Motion 下进入动画自动跳过
-
-private struct WeekActivityBars: View {
-    let days: [WeekActivityDay]
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hasAppeared: Bool = false
-
-    var body: some View {
-        GeometryReader { geo in
-            let columnWidth = geo.size.width / CGFloat(max(1, days.count))
-            let barWidth = min(columnWidth - 8, 18)
-            let chartHeight = geo.size.height - 18  // 18pt 让出底部 weekday label
-            let barAreaHeight = max(8, chartHeight)
-
-            HStack(spacing: 0) {
-                ForEach(days) { day in
-                    VStack(spacing: 6) {
-                        ZStack(alignment: .bottom) {
-                            // 背景 track（满高灰）
-                            Capsule()
-                                .fill(BsColor.inkFaint.opacity(0.10))
-                                .frame(width: barWidth, height: barAreaHeight)
-
-                            // 实际 bar
-                            Capsule()
-                                .fill(barFill(for: day))
-                                .frame(
-                                    width: barWidth,
-                                    height: hasAppeared ? barHeight(for: day, total: barAreaHeight) : 0
-                                )
-                                .overlay(alignment: .top) {
-                                    // 顶端 highlight hairline —— 给"已完成"的 bar
-                                    // 一抹 Apple Fitness 同款光泽
-                                    if barHeight(for: day, total: barAreaHeight) > 6 {
-                                        Capsule()
-                                            .fill(Color.white.opacity(0.45))
-                                            .frame(width: barWidth, height: 2)
-                                            .padding(.top, 1)
-                                    }
-                                }
-                        }
-                        .frame(height: barAreaHeight, alignment: .bottom)
-
-                        Text(day.shortLabel)
-                            .font(.custom("Inter-Medium", size: 11, relativeTo: .caption2))
-                            .foregroundStyle(
-                                day.isToday ? BsColor.brandAzure : BsColor.inkMuted
-                            )
-                    }
-                    .frame(width: columnWidth)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(a11yLabel(for: day))
-                }
-            }
-        }
-        .onAppear {
-            if reduceMotion {
-                hasAppeared = true
-            } else {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.78).delay(0.06)) {
-                    hasAppeared = true
-                }
-            }
-        }
-    }
-
-    private func barHeight(for day: WeekActivityDay, total: CGFloat) -> CGFloat {
-        guard !day.isInFuture, day.workHours > 0 else { return 0 }
-        let fraction = min(1.0, day.workHours / 8.0)
-        let minVisible: CGFloat = 6
-        return max(minVisible, CGFloat(fraction) * total)
-    }
-
-    private func barFill(for day: WeekActivityDay) -> LinearGradient {
-        if day.isInFuture {
-            return LinearGradient(colors: [Color.clear, Color.clear], startPoint: .top, endPoint: .bottom)
-        }
-        if day.isToday {
-            return LinearGradient(
-                colors: [BsColor.brandAzure, BsColor.brandAzure.opacity(0.78)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        if day.workHours > 0 {
-            return LinearGradient(
-                colors: [BsColor.brandMint, BsColor.brandMint.opacity(0.72)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        return LinearGradient(
-            colors: [BsColor.inkFaint.opacity(0.18), BsColor.inkFaint.opacity(0.18)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    private func a11yLabel(for day: WeekActivityDay) -> String {
-        if day.isInFuture { return "周\(day.shortLabel)，未到" }
-        if day.workHours <= 0 { return "周\(day.shortLabel)，未打卡" }
-        let whole = Int(day.workHours)
-        let mins = Int(round((day.workHours - Double(whole)) * 60))
-        let prefix = day.isToday ? "今天，周\(day.shortLabel)" : "周\(day.shortLabel)"
-        return "\(prefix)，工作 \(whole) 小时 \(mins) 分"
     }
 }
 

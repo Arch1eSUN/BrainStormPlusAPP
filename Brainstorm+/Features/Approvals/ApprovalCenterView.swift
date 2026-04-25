@@ -330,10 +330,10 @@ public struct ApprovalCenterView: View {
 
     @ViewBuilder
     private func queueEmptyState(_ kind: ApprovalQueueKind) -> some View {
-        BsEmptyState(
-            title: "暂无\(kind.displayLabel)审批",
+        ContentUnavailableView(
+            "暂无\(kind.displayLabel)审批",
             systemImage: "checkmark.seal",
-            description: "队列已清空。下拉可刷新。"
+            description: Text("队列已清空。下拉可刷新。")
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

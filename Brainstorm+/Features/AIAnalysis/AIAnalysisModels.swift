@@ -171,7 +171,17 @@ public enum AIAnalysisPageState: Equatable {
 
 public enum AIAnalysisPhase: String {
     case initPhase = "INIT"
+    /// Legacy generic "scraping" — kept for back-compat with old SSE feeds.
     case scraping = "SCRAPING"
+    /// Iter 6 P0: short URL → final URL resolution.
+    case resolvingUrl = "RESOLVING_URL"
+    /// Iter 6 P0: platform-specific scraper run.
+    case scrapingPage = "SCRAPING_PAGE"
+    /// Iter 6 P0: cover image + interaction metric extraction.
+    case extractingMedia = "EXTRACTING_MEDIA"
+    /// Iter 6 P0: soft phase emitted when scrape returned empty / hit a hard
+    /// error — UI shows a hint to upload a screenshot.
+    case scrapeFailed = "SCRAPE_FAILED"
     case analyzing = "ANALYZING"
     case prompt    = "AI_PROMPT"
     case generating = "AI_GENERATING"
@@ -183,6 +193,10 @@ public enum AIAnalysisPhase: String {
         switch self {
         case .initPhase: return "初始化任务"
         case .scraping: return "抓取页面内容"
+        case .resolvingUrl: return "解析分享链接"
+        case .scrapingPage: return "抓取页面内容"
+        case .extractingMedia: return "提取封面与数据"
+        case .scrapeFailed: return "抓取受限"
         case .analyzing: return "整理上下文"
         case .prompt: return "构建分析指令"
         case .generating: return "调用大模型"
@@ -196,6 +210,10 @@ public enum AIAnalysisPhase: String {
         switch self {
         case .initPhase: return "wand.and.stars"
         case .scraping: return "doc.text.magnifyingglass"
+        case .resolvingUrl: return "link.circle"
+        case .scrapingPage: return "doc.text.magnifyingglass"
+        case .extractingMedia: return "photo.on.rectangle"
+        case .scrapeFailed: return "exclamationmark.triangle"
         case .analyzing: return "rectangle.stack.badge.person.crop"
         case .prompt: return "text.bubble"
         case .generating: return "brain.head.profile"
@@ -206,8 +224,11 @@ public enum AIAnalysisPhase: String {
     }
 
     /// Order shown to the user. `done` is the terminal sentinel and not rendered as a row.
+    /// `scrapeFailed` is a soft event — surfaced inline rather than as a row,
+    /// so it's intentionally absent from the ordered list.
     public static let ordered: [AIAnalysisPhase] = [
-        .initPhase, .scraping, .analyzing, .prompt, .generating, .streaming, .parsing,
+        .initPhase, .resolvingUrl, .scrapingPage, .extractingMedia,
+        .analyzing, .prompt, .generating, .streaming, .parsing,
     ]
 }
 

@@ -62,6 +62,10 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
     public let isWithdrawn: Bool
     public let withdrawnAt: Date?
     public let createdAt: Date?
+    /// Phase 1.1 (slack-grade): denormalized counter maintained by trigger
+    /// `fn_chat_messages_after_insert`. Top-level rows (reply_to == nil) only.
+    /// Used by message footer "n 条回复 →" entry into ChatThreadView.
+    public let threadReplyCount: Int
 
     public enum MessageType: String, Codable, Hashable {
         case text = "text"
@@ -82,6 +86,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         case isWithdrawn = "is_withdrawn"
         case withdrawnAt = "withdrawn_at"
         case createdAt = "created_at"
+        case threadReplyCount = "thread_reply_count"
     }
 
     // JSONB 默认值是 '[]' 但旧行 / 非 SELECT 实时事件里有可能字段缺席，
@@ -106,6 +111,9 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         isWithdrawn = try c.decode(Bool.self, forKey: .isWithdrawn)
         withdrawnAt = try c.decodeIfPresent(Date.self, forKey: .withdrawnAt)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        // Phase 1.1: 字段在迁移 20260425010000 之后才存在,旧行 / realtime
+        // minimal payload 缺席时降级为 0。
+        threadReplyCount = (try? c.decodeIfPresent(Int.self, forKey: .threadReplyCount)) ?? 0
     }
 
     public init(
@@ -119,7 +127,8 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         reactions: [String: [UUID]] = [:],
         isWithdrawn: Bool = false,
         withdrawnAt: Date? = nil,
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        threadReplyCount: Int = 0
     ) {
         self.id = id
         self.channelId = channelId
@@ -132,6 +141,7 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         self.isWithdrawn = isWithdrawn
         self.withdrawnAt = withdrawnAt
         self.createdAt = createdAt
+        self.threadReplyCount = threadReplyCount
     }
 }
 
@@ -141,6 +151,9 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
     public let userId: UUID
     public let role: MemberRole
     public let joinedAt: Date?
+    /// Phase 1.1 (slack-grade) — 上次读到的最近 message.created_at。
+    /// 客户端用它计算未读分隔线("X 条新消息")的位置。
+    public let lastReadAt: Date?
 
     public enum MemberRole: String, Codable, Hashable {
         case owner
@@ -154,5 +167,32 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
         case userId = "user_id"
         case role
         case joinedAt = "joined_at"
+        case lastReadAt = "last_read_at"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        channelId = try c.decode(UUID.self, forKey: .channelId)
+        userId = try c.decode(UUID.self, forKey: .userId)
+        role = try c.decode(MemberRole.self, forKey: .role)
+        joinedAt = try c.decodeIfPresent(Date.self, forKey: .joinedAt)
+        lastReadAt = try c.decodeIfPresent(Date.self, forKey: .lastReadAt)
+    }
+
+    public init(
+        id: UUID,
+        channelId: UUID,
+        userId: UUID,
+        role: MemberRole,
+        joinedAt: Date? = nil,
+        lastReadAt: Date? = nil
+    ) {
+        self.id = id
+        self.channelId = channelId
+        self.userId = userId
+        self.role = role
+        self.joinedAt = joinedAt
+        self.lastReadAt = lastReadAt
     }
 }

@@ -26,7 +26,8 @@ import Supabase
 
 public struct BsCommandPalette: View {
     @Environment(SessionManager.self) private var sessionManager
-    @Environment(\.dismiss) private var dismiss
+    // dismiss 不再需要 — bsModalNavBar 内的 X 走自己的 Environment
+    // dismiss closure (Iter 6)。
 
     @State private var searchQuery: String = ""
     /// Debounced search value — updated 180ms after user stops typing so
@@ -201,25 +202,14 @@ public struct BsCommandPalette: View {
             }
             .background(BsColor.pageBackground.ignoresSafeArea())
             .scrollContentBackground(.hidden)
-            // Bug-fix v5 (ghost-X 常驻 / 2026-04-25):
-            // 上一版把 close button overlay 挂在 NavigationStack 外层
-            // (.overlay(alignment: .topTrailing) { closeButtonOverlay })。
-            // NavStack 外层 overlay 不参与 push transition —— 当用户点 tile
-            // push 进任意 destination(考勤 / OKR / 审批 / 用户列表 …)时,
-            // X 仍然浮在屏幕右上,挤在系统返回按钮旁边,违反了"X 仅用于关闭
-            // 整个 launcher,destination 内部应只有系统返回按钮"的语义。
-            // 修法:把 overlay 挂到 root ScrollView(NavigationStack 的 root
-            // 内容),push destination 时整个 root 被 transition out → overlay
-            // 自动跟随消失,destination 内部不再渲染 X。
-            //
-            // 关于 Liquid Glass:close button 现在是 BsCloseButton 原生 glass
-            // 圆按钮(详见 BsCloseButton.swift)。不进 toolbar pipeline,所以
-            // 系统也不会再 wrap 一层椭圆 capsule。
-            .overlay(alignment: .topTrailing) {
-                closeButtonOverlay
-            }
+            // Iter 6 (2026-04-25):
+            // 改走 toolbar pipeline (`bsModalNavBar`) —— X 自动落在系统
+            // NavBar trailing slot,跟所有 sheet/cover 的关闭按钮位置/大小
+            // 完全统一 (44pt 玻璃圆,= 系统 back button)。push destination
+            // 时 destination 自带 toolbar,系统自动接管 → X 自然隐藏。
+            // 不再需要手挂 overlay + 手算 padding。
+            .bsModalNavBar(displayMode: .large, dismissBehavior: .auto)
             .navigationTitle("所有应用")
-            .navigationBarTitleDisplayMode(.large)
             .searchable(
                 text: $searchQuery,
                 placement: .navigationBarDrawer(displayMode: .always),
@@ -239,24 +229,6 @@ public struct BsCommandPalette: View {
         // Phase 25 v4：改用 NavigationLink push —— 完全 iOS 原生。
         // launcher 的 NavigationStack 自动加左上角 native 返回按钮，
         // 不覆盖 destination 自己的 Large Title。Tile 切换成 NavigationLink。
-    }
-
-    /// Floating close button —— 不走 toolbar 避免被系统自动套 Liquid Glass
-    /// capsule。改用 `BsCloseButton`(iOS 26 原生 `.glassEffect(.regular.interactive(),
-    /// in: Circle())`,无外层 Capsule),修掉用户反馈"叉没用容器了 / liquid glass
-    /// 特性也没有了"的退步。详见 BsCloseButton.swift 的设计说明。
-    private var closeButtonOverlay: some View {
-        BsCloseButton {
-            // Haptic removed: 用户反馈关闭按钮过密震动
-            dismiss()
-        }
-        // 落点 = 系统 NavBar trailing 视觉位置 (与 toolbar trailing 对齐):
-        //   • BsCloseButton 自带 44×44 hit target (4pt padding 围 36pt 视觉圆)
-        //   • overlay 在 NavStack root 上,topTrailing 让 X 锚到 safe-area 内
-        //   • 系统 toolbar item leading/trailing inset = 8pt,这里 -2pt 抵
-        //     消 BsCloseButton 内的 4pt hit padding 让视觉圆心对齐
-        .padding(.top, 0)
-        .padding(.trailing, BsSpacing.sm)
     }
 
     // MARK: - Sections

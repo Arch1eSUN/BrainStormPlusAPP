@@ -71,7 +71,11 @@ public final class AdminTeamReportsViewModel: ObservableObject {
                 try await loadWeekly()
             }
         } catch {
-            errorMessage = ErrorLocalizer.localize(error)
+            // iter6 §A.5 — CancellationError 静默：用户在筛选/日期切换时
+            // 旧 task 会被 SwiftUI .task(id:) 取消。
+            let (tier, msg) = ErrorPresenter.present(error)
+            if tier == .silent { return }
+            errorMessage = msg
         }
     }
 

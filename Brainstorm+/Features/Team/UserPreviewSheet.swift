@@ -84,12 +84,10 @@ public struct UserPreviewSheet: View {
                 .frame(maxWidth: .infinity)
             }
             .background(BsColor.pageBackground.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
-                }
-            }
+            // Iter 6: 只读 profile preview 改成统一的 BsCloseButton X
+            // (44pt 玻璃圆 = 系统 back button)。原来的"完成"文字按钮跟
+            // 其他 sheet 不一致 → 收口到 bsModalNavBar。
+            .bsModalNavBar(dismissBehavior: .auto)
             .navigationDestination(isPresented: $pushDetail) {
                 TeamMemberDetailView(userId: user.id)
             }

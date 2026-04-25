@@ -5,7 +5,6 @@ import UniformTypeIdentifiers
 
 public struct ChatRoomView: View {
     @StateObject private var viewModel: ChatRoomViewModel
-    @State private var messageText: String = ""
 
     // MARK: - Sprint 3.3 附件选择状态
     //
@@ -21,6 +20,21 @@ public struct ChatRoomView: View {
     // 被回复的原消息 —— 用户从 contextMenu 选 "回复" 后塞进来，输入栏上方会
     // 出现一个预览条，发送时把 id 作为 reply_to 写入 chat_messages。
     @State private var replyingTo: ChatMessage? = nil
+
+    // MARK: - Phase 1.1: Slack-grade state
+
+    /// Per-device 草稿持久化(配 RPC 跨设备兜底)。AppStorage key 含 channel id。
+    @State private var localDraft: String = ""
+
+    /// @ 提及 sheet 触发标记 + 当前 query 片段。
+    @State private var showMentionPicker: Bool = false
+    @State private var mentionQuery: String = ""
+
+    /// Thread sheet —— 用户点击消息底部 "n 条回复 →" 进入。
+    @State private var threadParent: ChatMessage? = nil
+
+    /// 系统当前 channel id 字符串(用于 AppStorage key)。
+    private var draftKey: String { "chat.draft.\(viewModel.channel.id.uuidString)" }
 
     public init(viewModel: ChatRoomViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -41,15 +55,48 @@ public struct ChatRoomView: View {
                     if !pendingUploads.isEmpty {
                         pendingAttachmentsStrip
                     }
-                    inputBar
+                    MessageInputBar(
+                        text: $viewModel.draft,
+                        isSending: viewModel.isSending,
+                        canSend: canSend,
+                        placeholder: "输入消息…",
+                        onSend: sendTapped,
+                        onAttachmentTap: { showFileImporter = true },
+                        onPhotoTap: { /* presented inline below as PhotosPicker overlay */ },
+                        onEmojiTap: { /* Phase 1.2: emoji picker */ },
+                        onMentionTap: {
+                            mentionQuery = ""
+                            showMentionPicker = true
+                        }
+                    )
+                    .background(
+                        // PhotosPicker 不能直接当 button —— 用一个透明 overlay 让
+                        // "图片"按钮的 hit-area 触发原生 PhotosPicker sheet。
+                        photosPickerHidden
+                    )
                 }
             }
         }
         .navigationTitle(viewModel.channel.name)
         .navigationBarTitleDisplayMode(.inline)
         .zyErrorBanner($viewModel.errorMessage)
-        .task { await viewModel.bootstrap() }
+        .task {
+            // 先把 per-device AppStorage 读到 VM,RPC 再兜底跨设备。
+            let stored = UserDefaults.standard.string(forKey: draftKey) ?? ""
+            if viewModel.draft.isEmpty && !stored.isEmpty {
+                viewModel.draft = stored
+            }
+            await viewModel.bootstrap()
+        }
         .onDisappear { viewModel.teardown() }
+        .onChange(of: viewModel.draft) { _, newValue in
+            // 1) 即时写入 per-device AppStorage(无延迟,免丢)
+            UserDefaults.standard.set(newValue, forKey: draftKey)
+            // 2) 500ms debounce 写入 RPC(跨设备)
+            viewModel.saveDraftDebounced(newValue)
+            // 3) 检测 @ 触发 —— 末位字符是 @ 且前一个字符不是字母数字时弹 sheet
+            detectMentionTrigger(in: newValue)
+        }
         // PhotosPicker 把选中的 PhotosPickerItem 塞进 $photoItems，
         // 这里监听变化 → loadTransferable(Data) → 追加到 pendingUploads。
         .onChange(of: photoItems) { _, newItems in
@@ -63,6 +110,89 @@ public struct ChatRoomView: View {
         ) { result in
             handleFileImport(result)
         }
+        .sheet(isPresented: $showMentionPicker) {
+            MentionPickerSheet(
+                candidates: viewModel.mentionCandidates,
+                query: $mentionQuery,
+                onPick: { profile in
+                    insertMention(profile)
+                    showMentionPicker = false
+                },
+                onDismiss: { showMentionPicker = false }
+            )
+        }
+        .sheet(item: $threadParent) { parent in
+            ChatThreadView(
+                client: supabase,
+                channel: viewModel.channel,
+                parent: parent,
+                currentUserId: viewModel.currentUserId
+            )
+        }
+    }
+
+    /// Slack-grade Send 闸门:无文本且无附件时禁用。
+    private var canSend: Bool {
+        if viewModel.isSending { return false }
+        let empty = viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return !(empty && pendingUploads.isEmpty)
+    }
+
+    /// 隐藏 PhotosPicker —— 跟 "图片" 按钮 hit-area 重叠,系统弹出原生 sheet。
+    @ViewBuilder
+    private var photosPickerHidden: some View {
+        PhotosPicker(
+            selection: $photoItems,
+            maxSelectionCount: 9,
+            matching: .images
+        ) { Color.clear }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .allowsHitTesting(false)
+    }
+
+    /// 检测末位字符是 @,且 @ 之前是 word boundary(空格 / 字符串开头)
+    /// → 弹 mention sheet。query 取 @ 之后到末尾的子串。
+    private func detectMentionTrigger(in text: String) {
+        guard !text.isEmpty else {
+            if showMentionPicker { showMentionPicker = false }
+            return
+        }
+        // 找到光标位置之前最近一个 @ —— 简化策略:取整串最后一个 @,看它后面
+        // 有没有空格;没空格 → 在 mention 中,query = @ 之后部分。
+        guard let atRange = text.range(of: "@", options: .backwards) else {
+            if showMentionPicker { showMentionPicker = false }
+            return
+        }
+        let after = String(text[atRange.upperBound...])
+        if after.contains(" ") || after.contains("\n") {
+            // @ 后已经空格/换行,说明用户已结束这次 mention
+            if showMentionPicker { showMentionPicker = false }
+            return
+        }
+        // 检查 @ 前一字符是不是 word boundary
+        if atRange.lowerBound > text.startIndex {
+            let prevIdx = text.index(before: atRange.lowerBound)
+            let prevChar = text[prevIdx]
+            if prevChar.isLetter || prevChar.isNumber {
+                // 像 "abc@def" —— 不视作 mention 触发(可能是邮箱)
+                if showMentionPicker { showMentionPicker = false }
+                return
+            }
+        }
+        mentionQuery = after
+        if !showMentionPicker {
+            showMentionPicker = true
+        }
+    }
+
+    /// 把当前文本里最后一个 @xxx 片段替换成 `@DisplayName ` (含末尾空格)。
+    private func insertMention(_ profile: Profile) {
+        let text = viewModel.draft
+        guard let atRange = text.range(of: "@", options: .backwards) else { return }
+        let displayName = profile.displayName ?? profile.fullName ?? "用户"
+        let replacement = "@\(displayName) "
+        viewModel.draft = String(text[..<atRange.lowerBound]) + replacement
     }
 
     @ViewBuilder
@@ -81,106 +211,119 @@ public struct ChatRoomView: View {
             Spacer()
         } else {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: BsSpacing.md) {
-                        ForEach(viewModel.messages) { msg in
-                            messageBubble(
-                                msg: msg,
-                                isCurrentUser: msg.senderId == viewModel.currentUserId
-                            )
-                            .id(msg.id)
+                ZStack(alignment: .bottom) {
+                    ScrollView {
+                        LazyVStack(spacing: BsSpacing.md) {
+                            ForEach(viewModel.messages) { msg in
+                                // Phase 1.1: 在第一条 created_at > unreadAnchor 的
+                                // 消息上方插入 UnreadDividerView。
+                                if shouldShowUnreadDivider(before: msg) {
+                                    UnreadDividerView(unreadCount: unreadCountFromAnchor)
+                                        .id("unread-divider")
+                                }
+                                messageBubble(
+                                    msg: msg,
+                                    isCurrentUser: msg.senderId == viewModel.currentUserId
+                                )
+                                .id(msg.id)
+                            }
+
+                            // Bottom anchor —— 用 onAppear/onDisappear 推 isAtBottom
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom-anchor")
+                                .onAppear {
+                                    viewModel.isAtBottom = true
+                                    if viewModel.pendingBelowCount > 0 {
+                                        viewModel.pendingBelowCount = 0
+                                    }
+                                    viewModel.markReadDebounced()
+                                }
+                                .onDisappear {
+                                    viewModel.isAtBottom = false
+                                }
+                        }
+                        .padding(.horizontal, BsSpacing.lg)
+                        .padding(.vertical, BsSpacing.md)
+                    }
+                    .onChange(of: viewModel.messages.count) { _, _ in
+                        // Phase 1.1: 仅当用户在底部时才自动滚;离开底部时让 pill 接力。
+                        if viewModel.isAtBottom {
+                            withAnimation(BsMotion.Anim.smooth) {
+                                proxy.scrollTo("bottom-anchor", anchor: .bottom)
+                            }
                         }
                     }
-                    .padding(.horizontal, BsSpacing.lg)
-                    .padding(.vertical, BsSpacing.md)
-                }
-                .onChange(of: viewModel.messages.count) { _, _ in
-                    withAnimation {
-                        proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+                    .task {
+                        // 首次进入:滚到底部(若有未读分隔线 → 滚到分隔线)
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        if let _ = viewModel.unreadAnchor,
+                           viewModel.messages.contains(where: { ($0.createdAt ?? .distantPast) > (viewModel.unreadAnchor ?? .distantFuture) }) {
+                            withAnimation { proxy.scrollTo("unread-divider", anchor: .top) }
+                        } else {
+                            proxy.scrollTo("bottom-anchor", anchor: .bottom)
+                        }
+                    }
+
+                    // Phase 1.1: "新消息 ↓" floating pill —— 仅当 isAtBottom == false
+                    // 且 pendingBelowCount > 0 时显示。点击后滚到底。
+                    if !viewModel.isAtBottom && viewModel.pendingBelowCount > 0 {
+                        newMessagePill(proxy: proxy)
+                            .padding(.bottom, BsSpacing.md)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
+                .animation(BsMotion.Anim.smooth, value: viewModel.pendingBelowCount)
             }
         }
     }
 
-    // MARK: - Input bar
-    // iOS 26 Liquid Glass composer — 真·.glassEffect(...)，不再是手搓
-    // ultraThinMaterial。顶部 hairline 保留分隔感，贴底 safe-area。
+    // MARK: - Phase 1.1 — Unread divider helpers
 
-    private var inputBar: some View {
-        HStack(spacing: BsSpacing.md) {
-            Menu {
-                PhotosPicker(
-                    selection: $photoItems,
-                    maxSelectionCount: 9,
-                    matching: .images
-                ) {
-                    Label("图片", systemImage: "photo")
-                }
-                Button {
-                    // Haptic removed: 用户反馈菜单按钮过密震动
-                    showFileImporter = true
-                } label: {
-                    Label("文件", systemImage: "doc")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20))
-                    .foregroundStyle(BsColor.inkMuted)
-            }
-            .accessibilityLabel("附件")
-
-            TextField("输入消息…", text: $messageText)
-                .font(BsTypography.body)
-                .foregroundStyle(BsColor.ink)
-                .padding(.horizontal, BsSpacing.lg)
-                .padding(.vertical, BsSpacing.sm + 2)
-                .background(BsColor.surfaceSecondary)
-                .clipShape(Capsule())
-
-            // Send button —— Azure glass-tinted Circle（取代原来光 SF symbol）。
-            // 禁用时 tint 几乎透明；激活时品牌 Azure 气场。
-            Button(action: sendTapped) {
-                Group {
-                    if viewModel.isSending {
-                        ProgressView()
-                            .frame(width: 20, height: 20)
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isSendDisabled ? BsColor.inkMuted : BsColor.brandAzure)
-                            .rotationEffect(.degrees(45))
-                    }
-                }
-                .frame(width: 36, height: 36)
-                .glassEffect(
-                    .regular
-                        .tint(
-                            isSendDisabled
-                                ? BsColor.inkFaint.opacity(0.10)
-                                : BsColor.brandAzure.opacity(0.35)
-                        )
-                        .interactive(),
-                    in: Circle()
-                )
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .disabled(isSendDisabled)
-            .accessibilityLabel("发送")
+    private func shouldShowUnreadDivider(before msg: ChatMessage) -> Bool {
+        guard let anchor = viewModel.unreadAnchor else { return false }
+        guard let created = msg.createdAt, created > anchor else { return false }
+        // 只在第一条满足条件的消息上方画一次
+        let firstUnread = viewModel.messages.first {
+            ($0.createdAt ?? .distantPast) > anchor
         }
-        .padding(.horizontal, BsSpacing.lg)
-        .padding(.vertical, BsSpacing.md)
-        .glassEffect(
-            .regular,
-            in: RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-        )
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundStyle(BsColor.borderSubtle),
-            alignment: .top
-        )
+        return firstUnread?.id == msg.id && msg.senderId != viewModel.currentUserId
+    }
+
+    private var unreadCountFromAnchor: Int {
+        guard let anchor = viewModel.unreadAnchor else { return 0 }
+        return viewModel.messages.filter {
+            ($0.createdAt ?? .distantPast) > anchor && $0.senderId != viewModel.currentUserId
+        }.count
+    }
+
+    @ViewBuilder
+    private func newMessagePill(proxy: ScrollViewProxy) -> some View {
+        Button {
+            Haptic.light()
+            viewModel.pendingBelowCount = 0
+            withAnimation(BsMotion.Anim.smooth) {
+                proxy.scrollTo("bottom-anchor", anchor: .bottom)
+            }
+        } label: {
+            HStack(spacing: BsSpacing.xs) {
+                Text("新消息")
+                Text("\(viewModel.pendingBelowCount)")
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(BsColor.brandCoral))
+                    .foregroundStyle(.white)
+                    .font(BsTypography.captionSmall)
+                Image(systemName: "arrow.down")
+            }
+            .font(BsTypography.captionSmall)
+            .foregroundStyle(BsColor.ink)
+            .padding(.horizontal, BsSpacing.md)
+            .padding(.vertical, BsSpacing.sm)
+            .glassEffect(.regular.interactive(), in: Capsule())
+            .overlay(Capsule().stroke(BsColor.borderSubtle, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Pending attachments 预览条
@@ -246,22 +389,15 @@ public struct ChatRoomView: View {
 
     // MARK: - Send flow
 
-    private var isSendDisabled: Bool {
-        if viewModel.isSending { return true }
-        let empty = messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return empty && pendingUploads.isEmpty
-    }
-
     private func sendTapped() {
-        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines)
         let uploads = pendingUploads
         let replyToId = replyingTo?.id
         guard !text.isEmpty || !uploads.isEmpty else { return }
-        Haptic.medium()
 
-        // 乐观清 UI —— 如果上传/发送失败，errorMessage 会弹出 banner，
-        // 用户可以重新选文件再发。Web 行为一致（page.tsx:301-306）。
-        messageText = ""
+        // 乐观清 UI —— 如果上传/发送失败，errorMessage 会弹出 banner。
+        viewModel.draft = ""
+        UserDefaults.standard.removeObject(forKey: draftKey)
         pendingUploads = []
         replyingTo = nil
 
@@ -281,6 +417,8 @@ public struct ChatRoomView: View {
                 }
             }
             await viewModel.sendMessage(text, attachments: attached, replyTo: replyToId)
+            // 清服务端草稿(跨设备一并失效)
+            await viewModel.clearDraftRemote()
         }
     }
 
@@ -391,6 +529,12 @@ public struct ChatRoomView: View {
                     if !msg.reactions.isEmpty {
                         reactionChipRow(msg: msg, isCurrentUser: isCurrentUser)
                     }
+
+                    // Phase 1.1: 线程入口 —— 仅顶层消息(replyTo == nil)且
+                    // thread_reply_count > 0 时显示。点击进入 ChatThreadView。
+                    if msg.replyTo == nil && msg.threadReplyCount > 0 {
+                        threadFooter(msg: msg)
+                    }
                 }
 
                 let timeText = ChatDateFormatter.format(msg.createdAt)
@@ -455,6 +599,15 @@ public struct ChatRoomView: View {
                             Label("回复", systemImage: "arrowshape.turn.up.left")
                         }
 
+                        // Phase 1.1: 线程回复入口 —— 顶层消息才能开线程。
+                        if msg.replyTo == nil {
+                            Button {
+                                threadParent = msg
+                            } label: {
+                                Label("在线程中回复", systemImage: "bubble.left.and.bubble.right")
+                            }
+                        }
+
                         if !msg.content.isEmpty {
                             Button {
                                 UIPasteboard.general.string = msg.content
@@ -468,8 +621,8 @@ public struct ChatRoomView: View {
                         if !isCurrentUser {
                             Button {
                                 replyingTo = msg
-                                if !messageText.hasPrefix("@") {
-                                    messageText = "@" + messageText
+                                if !viewModel.draft.hasPrefix("@") {
+                                    viewModel.draft = "@" + viewModel.draft
                                 }
                             } label: {
                                 Label("@提及此人", systemImage: "at")
@@ -560,6 +713,35 @@ public struct ChatRoomView: View {
         .padding(.vertical, BsSpacing.xs + 2)
         .background(BsColor.surfaceTertiary)
         .clipShape(RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous))
+    }
+
+    /// Phase 1.1 — 线程 footer。显示在带有 thread_reply_count > 0 的顶层
+    /// 消息底部,点击进入 ChatThreadView sheet。
+    @ViewBuilder
+    private func threadFooter(msg: ChatMessage) -> some View {
+        Button {
+            Haptic.light()
+            threadParent = msg
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("\(msg.threadReplyCount) 条回复")
+                    .font(BsTypography.captionSmall)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(BsColor.brandAzureDark)
+            .padding(.horizontal, BsSpacing.sm + 2)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(BsColor.brandAzure.opacity(0.10))
+            )
+            .overlay(
+                Capsule().stroke(BsColor.brandAzure.opacity(0.20), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Reply preview strip (above input bar) — Liquid Glass
