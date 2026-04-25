@@ -16,11 +16,27 @@ struct BrainStormApp: App {
     /// root so any list view in the tree can save/restore offsets via
     /// @EnvironmentObject.
     @StateObject private var scrollStateStore = ScrollStateStore()
+    /// Iter 6 review §B.4 — offline reachability + write retry queue.
+    /// Hosted at app root so any list view + toolbar can react to
+    /// `isOnline` via @EnvironmentObject without re-instantiating the
+    /// underlying NWPathMonitor.
+    @StateObject private var networkMonitor = NetworkMonitor.shared
     @State private var minSplashHeld = false
 
     init() {
         // v1.2: TabBar badge 全局走 Coral（unreadBadge = brandCoral）
         UITabBarItem.appearance().badgeColor = UIColor(BsColor.unreadBadge)
+
+        // Iter 6 review §B.4 — start path monitor early so the first
+        // SwiftUI render already knows the network state, and register
+        // queue handlers + purge expired cache asynchronously.
+        NetworkMonitor.shared.start()
+        Task.detached(priority: .utility) {
+            await EntityCache.shared.purgeExpired()
+            await WriteActionHandlers.registerAll()
+            // Drain any actions persisted from a previous launch.
+            await WriteActionQueue.shared.processQueue()
+        }
     }
 
     var body: some Scene {
@@ -34,6 +50,7 @@ struct BrainStormApp: App {
                         .environment(sessionManager)
                         .environmentObject(realtimeSync)
                         .environmentObject(scrollStateStore)
+                        .environmentObject(networkMonitor)
                         .transition(.opacity)
                 } else {
                     LoginView()

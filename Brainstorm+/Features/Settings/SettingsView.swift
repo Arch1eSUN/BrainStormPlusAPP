@@ -47,8 +47,13 @@ private enum SettingsExternalLink {
 public struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var showingSignOutAlert = false
+    @State private var signOutErrorMessage: String?
     @Environment(SessionManager.self) private var sessionManager
     @AppStorage("bs_color_scheme") private var appearanceRaw: String = BsAppearanceMode.system.rawValue
+    /// Iter6 §B.8 — 敏感管理操作（删用户/改角色/退出登录/编辑薪资）的 FaceID 二次验证
+    /// 总开关。默认 ON：首次安装即受保护。BiometricGate 内部读这个 key,
+    /// 关闭后 authenticate(...) 直接 return 视为通过。
+    @AppStorage(kBiometricRequiredForSensitive) private var biometricRequired: Bool = true
 
     public init() {}
 
@@ -124,6 +129,25 @@ public struct SettingsView: View {
                         Text("常规")
                     } footer: {
                         Text("管理系统通知、隐私与外观偏好")
+                    }
+
+                    // ── 安全 (Iter6 §B.8) ──────────────────────────────
+                    // 敏感管理操作（删用户/改角色/编辑薪资/退出登录）需要
+                    // FaceID/TouchID 二次确认 —— 防设备被偷或借用后误操作。
+                    // 关闭后 BiometricGate 整体跳过验证（仍保留普通确认弹窗）。
+                    Section {
+                        Toggle(isOn: $biometricRequired) {
+                            Label {
+                                Text("敏感操作需 FaceID 验证")
+                            } icon: {
+                                Image(systemName: "faceid")
+                                    .foregroundStyle(BsColor.brandAzure)
+                            }
+                        }
+                    } header: {
+                        Text("安全")
+                    } footer: {
+                        Text("开启后，删除用户、修改角色、编辑薪资、退出登录等敏感操作会要求 FaceID/TouchID 验证。")
                     }
 
                     // Phase 25：管理员入口已迁到 Dashboard 工作台"管理"网格。
@@ -208,12 +232,32 @@ public struct SettingsView: View {
                 Button("取消", role: .cancel) { }
                 Button("退出登录", role: .destructive) {
                     Haptic.medium()
-                    Task {
-                        await viewModel.signOut(sessionManager: sessionManager)
+                    // Iter6 §B.8 — 退出登录需 FaceID 二次确认（防误退导致
+                    // 后续要重新走完整登录流程）。Alert 文本确认 + biometric
+                    // 共同构成 two-step 防误。设备无 biometric 时保留 alert
+                    // 已有的文本确认，直接放行。
+                    Task { @MainActor in
+                        await runSensitiveAction(
+                            reason: "确认退出当前账号",
+                            onError: { signOutErrorMessage = $0 }
+                        ) {
+                            await viewModel.signOut(sessionManager: sessionManager)
+                        }
                     }
                 }
             } message: {
                 Text("退出后需要重新登录才能查看考勤、审批与通知。")
+            }
+            .alert(
+                "无法退出登录",
+                isPresented: .init(
+                    get: { signOutErrorMessage != nil },
+                    set: { if !$0 { signOutErrorMessage = nil } }
+                )
+            ) {
+                Button("好", role: .cancel) { signOutErrorMessage = nil }
+            } message: {
+                Text(signOutErrorMessage ?? "")
             }
         }
     }

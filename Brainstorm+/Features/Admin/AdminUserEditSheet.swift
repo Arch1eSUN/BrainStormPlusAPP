@@ -223,6 +223,32 @@ public struct AdminUserEditSheet: View {
             updates.excludedCapabilities = Array(excludedCaps)
         }
 
+        // Iter6 §B.8 — 仅当角色实际发生变化时才弹 FaceID（避免普通编辑
+        // 姓名/部门也要刷脸）。department/position/姓名 走普通 RLS
+        // 校验即可，不视为 sensitive。
+        let originalRole = adminDbRoleToAppRole(detail?.role)
+        let roleChanged = canAssignPrivileges && appRole != originalRole
+
+        if roleChanged {
+            let targetName = fullName.isEmpty ? (detail?.fullName ?? "用户") : fullName
+            do {
+                try await BiometricGate.shared.authenticate(
+                    reason: "确认修改 \(targetName) 的角色为 \(adminAppRoleLabel(appRole))"
+                )
+            } catch BiometricGateError.userCancelled {
+                return
+            } catch BiometricGateError.notAvailable {
+                // Fallback：设备无 biometric。"保存"按钮本身已是显式点击，
+                // 算作文本确认 step，直接放行。
+            } catch BiometricGateError.lockedOut {
+                errorText = "FaceID/TouchID 已被锁定，请在系统设置中解锁后重试"
+                return
+            } catch {
+                errorText = "身份验证失败，请重试"
+                return
+            }
+        }
+
         let ok = await vm.updateConfig(userId: userId, updates: updates)
         if ok {
             onSuccess()

@@ -7,7 +7,10 @@ public class NotificationListViewModel: ObservableObject {
     @Published public var notifications: [AppNotification] = []
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
-    
+    /// Iter 6 review §B.4 — true while we're rendering cached
+    /// notifications (offline / pre-network paint).
+    @Published public private(set) var isShowingCached: Bool = false
+
     private let client: SupabaseClient
     
     public init(client: SupabaseClient) {
@@ -15,19 +18,36 @@ public class NotificationListViewModel: ObservableObject {
     }
     
     public func fetchNotifications() async {
+        // Iter 6 review §B.4 — cache-first paint.
+        if notifications.isEmpty {
+            if let uid = try? await client.auth.session.user.id {
+                let key = EntityCacheKey.notifications(userId: uid)
+                if let cached: [AppNotification] = await EntityCache.shared
+                    .fetch([AppNotification].self, key: key) {
+                    self.notifications = cached
+                    self.isShowingCached = true
+                }
+            }
+        }
+
         isLoading = true
         errorMessage = nil
         do {
             let session = try await client.auth.session
             let currentUserId = session.user.id
-            
-            self.notifications = try await client
+
+            let fresh: [AppNotification] = try await client
                 .from("notifications")
                 .select()
                 .eq("user_id", value: currentUserId)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
+            self.notifications = fresh
+            self.isShowingCached = false
+
+            let key = EntityCacheKey.notifications(userId: currentUserId)
+            Task { await EntityCache.shared.store(fresh, key: key) }
         } catch {
             // Iter 7 §C.2 — silent CancellationError;nil 时 banner 不闪屏。
             self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage

@@ -317,6 +317,41 @@ public class ChatRoomViewModel: ObservableObject {
             let reply_to: String?
         }
 
+        // Iter 6 review §B.4 — offline send goes through the queue.
+        // We optimistically synthesise a local row so the bubble shows
+        // immediately, then enqueue for replay. The real id will be
+        // assigned when the queue replays the insert; the optimistic
+        // row gets reconciled away by the next fetchMessages() once
+        // online.
+        if !NetworkMonitor.shared.isOnline {
+            let optimisticType = ChatMessage.MessageType(rawValue: derivedType) ?? .text
+            let optimistic = ChatMessage(
+                id: UUID(),
+                channelId: channel.id,
+                senderId: userId,
+                content: trimmed,
+                type: optimisticType,
+                replyTo: replyTo,
+                attachments: attachments,
+                createdAt: Date()
+            )
+            messages.append(optimistic)
+
+            let queued = WriteActionHandlers.ChatSendMessagePayload(
+                channel_id: channel.id,
+                sender_id: userId,
+                content: trimmed,
+                type: derivedType,
+                attachments: attachments,
+                reply_to: replyTo
+            )
+            await WriteActionQueue.shared.enqueue(
+                kind: WriteActionKind.chatSendMessage,
+                payload: queued
+            )
+            return
+        }
+
         do {
             let inserted: ChatMessage = try await client
                 .from("chat_messages")

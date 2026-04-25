@@ -33,6 +33,8 @@ public struct ReportingListView: View {
     // hoisted 到 view 根,daily / weekly 共用同一对 state 互不干扰。
     @State private var pendingDeleteDaily: DailyLog?
     @State private var pendingDeleteWeekly: WeeklyReport?
+    /// Iter 6 §B.7 — 数据导出，弹 ExportSheet
+    @State private var isShowingExport = false
 
     // Phase 3: isEmbedded parameterization
     public let isEmbedded: Bool
@@ -102,21 +104,36 @@ public struct ReportingListView: View {
         .scrollPosition($scrollPosition)
         .navigationTitle("报告")
         .toolbar {
-            // 新建按钮只在 "我的" tab 露出 —— 全员视图是只读聚合。
-            if scope == .mine {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        // Haptic removed: 用户反馈 toolbar 按钮过密震动
-                        switch viewModel.selectedTab {
-                        case .daily:  dailyEditTarget = .new
-                        case .weekly: weeklyEditTarget = .new
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    if scope == .mine {
+                        Button {
+                            switch viewModel.selectedTab {
+                            case .daily:  dailyEditTarget = .new
+                            case .weekly: weeklyEditTarget = .new
+                            }
+                        } label: {
+                            Label("新建报告", systemImage: "plus")
                         }
-                    } label: {
-                        Label("新建", systemImage: "plus")
                     }
-                    .accessibilityLabel("新建报告")
+                    Button {
+                        isShowingExport = true
+                    } label: {
+                        Label(
+                            viewModel.selectedTab == .daily ? "导出日报 CSV" : "导出周报 CSV",
+                            systemImage: "square.and.arrow.up"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("更多操作")
             }
+        }
+        .sheet(isPresented: $isShowingExport) {
+            ExportSheet(
+                module: viewModel.selectedTab == .daily ? .dailyLogs : .weeklyReports
+            )
         }
         .refreshable {
             switch scope {

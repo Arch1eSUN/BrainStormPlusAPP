@@ -320,6 +320,8 @@ public final class AdminTeamReportsViewModel: ObservableObject {
 
 public struct AdminTeamReportsView: View {
     @StateObject private var vm = AdminTeamReportsViewModel()
+    /// Iter 6 §B.7 — admin 全员导出
+    @State private var isShowingExport = false
 
     public let isEmbedded: Bool
 
@@ -385,6 +387,21 @@ public struct AdminTeamReportsView: View {
         .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("全员日报 / 周报")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingExport = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("导出 CSV")
+            }
+        }
+        .sheet(isPresented: $isShowingExport) {
+            ExportSheet(
+                module: vm.segment == .daily ? .dailyLogs : .weeklyReports
+            )
+        }
         .task { await vm.load() }
         .refreshable { await vm.load() }
         .onChange(of: vm.segment) { _, _ in Task { await vm.load() } }

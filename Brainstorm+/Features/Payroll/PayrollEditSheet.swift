@@ -390,6 +390,28 @@ public struct PayrollEditSheet: View {
 
         isSubmitting = true
         Task { @MainActor in
+            // Iter6 §B.8 — 编辑薪资是高敏写操作（直接落进 payroll_records），
+            // 走 FaceID 二次确认。notAvailable 时直接放行（"保存"按钮本身
+            // 已是显式点击）。
+            do {
+                try await BiometricGate.shared.authenticate(reason: "确认修改薪资数据")
+            } catch BiometricGateError.userCancelled {
+                isSubmitting = false
+                return
+            } catch BiometricGateError.notAvailable {
+                // fallback: 老设备无 biometric — 放行。
+            } catch BiometricGateError.lockedOut {
+                isSubmitting = false
+                Haptic.warning()
+                errorMessage = "FaceID/TouchID 已被锁定，请在系统设置中解锁后重试"
+                return
+            } catch {
+                isSubmitting = false
+                Haptic.warning()
+                errorMessage = "身份验证失败，请重试"
+                return
+            }
+
             let ok = await viewModel.adminSavePayroll(record: input)
             isSubmitting = false
             if ok {

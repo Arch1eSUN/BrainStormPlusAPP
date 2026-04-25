@@ -16,6 +16,11 @@ public class ChatListViewModel: ObservableObject {
     @Published public var channels: [ChatChannel] = []
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
+    /// Iter 6 review §B.4 — true while the channel list is being
+    /// rendered from EntityCache (offline / pre-network). The view
+    /// pairs this with NetworkMonitor.isOnline to decide whether to
+    /// show OfflineCachedBanner.
+    @Published public private(set) var isShowingCached: Bool = false
 
     // MARK: - Sprint 3.4 search state
     @Published public var searchQuery: String = ""
@@ -66,6 +71,17 @@ public class ChatListViewModel: ObservableObject {
         } catch {
             errorMessage = "未登录"
             return
+        }
+
+        // Iter 6 review §B.4 — cache-first paint so opening Messages
+        // tab offline shows the previous channel list instead of blank.
+        if channels.isEmpty {
+            let key = EntityCacheKey.chatChannels(userId: currentUserId)
+            if let cached: [ChatChannel] = await EntityCache.shared
+                .fetch([ChatChannel].self, key: key) {
+                self.channels = cached
+                self.isShowingCached = true
+            }
         }
 
         // 1) Announcement channels —— RLS: type='announcement' 任何登录用户可见
@@ -142,6 +158,16 @@ public class ChatListViewModel: ObservableObject {
         #endif
 
         self.channels = applySort(merged)
+        self.isShowingCached = false
+
+        // Iter 6 review §B.4 — persist for next launch. We only cache
+        // when the network actually returned rows (`merged.count > 0`)
+        // so a transient empty fetch doesn't blow away a good snapshot.
+        if !merged.isEmpty {
+            let cacheKey = EntityCacheKey.chatChannels(userId: currentUserId)
+            let toStore = self.channels
+            Task { await EntityCache.shared.store(toStore, key: cacheKey) }
+        }
 
         // Iter 7 Fix 1 — DM 频道单独把对方 Profile 解析出来,channelRow 用 peer
         // 名字 + 头像渲染,而不是数据库里那个通用 channel.name。fire-and-forget,

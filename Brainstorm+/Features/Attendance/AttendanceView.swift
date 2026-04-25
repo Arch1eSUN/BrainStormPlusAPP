@@ -31,6 +31,8 @@ public struct AttendanceView: View {
     /// 长按"申请补卡 / 异常修正"目标日 —— 走 sheet(item:),非 nil 时弹
     /// AttendanceCorrectionSubmitSheet。
     @State private var fixTargetDay: AttendanceDay? = nil
+    /// Iter 6 §B.7 — CSV 导出
+    @State private var isShowingExport = false
 
     public let isEmbedded: Bool
 
@@ -68,6 +70,19 @@ public struct AttendanceView: View {
         .background(BsColor.pageBackground.ignoresSafeArea())
         .navigationTitle("考勤")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingExport = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("导出 CSV")
+            }
+        }
+        .sheet(isPresented: $isShowingExport) {
+            ExportSheet(module: .attendance)
+        }
         .refreshable {
             await viewModel.loadToday()
             await viewModel.loadRange(viewModel.selectedRange)

@@ -25,6 +25,7 @@ public struct TaskListView: View {
     @EnvironmentObject private var scrollStore: ScrollStateStore
     @State private var selectedFilter: TaskFilter = .all
     @State private var isShowingCreateTask = false
+    @State private var isShowingExport = false
     @State private var viewMode: ViewMode = .list
     /// 删除二次确认 —— 长按 / swipe 都打到这个 sheet（docs/longpress-system.md）。
     @State private var pendingDeleteTask: TaskModel? = nil
@@ -146,15 +147,26 @@ public struct TaskListView: View {
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 viewModeToggleButton
-                Button {
-                    // Haptic removed: 用户反馈按钮过密震动
-                    isShowingCreateTask = true
+                Menu {
+                    Button {
+                        isShowingCreateTask = true
+                    } label: {
+                        Label("新建任务", systemImage: "plus")
+                    }
+                    Button {
+                        isShowingExport = true
+                    } label: {
+                        Label("导出 CSV", systemImage: "square.and.arrow.up")
+                    }
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "ellipsis.circle")
                         .font(.system(.headline, weight: .semibold))
                 }
-                .accessibilityLabel("新建任务")
+                .accessibilityLabel("更多操作")
             }
+        }
+        .sheet(isPresented: $isShowingExport) {
+            ExportSheet(module: .tasks)
         }
         .refreshable {
             // Haptic removed: 用户反馈滑动场景不应震动

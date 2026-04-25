@@ -36,6 +36,9 @@ struct MainTabView: View {
     @Environment(SessionManager.self) private var sessionManager
     @State private var selectedTab: Tab = .dashboard
 
+    // Iter 6 review §B.4 — drives the offline indicator overlay.
+    @EnvironmentObject private var networkMonitor: NetworkMonitor
+
     // v1.2 Phase 12 — tab badge 实时数据源:
     //   • 审批 = 所有可见 ApprovalQueueKind 的 pending head-count 汇总
     //     （RLS 已经过滤掉非审批人看不到的行,allCases 汇总是安全的)
@@ -116,6 +119,28 @@ struct MainTabView: View {
                 .tag(Tab.me)
         }
         .tint(BsColor.brandAzure)
+        // Iter 6 review §B.4 — small floating cloud-slash pill in the
+        // top-trailing safe area when offline. Invisible online; quietly
+        // confirms reachability when offline so the user understands
+        // why list views are showing the cached banner.
+        .overlay(alignment: .topTrailing) {
+            if !networkMonitor.isOnline {
+                HStack(spacing: 6) {
+                    Image(systemName: "icloud.slash")
+                    Text("离线")
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.thinMaterial, in: Capsule())
+                .padding(.top, 8)
+                .padding(.trailing, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .accessibilityLabel("当前离线")
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
         .onChange(of: selectedTab) { _, newTab in
             // Haptic removed: 用户反馈 tab 切换过密震动；系统 TabView 已有原生反馈
             // 切到对应 tab 时触发该 badge 的轻量刷新 —— 进入 tab 内部各自

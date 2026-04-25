@@ -269,7 +269,30 @@ public final class ReportingViewModel: ObservableObject {
     // Fetch
     // ──────────────────────────────────────────────────────────────
 
+    /// Iter 6 review §B.4 — true while we're rendering daily/weekly
+    /// rows from EntityCache and the network refresh is still pending.
+    @Published public private(set) var isShowingCached: Bool = false
+
     public func fetchReports() async {
+        // Iter 6 review §B.4 — paint cached daily/weekly first so
+        // entering Reporting offline doesn't show empty placeholders.
+        if dailyLogs.isEmpty || weeklyReports.isEmpty {
+            if let uid = try? await client.auth.session.user.id {
+                let dKey = EntityCacheKey.reportingDaily(userId: uid)
+                let wKey = EntityCacheKey.reportingWeekly(userId: uid)
+                if dailyLogs.isEmpty,
+                   let cached: [DailyLog] = await EntityCache.shared.fetch([DailyLog].self, key: dKey) {
+                    self.dailyLogs = cached
+                    self.isShowingCached = true
+                }
+                if weeklyReports.isEmpty,
+                   let cached: [WeeklyReport] = await EntityCache.shared.fetch([WeeklyReport].self, key: wKey) {
+                    self.weeklyReports = cached
+                    self.isShowingCached = true
+                }
+            }
+        }
+
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -297,6 +320,15 @@ public final class ReportingViewModel: ObservableObject {
 
             self.dailyLogs = try await fetchedLogs
             self.weeklyReports = try await fetchedWeekly
+            self.isShowingCached = false
+
+            // Iter 6 review §B.4 — persist for offline replay.
+            let dailySnapshot = self.dailyLogs
+            let weeklySnapshot = self.weeklyReports
+            let dKey = EntityCacheKey.reportingDaily(userId: uid)
+            let wKey = EntityCacheKey.reportingWeekly(userId: uid)
+            Task { await EntityCache.shared.store(dailySnapshot, key: dKey) }
+            Task { await EntityCache.shared.store(weeklySnapshot, key: wKey) }
 
             // Historical approval_status join — fail open (non-fatal).
             await hydrateApprovalStatus()

@@ -45,6 +45,7 @@ public struct ApprovalCenterView: View {
     @State private var selectedMineType: ApprovalRequestType?
     @State private var didApplyInitialDefault = false
     @State private var showTypePicker = false
+    @State private var showExportSheet = false
     @State private var pendingSubmitKind: ApprovalSubmitKind?
     @State private var pendingAction: PendingAction?
     @Namespace private var zoomNamespace
@@ -132,6 +133,9 @@ public struct ApprovalCenterView: View {
                 pendingSubmitKind = kind
             }
             .bsSheetStyle(.detail)
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheet(module: .approvals)
         }
         .sheet(item: $pendingSubmitKind) { kind in
             submitSheet(for: kind)
@@ -301,16 +305,25 @@ public struct ApprovalCenterView: View {
     @ToolbarContentBuilder
     private var newSubmissionButton: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                showTypePicker = true
+            Menu {
+                Button {
+                    showTypePicker = true
+                } label: {
+                    Label("新建审批", systemImage: "plus")
+                }
+                Button {
+                    showExportSheet = true
+                } label: {
+                    Label("导出 CSV", systemImage: "square.and.arrow.up")
+                }
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: "ellipsis.circle")
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(BsColor.brandAzure)
                     .frame(width: 32, height: 32)
                     .glassEffect(.regular.tint(BsColor.brandAzure.opacity(0.18)).interactive(), in: Circle())
             }
-            .accessibilityLabel("新建审批")
+            .accessibilityLabel("更多操作")
         }
     }
 

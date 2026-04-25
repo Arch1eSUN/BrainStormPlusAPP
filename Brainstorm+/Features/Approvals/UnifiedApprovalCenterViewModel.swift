@@ -67,6 +67,11 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
     @Published public private(set) var isLoading: Bool = false
     @Published public private(set) var busyIds: Set<UUID> = []
     @Published public var errorMessage: String?
+    /// Iter 6 review §B.4 — set per-cell when the slice is sourced from
+    /// EntityCache and the network refresh hasn't finished. The view
+    /// uses it together with `NetworkMonitor.isOnline` to decide whether
+    /// to flag the section as offline-stale.
+    @Published public private(set) var cachedCells: Set<String> = []
 
     private var lastFetchAt: [CacheKey: Date] = [:]
     private let staleAfter: TimeInterval = 60   // refreshIfStale debounce
@@ -211,6 +216,22 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
             }
         }
 
+        // Iter 6 review §B.4 — when offline, persist the decision to
+        // the queue and trust the optimistic remove. The handler
+        // replays the same RPC server-side once reachability returns.
+        if !NetworkMonitor.shared.isOnline {
+            let queued = WriteActionHandlers.ApprovalActionPayload(
+                request_id: row.id,
+                decision: decision.rawValue,
+                comment: trimmedComment
+            )
+            await WriteActionQueue.shared.enqueue(
+                kind: WriteActionKind.approvalAction,
+                payload: queued
+            )
+            return true
+        }
+
         struct Params: Encodable {
             let p_request_id: String
             let p_decision: String
@@ -273,6 +294,18 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
             return
         }
 
+        // Iter 6 review §B.4 — paint cached snapshot first so swapping
+        // segmented control to "我提" never shows blank during slow
+        // networks / offline.
+        if mineRows.isEmpty {
+            let key = EntityCacheKey.approvalsMine(userId: currentUserId)
+            if let cached: [ApprovalMySubmissionRow] = await EntityCache.shared
+                .fetch([ApprovalMySubmissionRow].self, key: key) {
+                self.mineRows = cached
+                self.cachedCells.insert("mine")
+            }
+        }
+
         do {
             let fetched: [ApprovalMySubmissionRow] = try await client
                 .from("approval_requests")
@@ -293,6 +326,9 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
                 .execute()
                 .value
             self.mineRows = fetched
+            self.cachedCells.remove("mine")
+            let key = EntityCacheKey.approvalsMine(userId: currentUserId)
+            Task { await EntityCache.shared.store(fetched, key: key) }
         } catch {
             handleSilentlyOrSurface(error)
         }
@@ -305,6 +341,19 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
         } catch {
             errorMessage = "请先登录"
             return
+        }
+
+        // Iter 6 review §B.4 — cache-first paint per-kind. Profile
+        // joins live alongside the row in cache so swapping kinds
+        // doesn't lose the requester avatar/name.
+        let cellKey = "queue::\(kind.rawValue)"
+        if (queueRowsByKind[kind]?.isEmpty ?? true) {
+            let cacheKey = EntityCacheKey.approvalsQueue(userId: currentUserId, kindRaw: kind.rawValue)
+            if let cached: [ApprovalListRow] = await EntityCache.shared
+                .fetch([ApprovalListRow].self, key: cacheKey) {
+                self.queueRowsByKind[kind] = cached
+                self.cachedCells.insert(cellKey)
+            }
         }
 
         do {
@@ -346,6 +395,9 @@ public final class UnifiedApprovalCenterViewModel: ObservableObject {
 
             queueRowsByKind[kind] = merged
             pendingCounts[kind] = merged.filter { $0.status == .pending }.count
+            self.cachedCells.remove(cellKey)
+            let cacheKey = EntityCacheKey.approvalsQueue(userId: currentUserId, kindRaw: kind.rawValue)
+            Task { await EntityCache.shared.store(merged, key: cacheKey) }
         } catch {
             handleSilentlyOrSurface(error)
         }

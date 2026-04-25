@@ -119,18 +119,32 @@ public struct AdminUsersView: View {
                 switch action {
                 case .deactivate(let user):
                     Button("禁用账号", role: .destructive) {
-                        Task {
-                            _ = await viewModel.deactivate(userId: user.id)
-                            await viewModel.load()
+                        let name = user.fullName ?? "未命名"
+                        Task { @MainActor in
+                            // Iter6 §B.8 — 敏感管理操作需 FaceID/TouchID 二次验证。
+                            // notAvailable 时 fallback 直接执行（confirmationDialog
+                            // 已经是文本确认 step，不需要再追加一层）。
+                            await runSensitiveAction(
+                                reason: "确认禁用用户 \(name)",
+                                onError: { viewModel.errorMessage = $0 }
+                            ) {
+                                _ = await viewModel.deactivate(userId: user.id)
+                                await viewModel.load()
+                            }
                         }
                     }
                     Button("取消", role: .cancel) { }
                 case .delete(let user):
                     Button("确认删除", role: .destructive) {
                         let name = user.fullName ?? "未命名"
-                        Task {
-                            _ = await viewModel.softDelete(userId: user.id, targetName: name)
-                            await viewModel.load()
+                        Task { @MainActor in
+                            await runSensitiveAction(
+                                reason: "确认删除用户 \(name)",
+                                onError: { viewModel.errorMessage = $0 }
+                            ) {
+                                _ = await viewModel.softDelete(userId: user.id, targetName: name)
+                                await viewModel.load()
+                            }
                         }
                     }
                     Button("取消", role: .cancel) { }

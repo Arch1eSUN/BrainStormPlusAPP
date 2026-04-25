@@ -25,6 +25,12 @@ public class TaskListViewModel: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String? = nil
 
+    /// Iter 6 review §B.4 — true when the currently-rendered `tasks`
+    /// array came from EntityCache and the network refresh hasn't
+    /// completed yet. Views can show a small "离线缓存" badge or
+    /// the OfflineCachedBanner while this is true + offline.
+    @Published public private(set) var isShowingCached: Bool = false
+
     /// 共享 yyyy-MM-dd formatter + ISO8601 formatter（避免每次调用都 alloc）
     private static let dueDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -175,6 +181,33 @@ public class TaskListViewModel: ObservableObject {
             progress: 0
         )
 
+        // Iter 6 review §B.4 — if offline, enqueue the create and
+        // surface optimistic success to the caller. We skip the
+        // participants insert + activity log for offline replay because
+        // the queue handler only knows how to insert the row; the
+        // owner-only participant row gets auto-created by the server
+        // trigger anyway.
+        if !NetworkMonitor.shared.isOnline {
+            let payload = WriteActionHandlers.TaskCreatePayload(
+                title: title,
+                description: description,
+                priority: priority.rawValue,
+                status: TaskModel.TaskStatus.todo.rawValue,
+                due_date: dueDateString,
+                project_id: projectId,
+                owner_id: user.id,
+                reporter_id: user.id,
+                created_by: user.id,
+                assignee_id: user.id,
+                progress: 0
+            )
+            await WriteActionQueue.shared.enqueue(
+                kind: WriteActionKind.taskCreate,
+                payload: payload
+            )
+            return
+        }
+
         // Insert + pull back the row id so we can write participants in a
         // second round-trip (Web uses a single client with `.select().single()`;
         // Supabase Swift exposes the same pattern via `.select("id")`).
@@ -230,22 +263,46 @@ public class TaskListViewModel: ObservableObject {
     // MARK: - Fetch
 
     public func fetchTasks() async {
+        // Iter 6 review §B.4 — cache-first stale-while-revalidate.
+        //   1. If the in-memory `tasks` is still empty (first render),
+        //      try EntityCache and paint immediately so the user
+        //      doesn't stare at a blank list.
+        //   2. Hit network; on success update both UI + cache.
+        //   3. On failure keep whatever's on screen (cache or last
+        //      successful fetch) and surface the banner.
+        if tasks.isEmpty {
+            let key = EntityCacheKey.tasks(userId: currentUserId)
+            if let cached: [TaskModel] = await EntityCache.shared.fetch([TaskModel].self, key: key) {
+                self.tasks = cached
+                self.isShowingCached = true
+            }
+        }
+
         isLoading = true
         errorMessage = nil
         do {
             // Mirror Web's select shape (tasks.ts:54 + 177) plus projects(id,name).
             // `task_participants(user_id)` collapses into [UUID] via TaskModel decoder.
             let columns = "id, title, description, status, priority, project_id, assignee_id, owner_id, reporter_id, progress, due_date, created_at, updated_at, projects:project_id(id, name), task_participants(user_id)"
-            self.tasks = try await client
+            let fresh: [TaskModel] = try await client
                 .from("tasks")
                 .select(columns)
                 .order("created_at", ascending: false)
                 .execute()
                 .value
+            self.tasks = fresh
+            self.isShowingCached = false
+
+            // Persist for next launch — fire-and-forget.
+            let key = EntityCacheKey.tasks(userId: currentUserId)
+            Task { await EntityCache.shared.store(fresh, key: key) }
         } catch {
             // Iter 7 §C.2 — userFacingMessage 自动 silent CancellationError;返回 nil
             // 时 errorMessage 不变,banner 不触发。
             self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
+            // If we already painted from cache, keep that snapshot;
+            // the OfflineCachedBanner picks up `NetworkMonitor.isOnline`
+            // and tells the user we're stale.
         }
         isLoading = false
     }
@@ -316,6 +373,21 @@ public class TaskListViewModel: ObservableObject {
         // Optimistic local update — replace the affected row in place.
         if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[idx] = mutate(tasks[idx], status: newStatus)
+        }
+
+        // Iter 6 review §B.4 — if offline, persist the update through
+        // the write queue and trust the optimistic UI patch. Activity
+        // log is skipped (best-effort, only matters online).
+        if !NetworkMonitor.shared.isOnline {
+            let payload = WriteActionHandlers.TaskStatusUpdatePayload(
+                task_id: task.id,
+                new_status: newStatus.rawValue
+            )
+            await WriteActionQueue.shared.enqueue(
+                kind: WriteActionKind.taskUpdate,
+                payload: payload
+            )
+            return
         }
 
         do {

@@ -38,7 +38,23 @@ public final class ActivityFeedViewModel: ObservableObject {
         return order.map { ($0, bucket[$0] ?? []) }
     }
 
+    /// Iter 6 review §B.4 — true while activity rows came from
+    /// EntityCache and the network refresh is still pending.
+    @Published public private(set) var isShowingCached: Bool = false
+
     public func load() async {
+        // Iter 6 review §B.4 — cache-first paint.
+        if items.isEmpty {
+            if let uid = try? await client.auth.session.user.id {
+                let key = EntityCacheKey.activityFeed(userId: uid)
+                if let cached: [ActivityItem] = await EntityCache.shared
+                    .fetch([ActivityItem].self, key: key) {
+                    self.items = cached
+                    self.isShowingCached = true
+                }
+            }
+        }
+
         isLoading = true
         errorMessage = nil
         do {
@@ -50,6 +66,12 @@ public final class ActivityFeedViewModel: ObservableObject {
                 .execute()
                 .value
             self.items = rows
+            self.isShowingCached = false
+
+            if let uid = try? await client.auth.session.user.id {
+                let key = EntityCacheKey.activityFeed(userId: uid)
+                Task { await EntityCache.shared.store(rows, key: key) }
+            }
         } catch {
             // Iter 7 §C.2 — silent CancellationError tier; banner 不闪屏。
             self.errorMessage = ErrorPresenter.userFacingMessage(error) ?? self.errorMessage
