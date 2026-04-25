@@ -74,6 +74,14 @@ public struct BsCloseButton: View {
         // (避免遮挡相邻 toolbar / nav 项)。
         .frame(width: 44, height: 44)
         .contentShape(Circle())
+        // Iter 7 (2026-04-25 用户反馈"右上角关闭按钮呈椭圆形而非圆形"):
+        // 当 BsCloseButton 放进 ToolbarItem(.topBarTrailing) 时,
+        // SwiftUI toolbar pipeline 会按 content 内容宽度横向拉伸 hit
+        // target → 原本 44×44 圆被 stretch 成 capsule。
+        // .fixedSize() 锁定 intrinsic content size 让 toolbar 不再
+        // 横向拉宽,圆形重新成立。和上面 .frame(width:44,height:44)
+        // 配合,即使在普通 view 容器里也保证不会被父布局二次 squash。
+        .fixedSize()
         .accessibilityLabel(accessibilityLabelText)
     }
 }

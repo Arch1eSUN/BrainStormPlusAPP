@@ -28,7 +28,8 @@ import Combine
 public struct AttendanceView: View {
     @StateObject private var viewModel = AttendanceViewModel()
     @State private var selectedDay: AttendanceDay? = nil
-    @State private var showFixSheet: Bool = false
+    /// 长按"申请补卡 / 异常修正"目标日 —— 走 sheet(item:),非 nil 时弹
+    /// AttendanceCorrectionSubmitSheet。
     @State private var fixTargetDay: AttendanceDay? = nil
 
     public let isEmbedded: Bool
@@ -79,6 +80,13 @@ public struct AttendanceView: View {
             AttendanceDayDetailSheet(day: day)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $fixTargetDay) { day in
+            AttendanceCorrectionSubmitSheet(seed: day) {
+                // 提交成功 → 重新拉本月范围,让用户立刻看到
+                // pending 状态(后续 admin 审批后再回写 timeline)。
+                Task { await viewModel.loadRange(viewModel.selectedRange) }
+            }
         }
     }
 
@@ -177,7 +185,6 @@ public struct AttendanceView: View {
                                 onDetail: { selectedDay = $0 },
                                 onRequestFix: { d in
                                     fixTargetDay = d
-                                    showFixSheet = true
                                 }
                             )
                             if idx < visible.count - 1 {
@@ -209,12 +216,9 @@ public struct AttendanceView: View {
                 Spacer()
                 Button {
                     Haptic.medium()
-                    // Navigate to fix flow — placeholder. Real route is
-                    // owned by Approvals feature (申请补卡审批单).
-                    // 留给后续接 ApprovalsCreate flow 时填入 NavigationLink。
+                    // 触发 sheet —— 第一条异常预填 target_date。
                     if let firstException = rangeDaysSorted.first(where: { $0.isException }) {
                         fixTargetDay = firstException
-                        showFixSheet = true
                     }
                 } label: {
                     Text("处理")
@@ -226,11 +230,6 @@ public struct AttendanceView: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-        .alert("申请补卡 / 异常修正", isPresented: $showFixSheet, presenting: fixTargetDay) { _ in
-            Button("好的", role: .cancel) {}
-        } message: { day in
-            Text("该功能将打开审批中心创建补卡申请：\(day.iso)")
         }
     }
 
@@ -349,9 +348,12 @@ public struct LiquidProgressBar: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                // Track
+                // Track — Iter7 fix (用户反馈"考勤的进度条那个液体也太奇怪了
+                // 黑色蓝色"): 旧版用 inkFaint 在 dark 视觉/某些设备上偏黑,
+                // 跟 brandAzure 强对比像 bug。改成同色系超浅 tint —
+                // 10% azure 让 track 仍然可见但完全跟流体填充协调。
                 Capsule()
-                    .fill(BsColor.inkFaint.opacity(0.15))
+                    .fill(BsColor.brandAzure.opacity(0.10))
 
                 // Liquid fill (rotated 90° so "progress" reads as horizontal)
                 TimelineView(.animation(minimumInterval: 1.0 / 60)) { ctx in
@@ -365,13 +367,7 @@ public struct LiquidProgressBar: View {
                         amplitude: amp,
                         frequency: 1.6
                     )
-                    .fill(
-                        LinearGradient(
-                            colors: [tone.opacity(0.95), tone.opacity(0.65)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(fillGradient)
                     .frame(width: width, height: geo.size.height)
                     .rotationEffect(.degrees(-90), anchor: .center)
                     .frame(width: width, height: geo.size.height)
@@ -380,12 +376,36 @@ public struct LiquidProgressBar: View {
             }
             .clipShape(Capsule())
             .overlay(
-                Capsule().stroke(BsColor.borderSubtle, lineWidth: 0.5)
+                Capsule().stroke(BsColor.brandAzure.opacity(0.18), lineWidth: 0.5)
             )
         }
         .animation(.smooth(duration: 0.6), value: progress)
         .accessibilityElement()
         .accessibilityLabel("进度 \(Int(progress * 100)) percent")
+    }
+
+    // Iter7: flow palette gradient (azure → mint) — matches dashboard hero
+    // card 的液体色彩。当 tone 是 danger/warning（异常态）则换 coral 渐变,
+    // 让色彩本身承载状态信息（绿/蓝=正常,珊瑚红=异常）。
+    private var fillGradient: LinearGradient {
+        // tone 由 progressTone 传入: brandMint(完成) / brandAzure(进行中) /
+        // inkFaint(未开始)。后两种统一走 azure→mint flow palette。
+        // 完成态保持 mint 主导（青绿成功反馈）。
+        let colors: [Color]
+        if tone == BsColor.brandMint {
+            colors = [BsColor.brandMint, BsColor.brandAzure]
+        } else if tone == BsColor.inkFaint {
+            // 未开始: 用极淡 azure→mint, fill 宽度本身=0 时也不会显示,
+            // 但兜底美观。
+            colors = [BsColor.brandAzure.opacity(0.6), BsColor.brandMint.opacity(0.6)]
+        } else {
+            colors = [BsColor.brandAzure, BsColor.brandMint]
+        }
+        return LinearGradient(
+            colors: colors,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
 

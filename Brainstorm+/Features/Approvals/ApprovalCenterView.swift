@@ -536,6 +536,18 @@ public struct ApprovalCenterView: View {
             bottom: BsSpacing.xs,
             trailing: BsSpacing.lg
         ))
+        // Swipe-actions system (docs/swipe-actions-system.md):"我提交的"行
+        // 没有 destructive 选项（撤回 RPC 待实现 —— 仅 chat / 任务有
+        // 可逆 destructive）。leading swipe 提供"复制编号"高频用法。
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                UIPasteboard.general.string = row.id.uuidString
+                Haptic.light()
+            } label: {
+                Label("复制编号", systemImage: "doc.on.doc")
+            }
+            .tint(BsColor.brandAzure)
+        }
         .contextMenu {
             NavigationLink(value: row.id) {
                 Label("查看详情", systemImage: "arrow.up.forward.square")

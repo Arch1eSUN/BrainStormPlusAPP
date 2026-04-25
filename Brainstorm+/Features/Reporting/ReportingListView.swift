@@ -202,6 +202,8 @@ public struct ReportingListView: View {
     // ── 全员 (admin/HR 聚合视图) ──────────────────────────────────
     @ViewBuilder
     private var teamContent: some View {
+        // iter7 fix: 顶部筛选简化 — 拿掉日期 range pickers; 保留 segmented +
+        // 人员筛选 Menu。下方按日期 Section 分组。
         VStack(spacing: BsSpacing.md) {
             BsContentCard(padding: .medium) {
                 VStack(alignment: .leading, spacing: BsSpacing.md) {
@@ -215,23 +217,7 @@ public struct ReportingListView: View {
                         Task { await teamViewModel.load() }
                     }
 
-                    HStack(spacing: BsSpacing.sm) {
-                        DatePicker("起", selection: $teamViewModel.rangeStart, displayedComponents: .date)
-                            .labelsHidden()
-                        Text("→").foregroundStyle(BsColor.inkMuted)
-                        DatePicker("止", selection: $teamViewModel.rangeEnd, displayedComponents: .date)
-                            .labelsHidden()
-                        Spacer()
-                    }
-                    .font(BsTypography.caption)
-                    .onChange(of: teamViewModel.rangeStart) { _, _ in
-                        Task { await teamViewModel.load() }
-                    }
-                    .onChange(of: teamViewModel.rangeEnd) { _, _ in
-                        Task { await teamViewModel.load() }
-                    }
-
-                    // iter6 §A.3 — 人员筛选改原生 Menu+Picker，不再水平滑动 chip。
+                    // iter6 §A.3 — 人员筛选 Menu+Picker (保留)。
                     memberFilterMenu
                 }
             }
@@ -244,24 +230,52 @@ public struct ReportingListView: View {
                 BsEmptyState(
                     title: "暂无报告",
                     systemImage: teamViewModel.segment == .daily ? "doc.text" : "calendar",
-                    description: "调整成员或日期范围试试"
+                    description: "调整成员后再试"
                 )
                 .padding(.top, 40)
             } else {
-                LazyVStack(spacing: BsSpacing.md) {
+                // iter7: 按日期分组渲染 (用户原话"全员的日报按照每一天和
+                // 日期分类好")。LazyVStack 内手卷 Section header 而非 List —
+                // ReportingListView 上层已是 ScrollView, 嵌 List 高度会塌。
+                LazyVStack(spacing: BsSpacing.md, pinnedViews: [.sectionHeaders]) {
                     switch teamViewModel.segment {
                     case .daily:
-                        ForEach(teamViewModel.dailyRows) { row in
-                            teamDailyCard(row).padding(.horizontal)
+                        ForEach(teamViewModel.dailyGroups) { group in
+                            Section {
+                                ForEach(group.rows) { row in
+                                    teamDailyCard(row).padding(.horizontal)
+                                }
+                            } header: {
+                                teamSectionHeader(group.label)
+                            }
                         }
                     case .weekly:
-                        ForEach(teamViewModel.weeklyRows) { row in
-                            teamWeeklyCard(row).padding(.horizontal)
+                        ForEach(teamViewModel.weeklyGroups) { group in
+                            Section {
+                                ForEach(group.rows) { row in
+                                    teamWeeklyCard(row).padding(.horizontal)
+                                }
+                            } header: {
+                                teamSectionHeader(group.label)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func teamSectionHeader(_ label: String) -> some View {
+        HStack {
+            Text(label)
+                .font(BsTypography.cardSubtitle)
+                .foregroundStyle(BsColor.ink)
+            Spacer()
+        }
+        .padding(.horizontal, BsSpacing.lg)
+        .padding(.vertical, BsSpacing.sm)
+        .background(BsColor.pageBackground.opacity(0.95))
     }
 
     private var teamCurrentRowsEmpty: Bool {

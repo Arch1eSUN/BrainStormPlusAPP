@@ -9,6 +9,11 @@ public struct ChatChannel: Identifiable, Codable, Hashable {
     public let lastMessage: String?
     public let lastMessageAt: Date?
     public let createdAt: Date?
+    /// Sprint 3.2: deterministic "userA:userB" key (sorted UUID pair) used to
+    /// dedupe DM channels. Non-DM channels leave this null. iOS reads it to
+    /// resolve the *other* user for DM display (Iter 7 Fix 1) without a
+    /// second join.
+    public let participantPairKey: String?
 
     public enum ChannelType: String, Codable, Hashable {
         case group = "group"
@@ -25,6 +30,43 @@ public struct ChatChannel: Identifiable, Codable, Hashable {
         case lastMessage = "last_message"
         case lastMessageAt = "last_message_at"
         case createdAt = "created_at"
+        case participantPairKey = "participant_pair_key"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        type = try c.decode(ChannelType.self, forKey: .type)
+        createdBy = try c.decodeIfPresent(UUID.self, forKey: .createdBy)
+        lastMessage = try c.decodeIfPresent(String.self, forKey: .lastMessage)
+        lastMessageAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageAt)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        // Older migrations / minimal SELECTs may omit the column — default nil.
+        participantPairKey = try c.decodeIfPresent(String.self, forKey: .participantPairKey)
+    }
+
+    public init(
+        id: UUID,
+        name: String,
+        description: String? = nil,
+        type: ChannelType,
+        createdBy: UUID? = nil,
+        lastMessage: String? = nil,
+        lastMessageAt: Date? = nil,
+        createdAt: Date? = nil,
+        participantPairKey: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.type = type
+        self.createdBy = createdBy
+        self.lastMessage = lastMessage
+        self.lastMessageAt = lastMessageAt
+        self.createdAt = createdAt
+        self.participantPairKey = participantPairKey
     }
 }
 
@@ -66,6 +108,13 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
     /// `fn_chat_messages_after_insert`. Top-level rows (reply_to == nil) only.
     /// Used by message footer "n 条回复 →" entry into ChatThreadView.
     public let threadReplyCount: Int
+    /// Phase 1.2: timestamp of last edit (chat_edit_message RPC). nil when
+    /// never edited. UI footer renders "(已编辑)" marker when non-nil.
+    public let editedAt: Date?
+    /// Phase 1.2: per-message read receipts. Append-only array of user UUIDs
+    /// (as strings in the JSONB column). chat_mark_read RPC dedupes server
+    /// side. Empty for messages older than the receipt rollout.
+    public let readBy: [UUID]
 
     public enum MessageType: String, Codable, Hashable {
         case text = "text"
@@ -87,6 +136,8 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         case withdrawnAt = "withdrawn_at"
         case createdAt = "created_at"
         case threadReplyCount = "thread_reply_count"
+        case editedAt = "edited_at"
+        case readBy = "read_by"
     }
 
     // JSONB 默认值是 '[]' 但旧行 / 非 SELECT 实时事件里有可能字段缺席，
@@ -114,6 +165,17 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         // Phase 1.1: 字段在迁移 20260425010000 之后才存在,旧行 / realtime
         // minimal payload 缺席时降级为 0。
         threadReplyCount = (try? c.decodeIfPresent(Int.self, forKey: .threadReplyCount)) ?? 0
+        // Phase 1.2 — both fields are JSONB defaults '[]' / NULL. Tolerate
+        // absence so iOS-only consumers running against pre-migration
+        // databases keep working.
+        editedAt = (try? c.decodeIfPresent(Date.self, forKey: .editedAt)) ?? nil
+        if let strs = try? c.decodeIfPresent([String].self, forKey: .readBy) {
+            readBy = strs.compactMap { UUID(uuidString: $0) }
+        } else if let uuids = try? c.decodeIfPresent([UUID].self, forKey: .readBy) {
+            readBy = uuids
+        } else {
+            readBy = []
+        }
     }
 
     public init(
@@ -128,7 +190,9 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         isWithdrawn: Bool = false,
         withdrawnAt: Date? = nil,
         createdAt: Date? = nil,
-        threadReplyCount: Int = 0
+        threadReplyCount: Int = 0,
+        editedAt: Date? = nil,
+        readBy: [UUID] = []
     ) {
         self.id = id
         self.channelId = channelId
@@ -142,6 +206,8 @@ public struct ChatMessage: Identifiable, Codable, Hashable {
         self.withdrawnAt = withdrawnAt
         self.createdAt = createdAt
         self.threadReplyCount = threadReplyCount
+        self.editedAt = editedAt
+        self.readBy = readBy
     }
 }
 
@@ -154,6 +220,12 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
     /// Phase 1.1 (slack-grade) — 上次读到的最近 message.created_at。
     /// 客户端用它计算未读分隔线("X 条新消息")的位置。
     public let lastReadAt: Date?
+    /// Phase 1.2: per-channel mute. nil = not muted; date in future = muted
+    /// until that time; date in past = de-facto unmuted (UI treats accordingly).
+    public let mutedUntil: Date?
+    /// Phase 1.2: pinned channel ordering. nil = unpinned; non-nil = pinned,
+    /// sort pinned-first by pinned_at desc.
+    public let pinnedAt: Date?
 
     public enum MemberRole: String, Codable, Hashable {
         case owner
@@ -168,6 +240,8 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
         case role
         case joinedAt = "joined_at"
         case lastReadAt = "last_read_at"
+        case mutedUntil = "muted_until"
+        case pinnedAt = "pinned_at"
     }
 
     public init(from decoder: Decoder) throws {
@@ -178,6 +252,8 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
         role = try c.decode(MemberRole.self, forKey: .role)
         joinedAt = try c.decodeIfPresent(Date.self, forKey: .joinedAt)
         lastReadAt = try c.decodeIfPresent(Date.self, forKey: .lastReadAt)
+        mutedUntil = (try? c.decodeIfPresent(Date.self, forKey: .mutedUntil)) ?? nil
+        pinnedAt = (try? c.decodeIfPresent(Date.self, forKey: .pinnedAt)) ?? nil
     }
 
     public init(
@@ -186,7 +262,9 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
         userId: UUID,
         role: MemberRole,
         joinedAt: Date? = nil,
-        lastReadAt: Date? = nil
+        lastReadAt: Date? = nil,
+        mutedUntil: Date? = nil,
+        pinnedAt: Date? = nil
     ) {
         self.id = id
         self.channelId = channelId
@@ -194,5 +272,13 @@ public struct ChatChannelMember: Identifiable, Codable, Hashable {
         self.role = role
         self.joinedAt = joinedAt
         self.lastReadAt = lastReadAt
+        self.mutedUntil = mutedUntil
+        self.pinnedAt = pinnedAt
+    }
+
+    /// True if `muted_until` is set AND in the future.
+    public var isCurrentlyMuted: Bool {
+        guard let until = mutedUntil else { return false }
+        return until > Date()
     }
 }

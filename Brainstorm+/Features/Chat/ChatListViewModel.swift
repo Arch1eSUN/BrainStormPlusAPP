@@ -22,7 +22,22 @@ public class ChatListViewModel: ObservableObject {
     @Published public var searchResults: [ChatSearchResult] = []
     @Published public var isSearching: Bool = false
 
+    // MARK: - Iter 7 Fix 1 — DM peer resolution
+    /// channel_id → peer Profile for DM channels. Populated post-fetch by
+    /// `resolveDirectChannelPeers`. Group / announcement channels are absent
+    /// from this map (they keep their stored `name`).
+    @Published public var directPeers: [UUID: Profile] = [:]
+
+    // MARK: - Iter 7 Phase 1.2 — per-channel state (mute / pin / cur user)
+    /// channel_id → caller's chat_channel_members row. Used for mute / pin
+    /// flags in the channel list. Loaded by `loadMembershipState()` after
+    /// `fetchChannels`. announcement / created_by-only channels may be
+    /// absent (no member row). Mute/pin RPCs upsert a row on demand.
+    @Published public var memberships: [UUID: ChatChannelMember] = [:]
+    @Published public var currentUserId: UUID? = nil
+
     private let client: SupabaseClient
+    private lazy var service = MessagesService(client: client)
 
     public init(client: SupabaseClient) {
         self.client = client
@@ -47,6 +62,7 @@ public class ChatListViewModel: ObservableObject {
         let currentUserId: UUID
         do {
             currentUserId = try await client.auth.session.user.id
+            self.currentUserId = currentUserId
         } catch {
             errorMessage = "未登录"
             return
@@ -101,6 +117,9 @@ public class ChatListViewModel: ObservableObject {
             if seen.insert(ch.id).inserted { merged.append(ch) }
         }
 
+        // 注意:此处只做"近况优先"基础排序;真正的 pinned-first 排序在
+        // applySort() 里组合 memberships.pinned_at 一起完成,membership 拿到
+        // 之后会重排一次。
         merged.sort { a, b in
             switch (a.lastMessageAt, b.lastMessageAt) {
             case let (x?, y?): return x > y
@@ -110,11 +129,24 @@ public class ChatListViewModel: ObservableObject {
             }
         }
 
+        // 先把 memberRows(已经查到)的 channel 索引建立起来,Phase 1.2 mute/pin
+        // 直接消费。announcement 频道下用户没显式 row -> 跳过即可。
+        var membershipMap: [UUID: ChatChannelMember] = [:]
+        for row in memberRows {
+            membershipMap[row.channelId] = row
+        }
+        self.memberships = membershipMap
+
         #if DEBUG
-        print("[ChatListViewModel] fetchChannels merged=\(merged.count) anns=\(anns.count) owned=\(ownd.count) member=\(memberChannels.count)")
+        print("[ChatListViewModel] fetchChannels merged=\(merged.count) anns=\(anns.count) owned=\(ownd.count) member=\(memberChannels.count) memberships=\(membershipMap.count)")
         #endif
 
-        self.channels = merged
+        self.channels = applySort(merged)
+
+        // Iter 7 Fix 1 — DM 频道单独把对方 Profile 解析出来,channelRow 用 peer
+        // 名字 + 头像渲染,而不是数据库里那个通用 channel.name。fire-and-forget,
+        // UI 在 directPeers @Published 上 reactively 刷新。
+        Task { await self.resolveDirectChannelPeers(merged, currentUserId: currentUserId) }
 
         // 如果三条全空 + 用户也没 membership,给一个明确提示而不是 silent
         // empty(避免用户反馈"消息没和 web 同步"时无从下手 debug)。
@@ -274,6 +306,213 @@ public class ChatListViewModel: ObservableObject {
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
             searchResults = []
+        }
+    }
+
+    // MARK: - Iter 7 Fix 1: DM peer resolution
+    //
+    // For each direct channel in `channels`, find the other user (peer) and
+    // load their Profile. Strategy:
+    //   1. Prefer `participant_pair_key` (sorted "uuidA:uuidB" string written
+    //      by chat_find_or_create_direct_channel RPC). One split + the half
+    //      that isn't us = peer id. No second query needed.
+    //   2. Fallback: query chat_channel_members for the channel and pick the
+    //      member whose user_id != currentUserId. Used for legacy DMs created
+    //      before participant_pair_key landed.
+    //   3. Bulk-load Profile rows in one IN (...) query; populate directPeers.
+    //
+    // We keep `channels[i].name` untouched so search/highlight against the
+    // stored name still works; the *display* override happens in ChatListView.
+    public func resolveDirectChannelPeers(
+        _ channelsToResolve: [ChatChannel],
+        currentUserId: UUID
+    ) async {
+        let dms = channelsToResolve.filter { $0.type == .direct }
+        guard !dms.isEmpty else { return }
+
+        var peerByChannel: [UUID: UUID] = [:]
+        var fallbackChannelIds: [UUID] = []
+
+        for ch in dms {
+            if let key = ch.participantPairKey {
+                let parts = key.split(separator: ":").map(String.init)
+                if parts.count == 2,
+                   let a = UUID(uuidString: parts[0]),
+                   let b = UUID(uuidString: parts[1]) {
+                    let peer = (a == currentUserId) ? b : a
+                    if peer != currentUserId {
+                        peerByChannel[ch.id] = peer
+                        continue
+                    }
+                }
+            }
+            fallbackChannelIds.append(ch.id)
+        }
+
+        // Fallback path — query chat_channel_members for legacy DM channels.
+        if !fallbackChannelIds.isEmpty {
+            do {
+                let rows: [ChatChannelMember] = try await client
+                    .from("chat_channel_members")
+                    .select("id,channel_id,user_id,role,joined_at")
+                    .in("channel_id", values: fallbackChannelIds.map { $0.uuidString })
+                    .execute()
+                    .value
+                // Group by channel, pick the non-self user.
+                var byChannel: [UUID: [ChatChannelMember]] = [:]
+                for r in rows {
+                    byChannel[r.channelId, default: []].append(r)
+                }
+                for (chId, members) in byChannel {
+                    if let peer = members.first(where: { $0.userId != currentUserId }) {
+                        peerByChannel[chId] = peer.userId
+                    }
+                }
+            } catch {
+                #if DEBUG
+                print("[ChatListViewModel] DM fallback membership query failed: \(error.localizedDescription)")
+                #endif
+            }
+        }
+
+        guard !peerByChannel.isEmpty else { return }
+
+        // Bulk profile fetch.
+        let peerIds = Array(Set(peerByChannel.values)).map { $0.uuidString }
+        do {
+            let profiles: [Profile] = try await client
+                .from("profiles")
+                .select("id,full_name,display_name,email,avatar_url,department,position")
+                .in("id", values: peerIds)
+                .execute()
+                .value
+            let byId = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+
+            var resolved: [UUID: Profile] = [:]
+            for (chId, userId) in peerByChannel {
+                if let prof = byId[userId] {
+                    resolved[chId] = prof
+                }
+            }
+            // 合并而非替换 —— 保留之前 cache,避免短暂 directPeers 抖动。
+            self.directPeers.merge(resolved, uniquingKeysWith: { _, new in new })
+        } catch {
+            #if DEBUG
+            print("[ChatListViewModel] DM peer profile load failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Pinned-first sort
+
+    /// pinned (by pinned_at desc) → unpinned (by last_message_at desc).
+    /// channels with no membership row are treated as unpinned.
+    public func applySort(_ list: [ChatChannel]) -> [ChatChannel] {
+        list.sorted { a, b in
+            let pa = memberships[a.id]?.pinnedAt
+            let pb = memberships[b.id]?.pinnedAt
+            switch (pa, pb) {
+            case let (x?, y?): return x > y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil):
+                let la = a.lastMessageAt
+                let lb = b.lastMessageAt
+                switch (la, lb) {
+                case let (x?, y?): return x > y
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil):
+                    return (a.createdAt ?? .distantPast) > (b.createdAt ?? .distantPast)
+                }
+            }
+        }
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Mute / Pin actions
+
+    public func setMuted(channelId: UUID, until: Date?) async {
+        do {
+            try await service.setChannelMuted(channelId: channelId, until: until)
+            // Optimistic patch — caller's row may be missing for announcement
+            // channels, in which case server creates it. Refetch lazily on
+            // next fetchChannels.
+            if var row = memberships[channelId] {
+                row = ChatChannelMember(
+                    id: row.id, channelId: row.channelId, userId: row.userId,
+                    role: row.role, joinedAt: row.joinedAt,
+                    lastReadAt: row.lastReadAt,
+                    mutedUntil: until,
+                    pinnedAt: row.pinnedAt
+                )
+                memberships[channelId] = row
+            }
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    public func setPinned(channelId: UUID, pinned: Bool) async {
+        do {
+            try await service.setChannelPinned(channelId: channelId, pinned: pinned)
+            if var row = memberships[channelId] {
+                row = ChatChannelMember(
+                    id: row.id, channelId: row.channelId, userId: row.userId,
+                    role: row.role, joinedAt: row.joinedAt,
+                    lastReadAt: row.lastReadAt,
+                    mutedUntil: row.mutedUntil,
+                    pinnedAt: pinned ? Date() : nil
+                )
+                memberships[channelId] = row
+            } else {
+                // 没 row 时:RPC 已经服务端 upsert 了,这里塞一个最小行让 sort 立刻反映。
+                if let me = currentUserId, pinned {
+                    let placeholder = ChatChannelMember(
+                        id: UUID(), channelId: channelId, userId: me,
+                        role: .member, joinedAt: nil, lastReadAt: nil,
+                        mutedUntil: nil, pinnedAt: Date()
+                    )
+                    memberships[channelId] = placeholder
+                }
+            }
+            // 排序需要更新
+            self.channels = applySort(channels)
+        } catch {
+            errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Global FTS search via RPC
+    //
+    // Replaces the Sprint 3.4 ILIKE-only path. RPC respects RLS, joins
+    // channels in-memory, returns ChatSearchResult bundles for the UI.
+
+    public func searchMessagesFTS(query: String) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            searchResults = []
+            return
+        }
+
+        isSearching = true
+        defer { isSearching = false }
+
+        do {
+            let rows = try await service.searchMessages(query: trimmed, limit: 50)
+            // In-memory join with already-loaded channels. Messages whose
+            // channel isn't in the list are dropped (RLS-filtered or out-of-org).
+            let channelLookup = Dictionary(uniqueKeysWithValues: channels.map { ($0.id, $0) })
+            self.searchResults = rows.compactMap { msg in
+                guard let ch = channelLookup[msg.channelId] else { return nil }
+                return ChatSearchResult(message: msg, channel: ch)
+            }
+        } catch {
+            // Fallback to legacy ILIKE path for resilience — shows results
+            // even if the FTS migration hasn't been pushed yet.
+            #if DEBUG
+            print("[ChatListViewModel] FTS RPC failed (\(error.localizedDescription)); falling back to ILIKE")
+            #endif
+            await searchMessages(query: trimmed)
         }
     }
 

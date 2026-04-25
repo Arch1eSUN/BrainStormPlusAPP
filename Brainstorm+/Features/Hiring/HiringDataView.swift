@@ -22,20 +22,82 @@ public final class HiringDataViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            async let contractRows: [HiringContract] = supabase
+            // iter7 fix (用户反馈"招聘管理的数据那里显示 contracts 和
+            // userid 在 schema cache 没有 relationship"):
+            //
+            // 根因: contracts.user_id / seniority_records.user_id FK 都指向
+            // auth.users(id) 而非 public.profiles(id) — 见 005_hiring_*.sql
+            // line 42 / 58。PostgREST schema cache 找不到 contracts→profiles
+            // 的 FK 关系 → 嵌入语法 `profiles:user_id(...)` 直接 PGRST200
+            // schema cache miss。
+            //
+            // 兜底: 不走 PostgREST embedding,先抓 contracts/seniority,再
+            // 用 .in() 一次性 batch-fetch 涉及到的 profiles, 客户端 stitch。
+            // (auth.users.id == public.profiles.id 1:1 by design 见
+            //  001_rbac_multi_tenant.sql)。
+            //
+            // 长期解: 见 /tmp/bs-parked-migrations/<date>_hiring_profiles_fk.sql
+            // 加 FK from contracts.user_id → public.profiles(id) ON DELETE
+            // SET NULL,然后 PostgREST 重载 schema 后嵌入语法可正常用。
+            async let contractRowsRaw: [HiringContract] = supabase
                 .from("contracts")
-                .select("*, profiles:user_id(full_name, display_name)")
+                .select()
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            async let seniorityRows: [SeniorityRecord] = supabase
+            async let seniorityRowsRaw: [SeniorityRecord] = supabase
                 .from("seniority_records")
-                .select("*, profiles:user_id(full_name, display_name)")
+                .select()
                 .order("hire_date", ascending: false)
                 .execute()
                 .value
-            contracts = try await contractRows
-            seniority = try await seniorityRows
+
+            let cs = try await contractRowsRaw
+            let ss = try await seniorityRowsRaw
+
+            // Collect the union of user_ids,一次性查 profiles。
+            var allUserIds: Set<UUID> = []
+            for c in cs { if let uid = c.userId { allUserIds.insert(uid) } }
+            for s in ss { if let uid = s.userId { allUserIds.insert(uid) } }
+
+            var profilesById: [UUID: HiringContract.LinkedProfile] = [:]
+            if !allUserIds.isEmpty {
+                struct ProfileRow: Decodable {
+                    let id: UUID
+                    let fullName: String?
+                    let displayName: String?
+                    enum CodingKeys: String, CodingKey {
+                        case id
+                        case fullName = "full_name"
+                        case displayName = "display_name"
+                    }
+                }
+                let idList = allUserIds.map { $0.uuidString }
+                let rows: [ProfileRow] = try await supabase
+                    .from("profiles")
+                    .select("id, full_name, display_name")
+                    .in("id", values: idList)
+                    .execute()
+                    .value
+                for r in rows {
+                    profilesById[r.id] = HiringContract.LinkedProfile(
+                        fullName: r.fullName,
+                        displayName: r.displayName
+                    )
+                }
+            }
+
+            // Stitch: copy and inject profiles。
+            contracts = cs.map { c in
+                var copy = c
+                if let uid = c.userId { copy.profiles = profilesById[uid] }
+                return copy
+            }
+            seniority = ss.map { s in
+                var copy = s
+                if let uid = s.userId { copy.profiles = profilesById[uid] }
+                return copy
+            }
         } catch {
             errorMessage = ErrorLocalizer.localize(error)
         }

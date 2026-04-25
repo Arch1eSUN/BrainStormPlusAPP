@@ -93,11 +93,33 @@ struct MentionPickerSheet: View {
         let q = localQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return candidates }
         return candidates.filter { p in
-            let hay = [p.displayName, p.fullName, p.email]
+            // Iter 7 Fix 2 — 模糊匹配同时覆盖 fullName / displayName / email username,
+            // 让用户输入"张"或"zhangsan"或邮箱前缀都能命中。
+            let emailUser: String = {
+                guard let e = p.email else { return "" }
+                return e.split(separator: "@").first.map(String.init) ?? e
+            }()
+            let hay = [p.fullName, p.displayName, p.email, emailUser]
                 .compactMap { $0?.lowercased() }
                 .joined(separator: " ")
             return hay.contains(q)
         }
+    }
+
+    /// Iter 7 Fix 2 — 中文姓名优先。`fullName` 是 HR 维护的中文真名（"张三"），
+    /// 只有它缺席时才退到 `displayName`,最后才用 email 用户名做兜底。
+    /// 调用方插入到输入栏时也用同一规则,做到 UI 看到什么 → 插入什么。
+    static func displayLabel(for p: Profile) -> String {
+        if let name = p.fullName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return name
+        }
+        if let name = p.displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return name
+        }
+        if let email = p.email, let user = email.split(separator: "@").first {
+            return String(user)
+        }
+        return "未命名"
     }
 
     @ViewBuilder
@@ -109,12 +131,15 @@ struct MentionPickerSheet: View {
                 .overlay(Circle().stroke(BsColor.borderSubtle, lineWidth: 0.5))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(p.displayName ?? p.fullName ?? "未命名")
+                // 中文姓名优先 —— displayLabel 已经按 fullName → displayName → email
+                // 顺序兜底,英文邮箱前缀只作为最后一道保底。
+                Text(Self.displayLabel(for: p))
                     .font(BsTypography.cardSubtitle)
                     .foregroundStyle(BsColor.ink)
                     .lineLimit(1)
-                if let dept = p.department, !dept.isEmpty {
-                    Text(dept)
+                // 副位:优先部门,再 fall back 到 position / email user 让用户区分同名
+                if let secondary = secondaryLine(for: p) {
+                    Text(secondary)
                         .font(BsTypography.captionSmall)
                         .foregroundStyle(BsColor.inkMuted)
                         .lineLimit(1)
@@ -137,6 +162,16 @@ struct MentionPickerSheet: View {
         )
     }
 
+    /// 副行:部门 → 职位 → email username。任一非空就出。
+    private func secondaryLine(for p: Profile) -> String? {
+        if let dept = p.department, !dept.isEmpty { return dept }
+        if let pos = p.position, !pos.isEmpty { return pos }
+        if let email = p.email, let user = email.split(separator: "@").first {
+            return String(user)
+        }
+        return nil
+    }
+
     @ViewBuilder
     private func avatar(for p: Profile) -> some View {
         if let urlStr = p.avatarUrl, let url = URL(string: urlStr) {
@@ -153,7 +188,8 @@ struct MentionPickerSheet: View {
 
     @ViewBuilder
     private func avatarFallback(for p: Profile) -> some View {
-        let initial = (p.displayName ?? p.fullName ?? "?").prefix(1)
+        // 头像首字: 中文姓名优先取姓; 邮箱用户名兜底。
+        let initial = Self.displayLabel(for: p).prefix(1)
         ZStack {
             BsColor.brandAzure.opacity(0.18)
             Text(String(initial).uppercased())

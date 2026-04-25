@@ -21,6 +21,9 @@ public struct AIAnalysisView: View {
     /// hand off to `viewModel.addScreenshot(data:)` so the VM owns lifecycle.
     @State private var pickerSelection: [PhotosPickerItem] = []
 
+    /// Round 50 fix #2 — show analysis history sheet.
+    @State private var showHistory: Bool = false
+
     @MainActor
     public init(isEmbedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: AIAnalysisViewModel())
@@ -49,6 +52,29 @@ public struct AIAnalysisView: View {
         }
         .navigationTitle("媒体智能分析")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Round 50 fix #2 — history entry point in nav bar.
+            ToolbarItem(placement: .topBarTrailing) {
+                if hasAccess {
+                    Button {
+                        showHistory = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .accessibilityLabel("查看历史记录")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                AIAnalysisHistoryView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("完成") { showHistory = false }
+                        }
+                    }
+            }
+        }
         .task {
             if hasAccess && viewModel.provider == nil {
                 await viewModel.loadProvider()

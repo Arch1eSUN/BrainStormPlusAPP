@@ -44,14 +44,37 @@ public final class AdminTeamReportsViewModel: ObservableObject {
 
     @Published public var segment: Segment = .daily
     @Published public var memberFilter: UUID? = nil // nil = 全部
-    @Published public var rangeStart: Date = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
-    @Published public var rangeEnd: Date = Date()
+    // iter7 fix (用户反馈"不需要做日期筛选 直接显示所有"):
+    // 拿掉 rangeStart/rangeEnd state,直接抓最近 200 条所有可见报告 + RLS。
 
     @Published public private(set) var members: [AuthorInfo] = []
     @Published public private(set) var dailyRows: [DailyRow] = []
     @Published public private(set) var weeklyRows: [WeeklyRow] = []
     @Published public private(set) var isLoading: Bool = false
     @Published public var errorMessage: String?
+
+    // MARK: - Date grouping (iter7 §A.3 — 全员日报按日期分组)
+
+    /// Bucket label 顺序: 今天 → 昨天 → 本周内具体日期 → 更早。
+    public struct DailyDateGroup: Identifiable {
+        public let id: String
+        public let label: String
+        public let rows: [DailyRow]
+    }
+
+    public struct WeeklyDateGroup: Identifiable {
+        public let id: String
+        public let label: String
+        public let rows: [WeeklyRow]
+    }
+
+    public var dailyGroups: [DailyDateGroup] {
+        groupDailyByDate(dailyRows)
+    }
+
+    public var weeklyGroups: [WeeklyDateGroup] {
+        groupWeeklyByDate(weeklyRows)
+    }
 
     private let client: SupabaseClient
 
@@ -111,8 +134,6 @@ public final class AdminTeamReportsViewModel: ObservableObject {
         var query = client
             .from("daily_logs")
             .select("id, user_id, date, content, progress, blockers, created_at, profiles:user_id(id, full_name, department)")
-            .gte("date", value: isoDay(rangeStart))
-            .lte("date", value: isoDay(rangeEnd))
 
         if let uid = memberFilter {
             query = query.eq("user_id", value: uid.uuidString)
@@ -192,8 +213,6 @@ public final class AdminTeamReportsViewModel: ObservableObject {
         var query = client
             .from("weekly_reports")
             .select("id, user_id, week_start, week_end, summary, accomplishments, plans, blockers, created_at, profiles:user_id(id, full_name, department)")
-            .gte("week_start", value: isoDay(rangeStart))
-            .lte("week_start", value: isoDay(rangeEnd))
 
         if let uid = memberFilter {
             query = query.eq("user_id", value: uid.uuidString)
@@ -242,6 +261,61 @@ public final class AdminTeamReportsViewModel: ObservableObject {
         let comps = cal.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", comps.year ?? 1970, comps.month ?? 1, comps.day ?? 1)
     }
+
+    // MARK: - Grouping helpers (iter7)
+    //
+    // 用户反馈"全员的日报按照每一天和日期分类好"。按日期 bucket → 同一
+    // bucket 内按提交人姓名稳定排序。bucket label:
+    //   • 今天 / 昨天   — 用户视角最相关
+    //   • 本周内 → 周三 / 本周一 ...
+    //   • 更早 → "M月d日"
+
+    private func groupDailyByDate(_ rows: [DailyRow]) -> [DailyDateGroup] {
+        let cal = Calendar(identifier: .gregorian)
+        // 按 startOfDay(date) bucket
+        let buckets = Dictionary(grouping: rows) { row -> Date in
+            cal.startOfDay(for: row.log.date)
+        }
+        return buckets.keys.sorted(by: >).map { day in
+            let label = relativeDateLabel(day, cal: cal)
+            let id = isoDay(day)
+            let sortedRows = (buckets[day] ?? []).sorted {
+                ($0.author?.fullName ?? "") < ($1.author?.fullName ?? "")
+            }
+            return DailyDateGroup(id: id, label: label, rows: sortedRows)
+        }
+    }
+
+    private func groupWeeklyByDate(_ rows: [WeeklyRow]) -> [WeeklyDateGroup] {
+        let cal = Calendar(identifier: .gregorian)
+        let buckets = Dictionary(grouping: rows) { row -> Date in
+            cal.startOfDay(for: row.report.weekStart)
+        }
+        return buckets.keys.sorted(by: >).map { day in
+            let label = relativeDateLabel(day, cal: cal)
+            let id = isoDay(day)
+            let sortedRows = (buckets[day] ?? []).sorted {
+                ($0.author?.fullName ?? "") < ($1.author?.fullName ?? "")
+            }
+            return WeeklyDateGroup(id: id, label: label, rows: sortedRows)
+        }
+    }
+
+    private func relativeDateLabel(_ day: Date, cal: Calendar) -> String {
+        if cal.isDateInToday(day) { return "今天" }
+        if cal.isDateInYesterday(day) { return "昨天" }
+        let now = Date()
+        if cal.isDate(day, equalTo: now, toGranularity: .weekOfYear) {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "zh_CN")
+            f.dateFormat = "EEEE" // 周三
+            return "本" + f.string(from: day)
+        }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M 月 d 日"
+        return f.string(from: day)
+    }
 }
 
 public struct AdminTeamReportsView: View {
@@ -280,23 +354,36 @@ public struct AdminTeamReportsView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: BsSpacing.md) {
-                        switch vm.segment {
-                        case .daily:
-                            ForEach(vm.dailyRows) { row in
-                                dailyCard(row)
-                                    .padding(.horizontal, BsSpacing.lg)
+                // iter7: 用 List + Section 让 iOS 自带 sticky section header
+                // (用户原话"全员的日报按照每一天和日期分类好")。
+                List {
+                    switch vm.segment {
+                    case .daily:
+                        ForEach(vm.dailyGroups) { group in
+                            Section(group.label) {
+                                ForEach(group.rows) { row in
+                                    dailyCard(row)
+                                        .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
+                                        .listRowSeparator(.hidden)
+                                        .listRowBackground(Color.clear)
+                                }
                             }
-                        case .weekly:
-                            ForEach(vm.weeklyRows) { row in
-                                weeklyCard(row)
-                                    .padding(.horizontal, BsSpacing.lg)
+                        }
+                    case .weekly:
+                        ForEach(vm.weeklyGroups) { group in
+                            Section(group.label) {
+                                ForEach(group.rows) { row in
+                                    weeklyCard(row)
+                                        .listRowInsets(EdgeInsets(top: 6, leading: BsSpacing.lg, bottom: 6, trailing: BsSpacing.lg))
+                                        .listRowSeparator(.hidden)
+                                        .listRowBackground(Color.clear)
+                                }
                             }
                         }
                     }
-                    .padding(.vertical, BsSpacing.md)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .background(BsColor.pageBackground.ignoresSafeArea())
@@ -306,8 +393,6 @@ public struct AdminTeamReportsView: View {
         .refreshable { await vm.load() }
         .onChange(of: vm.segment) { _, _ in Task { await vm.load() } }
         .onChange(of: vm.memberFilter) { _, _ in Task { await vm.load() } }
-        .onChange(of: vm.rangeStart) { _, _ in Task { await vm.load() } }
-        .onChange(of: vm.rangeEnd) { _, _ in Task { await vm.load() } }
         .zyErrorBanner($vm.errorMessage)
     }
 
@@ -319,6 +404,8 @@ public struct AdminTeamReportsView: View {
     }
 
     private var controlsCard: some View {
+        // iter7 fix: 拿掉日期 range pickers (用户反馈"上面两栏筛选好奇怪 /
+        // 不需要做日期筛选 直接显示所有"); 仅保留 segmented + 人员筛选 Menu。
         BsContentCard(padding: .medium) {
             VStack(alignment: .leading, spacing: BsSpacing.md) {
                 Picker("视图", selection: $vm.segment) {
@@ -328,46 +415,49 @@ public struct AdminTeamReportsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                HStack(spacing: BsSpacing.sm) {
-                    DatePicker("起", selection: $vm.rangeStart, displayedComponents: .date)
-                        .labelsHidden()
-                    Text("→").foregroundStyle(BsColor.inkMuted)
-                    DatePicker("止", selection: $vm.rangeEnd, displayedComponents: .date)
-                        .labelsHidden()
-                    Spacer()
-                }
-                .font(BsTypography.caption)
-
-                if !vm.members.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: BsSpacing.sm) {
-                            memberChip(label: "全部", value: nil)
-                            ForEach(vm.members, id: \.id) { m in
-                                memberChip(label: m.fullName, value: m.id)
-                            }
-                        }
-                    }
-                }
+                memberFilterMenu
             }
         }
     }
 
     @ViewBuilder
-    private func memberChip(label: String, value: UUID?) -> some View {
-        let isSelected = vm.memberFilter == value
-        Button {
-            vm.memberFilter = value
+    private var memberFilterMenu: some View {
+        // iter7 §A.3 — iOS-native Menu+Picker (与 ReportingListView 同款)。
+        let selectedLabel: String = {
+            if let uid = vm.memberFilter,
+               let m = vm.members.first(where: { $0.id == uid }) {
+                return m.fullName
+            }
+            return "全部成员"
+        }()
+        Menu {
+            Picker("成员", selection: $vm.memberFilter) {
+                Text("全部成员").tag(UUID?.none)
+                ForEach(vm.members, id: \.id) { m in
+                    if let dept = m.department, !dept.isEmpty {
+                        Text("\(m.fullName) · \(dept)").tag(UUID?.some(m.id))
+                    } else {
+                        Text(m.fullName).tag(UUID?.some(m.id))
+                    }
+                }
+            }
         } label: {
-            Text(label)
-                .font(BsTypography.captionSmall)
-                .padding(.horizontal, BsSpacing.md)
-                .padding(.vertical, BsSpacing.sm - 1)
-                .background(
-                    Capsule().fill(isSelected ? BsColor.brandAzure.opacity(0.15) : BsColor.inkMuted.opacity(0.08))
-                )
-                .foregroundStyle(isSelected ? BsColor.brandAzure : BsColor.ink)
+            HStack {
+                Label(selectedLabel, systemImage: "person.2.fill")
+                    .font(BsTypography.bodyMedium)
+                    .foregroundStyle(BsColor.ink)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.footnote)
+                    .foregroundStyle(BsColor.inkFaint)
+            }
+            .padding(.horizontal, BsSpacing.md)
+            .padding(.vertical, BsSpacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(BsColor.inkMuted.opacity(0.08))
+            )
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder

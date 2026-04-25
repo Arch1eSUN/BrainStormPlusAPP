@@ -5,6 +5,10 @@ import UniformTypeIdentifiers
 
 public struct ChatRoomView: View {
     @StateObject private var viewModel: ChatRoomViewModel
+    /// Iter 7 Fix 1 — when entering a DM, ChatList resolves peer Profile and
+    /// passes their display label here so the navigation title reads "张三"
+    /// instead of the stored channel.name (often a generic placeholder).
+    public let titleOverride: String?
 
     // MARK: - Sprint 3.3 附件选择状态
     //
@@ -36,8 +40,9 @@ public struct ChatRoomView: View {
     /// 系统当前 channel id 字符串(用于 AppStorage key)。
     private var draftKey: String { "chat.draft.\(viewModel.channel.id.uuidString)" }
 
-    public init(viewModel: ChatRoomViewModel) {
+    public init(viewModel: ChatRoomViewModel, titleOverride: String? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.titleOverride = titleOverride
     }
 
     public var body: some View {
@@ -49,6 +54,13 @@ public struct ChatRoomView: View {
                 content
 
                 if !viewModel.accessDenied {
+                    // Iter 7 Phase 1.2 — typing indicator (user-facing names).
+                    let activeTypers = viewModel.typingUsers.values
+                        .sorted { $0.lastSeen > $1.lastSeen }
+                    if !activeTypers.isEmpty {
+                        TypingIndicator(users: Array(activeTypers))
+                            .animation(BsMotion.Anim.smooth, value: activeTypers.count)
+                    }
                     if let parent = replyingTo {
                         replyPreviewStrip(parent: parent)
                     }
@@ -77,7 +89,7 @@ public struct ChatRoomView: View {
                 }
             }
         }
-        .navigationTitle(viewModel.channel.name)
+        .navigationTitle(titleOverride ?? viewModel.channel.name)
         .navigationBarTitleDisplayMode(.inline)
         .zyErrorBanner($viewModel.errorMessage)
         .task {
@@ -96,6 +108,11 @@ public struct ChatRoomView: View {
             viewModel.saveDraftDebounced(newValue)
             // 3) 检测 @ 触发 —— 末位字符是 @ 且前一个字符不是字母数字时弹 sheet
             detectMentionTrigger(in: newValue)
+            // 4) Iter 7 Phase 1.2 — 用户在输入 → broadcast typing presence
+            //    (内部 800ms rate limit, 不会狂打)
+            if !newValue.isEmpty {
+                viewModel.notifyTyping()
+            }
         }
         // PhotosPicker 把选中的 PhotosPickerItem 塞进 $photoItems，
         // 这里监听变化 → loadTransferable(Data) → 追加到 pendingUploads。
@@ -187,10 +204,12 @@ public struct ChatRoomView: View {
     }
 
     /// 把当前文本里最后一个 @xxx 片段替换成 `@DisplayName ` (含末尾空格)。
+    /// Iter 7 Fix 2 — 优先中文姓名(`fullName`),让插入文本读起来跟 mention sheet
+    /// 看到的一致(@张三 而不是 @zhangsan)。
     private func insertMention(_ profile: Profile) {
         let text = viewModel.draft
         guard let atRange = text.range(of: "@", options: .backwards) else { return }
-        let displayName = profile.displayName ?? profile.fullName ?? "用户"
+        let displayName = MentionPickerSheet.displayLabel(for: profile)
         let replacement = "@\(displayName) "
         viewModel.draft = String(text[..<atRange.lowerBound]) + replacement
     }
@@ -214,6 +233,26 @@ public struct ChatRoomView: View {
                 ZStack(alignment: .bottom) {
                     ScrollView {
                         LazyVStack(spacing: BsSpacing.md) {
+                            // Iter 7 Phase 1.2 — top sentinel for infinite scroll up.
+                            // .onAppear → load older page; loader visible when fetching.
+                            if viewModel.hasMoreOlder {
+                                Color.clear
+                                    .frame(height: 1)
+                                    .onAppear {
+                                        Task { await viewModel.loadMoreOlderMessages() }
+                                    }
+                            }
+                            if viewModel.isLoadingOlder {
+                                HStack(spacing: BsSpacing.xs) {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                    Text("加载更多…")
+                                        .font(BsTypography.captionSmall)
+                                        .foregroundStyle(BsColor.inkMuted)
+                                }
+                                .padding(.vertical, BsSpacing.sm)
+                                .frame(maxWidth: .infinity)
+                            }
                             ForEach(viewModel.messages) { msg in
                                 // Phase 1.1: 在第一条 created_at > unreadAnchor 的
                                 // 消息上方插入 UnreadDividerView。
@@ -496,14 +535,11 @@ public struct ChatRoomView: View {
                             .regular,
                             in: RoundedRectangle(cornerRadius: BsRadius.xl - 2, style: .continuous)
                         )
+                } else if viewModel.editingMessageId == msg.id {
+                    // Iter 7 Phase 1.2 — inline edit mode: 替换 bubble 为 TextField + 保存/取消。
+                    inlineEditBubble(msg: msg, isCurrentUser: isCurrentUser)
                 } else {
-                    // 文本部分：空字符串 + 纯附件时跳过气泡，避免多一个空框。
-                    // Sprint 3.5: content 走 `ChatContentHighlighter` 给
-                    // `@mention` 套高亮样式。
-                    //
-                    // Fusion 升级：自己一侧 → Azure glass tint + 非对称气泡
-                    // (bottomTrailing 4pt 收角，iMessage own-side 形状但带品牌色)；
-                    // 对方一侧 → neutral glass + bottomLeading 4pt 收角。
+                    // 文本部分:空字符串 + 纯附件时跳过气泡,避免多一个空框。
                     if !msg.content.isEmpty {
                         Text(ChatContentHighlighter.attributed(
                             msg.content,
@@ -525,23 +561,52 @@ public struct ChatRoomView: View {
                         attachmentView(att)
                     }
 
-                    // Phase 4.5: reaction 芯片条 —— 对齐 Web page.tsx:773-790。
+                    // Iter 7 Phase 1.2 — link preview card (first http(s) URL only,
+                    // 减少视觉噪音)。
+                    if let firstURL = msg.content.firstDetectedURL() {
+                        LinkPreviewCard(
+                            url: firstURL,
+                            fetcher: linkPreviewFetcher(for: firstURL)
+                        )
+                    }
+
+                    // Phase 4.5: reaction 芯片条
                     if !msg.reactions.isEmpty {
                         reactionChipRow(msg: msg, isCurrentUser: isCurrentUser)
                     }
 
-                    // Phase 1.1: 线程入口 —— 仅顶层消息(replyTo == nil)且
-                    // thread_reply_count > 0 时显示。点击进入 ChatThreadView。
+                    // Phase 1.1: 线程入口
                     if msg.replyTo == nil && msg.threadReplyCount > 0 {
                         threadFooter(msg: msg)
                     }
+
+                    // Iter 7 Phase 1.2 — read receipt avatars (own messages only,
+                    // shown bottom-right of bubble).
+                    if isCurrentUser && !msg.readBy.isEmpty {
+                        readReceiptStack(readers: msg.readBy)
+                    }
                 }
 
-                let timeText = ChatDateFormatter.format(msg.createdAt)
-                if !timeText.isEmpty {
-                    Text(timeText)
-                        .font(BsTypography.captionSmall)
-                        .foregroundStyle(BsColor.inkMuted)
+                // 时间 + (已编辑) marker
+                HStack(spacing: BsSpacing.xs) {
+                    let timeText = ChatDateFormatter.format(msg.createdAt)
+                    if !timeText.isEmpty {
+                        Text(timeText)
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                    }
+                    if msg.editedAt != nil {
+                        Text("(已编辑)")
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkFaint)
+                    }
+                }
+            }
+            .onAppear {
+                // Iter 7 Phase 1.2 — 进入 viewport 即触发已读回执 (debounced VM-side)
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    await viewModel.markMessageRead(msg.id)
                 }
             }
             // contextMenu —— 长按系统 v3 (docs/longpress-system.md)
@@ -614,6 +679,15 @@ public struct ChatRoomView: View {
                                 Haptic.light()
                             } label: {
                                 Label("复制文本", systemImage: "doc.on.doc")
+                            }
+                        }
+
+                        // Iter 7 Phase 1.2 — 编辑 (own + 5min window)
+                        if viewModel.canEdit(msg) {
+                            Button {
+                                viewModel.beginEditing(msg.id)
+                            } label: {
+                                Label("编辑", systemImage: "pencil")
                             }
                         }
 
@@ -839,6 +913,103 @@ public struct ChatRoomView: View {
             RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
                 .fill(BsColor.surfacePrimary)
         )
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Inline edit bubble
+
+    @ViewBuilder
+    private func inlineEditBubble(msg: ChatMessage, isCurrentUser: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: BsSpacing.xs) {
+            TextField("编辑消息…", text: $viewModel.editingDraft, axis: .vertical)
+                .font(BsTypography.body)
+                .lineLimit(1...6)
+                .padding(.horizontal, BsSpacing.md)
+                .padding(.vertical, BsSpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                        .fill(BsColor.surfacePrimary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                        .stroke(BsColor.brandAzure.opacity(0.4), lineWidth: 1)
+                )
+            HStack(spacing: BsSpacing.sm) {
+                Button("取消") {
+                    Haptic.light()
+                    viewModel.cancelEditing()
+                }
+                .font(BsTypography.captionSmall)
+                .foregroundStyle(BsColor.inkMuted)
+
+                Button("保存") {
+                    Haptic.medium()
+                    Task { await viewModel.commitEdit() }
+                }
+                .font(BsTypography.captionSmall.weight(.semibold))
+                .foregroundStyle(BsColor.brandAzure)
+            }
+        }
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Read receipt avatar stack
+
+    @ViewBuilder
+    private func readReceiptStack(readers: [UUID]) -> some View {
+        // 仅显示 max 3 个头像 + (剩余数字)。点击 future: open sheet with full list.
+        let visible = Array(readers.prefix(3))
+        let extra = max(0, readers.count - visible.count)
+        HStack(spacing: -8) {
+            ForEach(visible, id: \.self) { uid in
+                readerAvatar(userId: uid)
+                    .frame(width: 16, height: 16)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(BsColor.surfacePrimary, lineWidth: 1.5))
+            }
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(BsColor.inkMuted)
+                    .padding(.leading, 10)
+            }
+        }
+        .padding(.top, 1)
+    }
+
+    @ViewBuilder
+    private func readerAvatar(userId: UUID) -> some View {
+        // Reader avatars rely on mentionCandidates lookup we already preload.
+        // If the reader isn't in the candidate list (cross-channel cache miss)
+        // we fall back to a tinted initial circle — RPC return ordering is
+        // by user_id, so the position is stable.
+        if let p = viewModel.mentionCandidates.first(where: { $0.id == userId }),
+           let urlStr = p.avatarUrl,
+           let url = URL(string: urlStr) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img): img.resizable().scaledToFill()
+                default:
+                    BsColor.brandAzure.opacity(0.25)
+                }
+            }
+        } else {
+            BsColor.brandAzure.opacity(0.25)
+        }
+    }
+
+    // MARK: - Iter 7 Phase 1.2: Link preview cache (per-bubble fetcher)
+
+    /// Singleton-per-URL fetcher cache so re-rendering doesn't refetch.
+    @State private var linkPreviewFetchers: [URL: LinkPreviewFetcher] = [:]
+
+    private func linkPreviewFetcher(for url: URL) -> LinkPreviewFetcher {
+        if let existing = linkPreviewFetchers[url] { return existing }
+        let f = LinkPreviewFetcher()
+        // Async-safe write on main actor (helper is @State, we mutate through
+        // mainactor-bound view body context).
+        DispatchQueue.main.async {
+            linkPreviewFetchers[url] = f
+        }
+        return f
     }
 
     /// Phase 4.5: 呈现 reaction 芯片 —— 每个 emoji 是一个可 tap 的 chip，显示

@@ -62,7 +62,13 @@ public struct ChatListView: View {
         // client + realtime subscriber for every channel in the list just
         // to prepare the nav link.
         .navigationDestination(for: ChatChannel.self) { channel in
-            ChatRoomView(viewModel: ChatRoomViewModel(client: supabase, channel: channel))
+            // Iter 7 Fix 1 — DM channel: pass peer Profile so room title can
+            // show the other user's full name instead of the stored channel
+            // name (which is often "Direct Message" for legacy DMs).
+            ChatRoomView(
+                viewModel: ChatRoomViewModel(client: supabase, channel: channel),
+                titleOverride: viewModel.directPeers[channel.id].map { MentionPickerSheet.displayLabel(for: $0) }
+            )
         }
         // 只在非 embedded 时才挂 nav title —— MessagesView 外层已经设置了
         // "消息"的 large title,若 child 在同一条 NavStack 上 又 `.navigationTitle`
@@ -100,16 +106,14 @@ public struct ChatListView: View {
         // losing the query.
         .searchable(text: $viewModel.searchQuery, prompt: "搜索消息…")
         .onChange(of: viewModel.searchQuery) { _, newValue in
-            // Minimal debounce: 250ms of idle before firing. Not using
-            // `.task(id:)` on the view because `searchQuery` mutations
-            // would otherwise cancel mid-typed edits; a raw Task with a
-            // sleep + `Task.isCancelled` check is lighter and mirrors
-            // AsyncStream.debounce.
+            // Minimal debounce: 250ms of idle before firing. Iter 7 Phase 1.2:
+            // routes through FTS RPC (chat_search_messages) for proper full-text
+            // matching with RLS;旧 ILIKE 代码作为 fallback 留在 VM 里。
             Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard !Task.isCancelled else { return }
                 guard viewModel.searchQuery == newValue else { return }
-                await viewModel.searchMessages(query: newValue)
+                await viewModel.searchMessagesFTS(query: newValue)
             }
         }
         .refreshable {
@@ -166,6 +170,7 @@ public struct ChatListView: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: BsSpacing.lg, bottom: 4, trailing: BsSpacing.lg))
                 .buttonStyle(.plain)
+                .contextMenu { channelContextMenu(channel) }
             }
         }
         .listStyle(.plain)
@@ -174,33 +179,84 @@ public struct ChatListView: View {
         .scrollContentBackground(.hidden)
     }
 
+    /// Iter 7 Phase 1.2 — long-press on channel row.
+    @ViewBuilder
+    private func channelContextMenu(_ channel: ChatChannel) -> some View {
+        let isPinned = (viewModel.memberships[channel.id]?.pinnedAt) != nil
+        let isMuted = viewModel.memberships[channel.id]?.isCurrentlyMuted == true
+
+        Button {
+            Task { await viewModel.setPinned(channelId: channel.id, pinned: !isPinned) }
+        } label: {
+            Label(isPinned ? "取消置顶" : "置顶频道",
+                  systemImage: isPinned ? "pin.slash" : "pin.fill")
+        }
+
+        if isMuted {
+            Button {
+                Task { await viewModel.setMuted(channelId: channel.id, until: nil) }
+            } label: {
+                Label("取消静音", systemImage: "bell")
+            }
+        } else {
+            Menu {
+                ForEach(MutePreset.allCases) { preset in
+                    Button(preset.label) {
+                        Task {
+                            await viewModel.setMuted(
+                                channelId: channel.id,
+                                until: preset.resolve()
+                            )
+                        }
+                    }
+                }
+            } label: {
+                Label("静音", systemImage: "bell.slash")
+            }
+        }
+    }
+
     /// Bug-fix(视图割裂): channel row 之前是裸 HStack + system list 默认背景,
     /// 跟 Approvals/Tasks 等模块的 BsContentCard row 视觉断层。包一层
     /// BsContentCard,token 跟全 app 同步。
+    ///
+    /// Iter 7 Fix 1 — DM 频道用对方 Profile 的中文姓名 + 头像渲染,而不是
+    /// chat_channels.name 那个通用占位。Group / announcement 频道照旧。
     @ViewBuilder
     private func channelRow(_ channel: ChatChannel) -> some View {
+        let peer: Profile? = (channel.type == .direct) ? viewModel.directPeers[channel.id] : nil
+        let isPinned = (viewModel.memberships[channel.id]?.pinnedAt) != nil
+        let isMuted = viewModel.memberships[channel.id]?.isCurrentlyMuted == true
+        let displayName: String = {
+            if let peer = peer {
+                return MentionPickerSheet.displayLabel(for: peer)
+            }
+            return channel.name
+        }()
+
         BsContentCard(padding: .none) {
             HStack(spacing: BsSpacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(channelColor(channel.type).opacity(0.15))
-                        .frame(width: 48, height: 48)
-                        .overlay(
-                            Circle()
-                                .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
-                        )
-                    Image(systemName: channelIcon(channel.type))
-                        .font(.system(.title3))
-                        .foregroundStyle(channelColor(channel.type))
-                }
+                rowAvatar(channel: channel, peer: peer)
 
                 VStack(alignment: .leading, spacing: BsSpacing.xs) {
                     HStack(spacing: BsSpacing.xs) {
-                        Text(channel.name)
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(BsColor.brandAzure)
+                                .accessibilityLabel("已置顶")
+                        }
+                        Text(displayName)
                             .font(BsTypography.cardTitle)
                             .foregroundStyle(BsColor.ink)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                        if isMuted {
+                            Image(systemName: "bell.slash.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(BsColor.inkFaint)
+                                .accessibilityLabel("已静音")
+                        }
                         Spacer(minLength: BsSpacing.xs)
                         Text(ChatDateFormatter.format(channel.lastMessageAt))
                             .font(BsTypography.captionSmall)
@@ -223,8 +279,62 @@ public struct ChatListView: View {
             .padding(.horizontal, BsSpacing.md)
             .padding(.vertical, BsSpacing.sm + 2)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(isMuted ? 0.7 : 1.0)
+            .background(
+                isPinned
+                ? RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                    .fill(BsColor.brandAzure.opacity(0.04))
+                : nil
+            )
         }
         .contentShape(Rectangle())
+    }
+
+    /// Iter 7 Fix 1 — DM 频道画对方头像;否则保留按 channel type 着色的图标圈。
+    @ViewBuilder
+    private func rowAvatar(channel: ChatChannel, peer: Profile?) -> some View {
+        if let peer = peer, let urlStr = peer.avatarUrl, let url = URL(string: urlStr) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().scaledToFill()
+                default:
+                    avatarInitial(for: peer)
+                }
+            }
+            .frame(width: 48, height: 48)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(BsColor.borderSubtle, lineWidth: 0.5))
+        } else if let peer = peer {
+            avatarInitial(for: peer)
+                .frame(width: 48, height: 48)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(BsColor.borderSubtle, lineWidth: 0.5))
+        } else {
+            ZStack {
+                Circle()
+                    .fill(channelColor(channel.type).opacity(0.15))
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Circle()
+                            .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
+                    )
+                Image(systemName: channelIcon(channel.type))
+                    .font(.system(.title3))
+                    .foregroundStyle(channelColor(channel.type))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func avatarInitial(for p: Profile) -> some View {
+        let initial = MentionPickerSheet.displayLabel(for: p).prefix(1)
+        ZStack {
+            BsColor.brandAzure.opacity(0.18)
+            Text(String(initial).uppercased())
+                .font(BsTypography.cardSubtitle)
+                .foregroundStyle(BsColor.brandAzureDark)
+        }
     }
 
     // MARK: - Search results
@@ -255,11 +365,16 @@ public struct ChatListView: View {
 
     @ViewBuilder
     private func searchResultRow(_ result: ChatSearchResult) -> some View {
+        let peer: Profile? = (result.channel.type == .direct)
+            ? viewModel.directPeers[result.channel.id]
+            : nil
+        let displayName: String = peer.map { MentionPickerSheet.displayLabel(for: $0) }
+            ?? result.channel.name
         VStack(alignment: .leading, spacing: BsSpacing.xs) {
             HStack {
                 Image(systemName: channelIcon(result.channel.type))
                     .foregroundStyle(channelColor(result.channel.type))
-                Text(result.channel.name)
+                Text(displayName)
                     .font(BsTypography.cardSubtitle)
                     .foregroundStyle(BsColor.ink)
                 Spacer()
