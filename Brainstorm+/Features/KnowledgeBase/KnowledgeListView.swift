@@ -70,13 +70,13 @@ public struct KnowledgeListView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
-                            Haptic.light()
+                            // Haptic removed: 用户反馈菜单按钮过密震动
                             editTarget = .new
                         } label: {
                             Label("新建文档", systemImage: "square.and.pencil")
                         }
                         Button {
-                            Haptic.light()
+                            // Haptic removed: 用户反馈菜单按钮过密震动
                             showUploadSheet = true
                         } label: {
                             Label("上传文件", systemImage: "arrow.up.doc")
@@ -102,7 +102,7 @@ public struct KnowledgeListView: View {
             }
         }
         .onChange(of: viewModel.categoryFilter) { _, _ in
-            Haptic.selection()
+            // Haptic removed: 用户反馈 filter onChange 过密震动
             Task { await viewModel.fetchArticles() }
         }
         .refreshable {
@@ -189,7 +189,7 @@ public struct KnowledgeListView: View {
     @ViewBuilder
     private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             action()
         } label: {
             Text(label)
@@ -225,11 +225,11 @@ public struct KnowledgeListView: View {
                 .contextMenu {
                     if isAdmin {
                         Button("编辑") {
-                            Haptic.light()
+                            // Haptic removed: contextMenu 选项过密震动
                             editTarget = .edit(article)
                         }
                         Button("删除", role: .destructive) {
-                            Haptic.rigid()
+                            // 真删触发：destructive confirm 用 warning
                             Haptic.warning()
                             Task { await viewModel.deleteArticle(article) }
                         }
@@ -243,14 +243,13 @@ public struct KnowledgeListView: View {
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     if isAdmin {
                         Button(role: .destructive) {
-                            Haptic.rigid()
-                            Haptic.warning()
+                            // Haptic removed: swipe action 系统自带反馈
                             Task { await viewModel.deleteArticle(article) }
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
                         Button {
-                            Haptic.light()
+                            // Haptic removed: swipe action 系统自带反馈
                             editTarget = .edit(article)
                         } label: {
                             Label("编辑", systemImage: "pencil")
@@ -282,7 +281,7 @@ public struct KnowledgeListView: View {
                     }
 
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         showFileImporter = true
                     } label: {
                         Label("选择文件", systemImage: "doc.badge.plus")

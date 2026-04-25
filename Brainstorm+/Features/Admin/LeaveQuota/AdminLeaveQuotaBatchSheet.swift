@@ -81,7 +81,7 @@ public struct AdminLeaveQuotaBatchSheet: View {
                 Text("手选员工").tag(Scope.individuals)
             }
             .pickerStyle(.segmented)
-            .onChange(of: scope) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker 切换过密震动
         }
     }
 

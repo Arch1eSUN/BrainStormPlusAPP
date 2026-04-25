@@ -61,7 +61,7 @@ public struct MessagesView: View {
                 .tint(BsColor.brandAzure)
                 .accessibilityLabel("消息分类")
                 .accessibilityHint("聊天或通知")
-                .onChange(of: selected) { _, _ in Haptic.selection() }
+                // Haptic removed: 用户反馈 picker 切换过密震动
 
                 Divider()
                     .opacity(0.4)

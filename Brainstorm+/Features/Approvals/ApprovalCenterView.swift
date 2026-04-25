@@ -146,7 +146,7 @@ public struct ApprovalCenterView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showTypePicker = true
                 } label: {
                     Image(systemName: "plus")
@@ -212,7 +212,7 @@ public struct ApprovalCenterView: View {
     private func pillButton(_ tab: Tab) -> some View {
         let isSelected = tab == selectedTab
         Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 tab 切换过密震动
             selectedTab = tab
         } label: {
             HStack(spacing: 6) {

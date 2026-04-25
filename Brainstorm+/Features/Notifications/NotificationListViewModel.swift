@@ -62,6 +62,45 @@ public class NotificationListViewModel: ObservableObject {
         }
     }
     
+    /// 标为未读 —— 反向 mutation。Web 没有这个 entry（Web 端只有
+    /// markAsRead），但 iOS 长按菜单应支持反悔（iOS 26 Mail/Slack 习惯）。
+    /// RLS：notifications 行级策略允许 user 修改 user_id == auth.uid() 的行。
+    public func markAsUnread(_ notification: AppNotification) async {
+        guard notification.isEffectivelyRead else { return }
+        do {
+            let updateData: [String: AnyJSON] = [
+                "is_read": false,
+                "read": false
+            ]
+            try await client
+                .from("notifications")
+                .update(updateData)
+                .eq("id", value: notification.id)
+                .execute()
+            await fetchNotifications()
+        } catch {
+            self.errorMessage = ErrorLocalizer.localize(error)
+        }
+    }
+
+    /// 删除单条通知（hard delete）。Web 端没有这个 surface ——
+    /// 通知作为 ephemeral 提醒，删了即删了。RLS 同上。
+    public func delete(_ notification: AppNotification) async {
+        // 乐观先从 UI 移除，失败时 errorBanner 弹出再 refetch 还原。
+        let snapshot = self.notifications
+        self.notifications.removeAll { $0.id == notification.id }
+        do {
+            try await client
+                .from("notifications")
+                .delete()
+                .eq("id", value: notification.id)
+                .execute()
+        } catch {
+            self.errorMessage = ErrorLocalizer.localize(error)
+            self.notifications = snapshot
+        }
+    }
+
     public func markAllAsRead() async {
         do {
             let session = try await client.auth.session

@@ -75,7 +75,7 @@ public struct ProjectListView: View {
             // `createProject` gates on `serverGuard` only, no admin check).
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     isShowingCreateSheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -102,7 +102,7 @@ public struct ProjectListView: View {
             }
         }
         .onChange(of: viewModel.statusFilter) { _, _ in
-            Haptic.selection()
+            // Haptic removed: 用户反馈 filter onChange 过密震动
             // Discrete choice — safe to trigger server-side `eq('status', s)` immediately.
             Task { await reload() }
         }
@@ -249,13 +249,13 @@ public struct ProjectListView: View {
                             // confirmation dialog (see `.confirmationDialog` above).
                             .contextMenu {
                                 Button {
-                                    Haptic.light()
+                                    // Haptic removed: contextMenu 选项过密震动
                                     projectBeingEdited = project
                                 } label: {
                                     Label("编辑", systemImage: "pencil")
                                 }
                                 Button(role: .destructive) {
-                                    Haptic.rigid()
+                                    // Haptic removed: 菜单选项；真删确认时由 confirmationDialog 处理
                                     projectPendingDelete = project
                                 } label: {
                                     Label("删除", systemImage: "trash")
@@ -273,7 +273,7 @@ public struct ProjectListView: View {
     private var statusFilterMenu: some View {
         Menu {
             Button {
-                Haptic.selection()
+                // Haptic removed: 用户反馈 filter menu 过密震动
                 viewModel.statusFilter = nil
             } label: {
                 Label("全部状态", systemImage: viewModel.statusFilter == nil ? "checkmark" : "")
@@ -281,7 +281,7 @@ public struct ProjectListView: View {
             Divider()
             ForEach(Self.statusOptions, id: \.0) { option in
                 Button {
-                    Haptic.selection()
+                    // Haptic removed: 用户反馈 filter menu 过密震动
                     viewModel.statusFilter = option.0
                 } label: {
                     Label(option.1, systemImage: viewModel.statusFilter == option.0 ? "checkmark" : "")

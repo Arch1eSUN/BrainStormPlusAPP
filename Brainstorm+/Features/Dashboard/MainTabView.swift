@@ -101,7 +101,7 @@ struct MainTabView: View {
         }
         .tint(BsColor.brandAzure)
         .onChange(of: selectedTab) { _, newTab in
-            Haptic.selection()
+            // Haptic removed: 用户反馈 tab 切换过密震动；系统 TabView 已有原生反馈
             // 切到对应 tab 时触发该 badge 的轻量刷新 —— 进入 tab 内部各自
             // VM 会 fetch 更完整的数据，这里只保证 badge 值紧跟离开 tab
             // 后的状态（例如在 ApprovalCenterView 审批完一条，切回主 tab

@@ -42,7 +42,7 @@ public struct AdminUsersView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈 toolbar 按钮过密震动
                         showCreateSheet = true
                     } label: {
                         Label("创建用户", systemImage: "person.badge.plus")
@@ -176,7 +176,7 @@ public struct AdminUsersView: View {
     private func filterChip(title: String, value: String) -> some View {
         let isSelected = viewModel.roleFilter == value
         return Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             viewModel.roleFilter = value
             Task { await viewModel.load() }
         } label: {
@@ -260,7 +260,7 @@ private struct AdminUserRowView: View {
             )
         ])
         .onTapGesture {
-            Haptic.light()
+            // Haptic removed: 用户反馈列表行点击过密震动
             onEdit()
         }
     }
@@ -271,7 +271,7 @@ private struct AdminUserRowView: View {
                 label: "编辑",
                 systemImage: "square.and.pencil",
                 tint: BsColor.brandAzure,
-                haptic: { Haptic.light() },
+                haptic: { /* Haptic removed: swipe action 系统自带反馈 */ },
                 action: onEdit
             )
         ]
@@ -281,7 +281,7 @@ private struct AdminUserRowView: View {
                     label: "禁用",
                     systemImage: "nosign",
                     tint: BsColor.warning,
-                    haptic: { Haptic.warning() },
+                    haptic: { /* Haptic removed: swipe action 系统自带反馈 */ },
                     action: onDeactivate
                 ),
                 at: 0

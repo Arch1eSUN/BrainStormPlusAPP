@@ -118,7 +118,7 @@ public struct ChatRoomView: View {
                     Label("图片", systemImage: "photo")
                 }
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈菜单按钮过密震动
                     showFileImporter = true
                 } label: {
                     Label("文件", systemImage: "doc")
@@ -400,27 +400,23 @@ public struct ChatRoomView: View {
                         .foregroundStyle(BsColor.inkMuted)
                 }
             }
-            // contextMenu: 长按消息气泡弹出 "复制文本" / "回复" / 快捷表情 /
-            // "撤回" 菜单。Fusion 增补：对齐 iOS 13+ native pattern，先复制再
-            // 回复。`Withdraw` 只在 own-message + 未撤回 + 2 分钟内 显示。
+            // contextMenu —— 长按系统设计 (docs/longpress-system.md)
+            //
+            //   • 顶部：快速 emoji 反应 Menu（仅未撤回时；对齐 iMessage / Slack）
+            //   • 中部：mutation actions —— 回复 / 复制 / @提及 / 转发
+            //     （回复在最前是因为它是 chat 里频次最高的动作）
+            //   • 底部：destructive —— 撤回（仅 own-message + 2 分钟窗口）
+            //
+            // 撤回 = 数据库 mutation（chat_withdraw_message RPC，2 分钟窗口）
+            // 一并替代了 "删除" —— chat_messages 没有 hard-delete 路径，
+            // 删除统一走撤回（Web 行为亦同）。
+            //
+            // 转发 = 暂以 "拷贝带 attribution 的引用块" 形式实现 ——
+            // 「转发 · <time>: <content>」入剪贴板，用户切到目标频道粘贴。
+            // 完整 channel-picker 转发待新 sprint。
             .contextMenu {
                 if !msg.isWithdrawn {
-                    if !msg.content.isEmpty {
-                        Button {
-                            UIPasteboard.general.string = msg.content
-                            Haptic.light()
-                        } label: {
-                            Label("复制文本", systemImage: "doc.on.doc")
-                        }
-                    }
-                    Button {
-                        Haptic.light()
-                        replyingTo = msg
-                    } label: {
-                        Label("回复", systemImage: "arrowshape.turn.up.left")
-                    }
-                    // Phase 4.5: 快捷 emoji —— 对齐 Web QUICK_EMOJIS
-                    // (page.tsx:70)。iOS 用 Menu 形式呈现，点击即 toggle。
+                    // —— 顶部：快速 emoji 反应
                     Menu {
                         ForEach(Self.quickEmojis, id: \.self) { emoji in
                             Button {
@@ -432,9 +428,55 @@ public struct ChatRoomView: View {
                     } label: {
                         Label("添加表情", systemImage: "face.smiling")
                     }
+
+                    // —— 中部：mutation 优先
+                    Button {
+                        // Haptic removed: contextMenu 选项过密震动
+                        replyingTo = msg
+                    } label: {
+                        Label("回复", systemImage: "arrowshape.turn.up.left")
+                    }
+
+                    if !msg.content.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = msg.content
+                            Haptic.light()
+                        } label: {
+                            Label("复制文本", systemImage: "doc.on.doc")
+                        }
+                    }
+
+                    // 仅别人的消息显示 @提及 / 转发
+                    if !isCurrentUser {
+                        Button {
+                            // 在 input 前置 "@" 并设 replyingTo —— 用户接着输入
+                            // 即可完成 mention（display-name 的 profiles 拉取
+                            // 待后续 sprint，此版本以 "@" 占位 + reply 锁人）。
+                            // Haptic removed: contextMenu 选项过密震动
+                            replyingTo = msg
+                            if !messageText.hasPrefix("@") {
+                                messageText = "@" + messageText
+                            }
+                        } label: {
+                            Label("@提及此人", systemImage: "at")
+                        }
+
+                        Button {
+                            // 拷贝引用块到剪贴板。Attachment 不随转发走 ——
+                            // Supabase public bucket URL 转发风险按 Web 默认行为。
+                            let stamp = ChatDateFormatter.format(msg.createdAt)
+                            let body = msg.content.isEmpty ? "[非文本消息]" : msg.content
+                            UIPasteboard.general.string = "「转发\(stamp.isEmpty ? "" : " · " + stamp)」\n\(body)"
+                            Haptic.success()
+                        } label: {
+                            Label("转发（复制引用）", systemImage: "arrowshape.turn.up.right")
+                        }
+                    }
+
+                    // —— 底部：destructive
                     if isCurrentUser && canWithdraw(msg) {
                         Button(role: .destructive) {
-                            Haptic.error()
+                            Haptic.warning() // destructive 真触发：消息撤回
                             Task { await viewModel.withdrawMessage(msg.id) }
                         } label: {
                             Label("撤回", systemImage: "arrow.uturn.backward")

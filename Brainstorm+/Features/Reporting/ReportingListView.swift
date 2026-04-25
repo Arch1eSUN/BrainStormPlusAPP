@@ -40,7 +40,7 @@ public struct ReportingListView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .onChange(of: viewModel.selectedTab) { _, _ in Haptic.selection() }
+                // Haptic removed: 用户反馈 picker 切换过密震动
 
                 if viewModel.isLoading {
                     ProgressView()
@@ -60,7 +60,7 @@ public struct ReportingListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     switch viewModel.selectedTab {
                     case .daily:  dailyEditTarget = .new
                     case .weekly: weeklyEditTarget = .new

@@ -31,7 +31,7 @@ public struct AnnouncementsListView: View {
                 if canManage {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
-                            Haptic.light()
+                            // Haptic removed: 用户反馈 toolbar 按钮过密震动
                             showCreate = true
                         } label: {
                             Label("发布公告", systemImage: "plus")
@@ -156,7 +156,7 @@ public struct AnnouncementsListView: View {
                         if canManage {
                             HStack(spacing: BsSpacing.xs) {
                                 Button {
-                                    Haptic.light()
+                                    // Haptic removed: 用户反馈辅助按钮过密震动
                                     Task { await viewModel.togglePin(item) }
                                 } label: {
                                     Image(systemName: item.pinned ? "pin.slash" : "pin")
@@ -169,7 +169,7 @@ public struct AnnouncementsListView: View {
                                 .accessibilityLabel(item.pinned ? "取消置顶" : "置顶")
 
                                 Button(role: .destructive) {
-                                    Haptic.warning()
+                                    // Haptic removed: 仅打开 confirm dialog，非真删
                                     pendingDelete = item
                                 } label: {
                                     Image(systemName: "trash")

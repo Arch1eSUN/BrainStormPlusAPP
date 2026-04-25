@@ -25,6 +25,8 @@ public struct TaskListView: View {
     @State private var selectedFilter: TaskFilter = .all
     @State private var isShowingCreateTask = false
     @State private var viewMode: ViewMode = .list
+    /// 删除二次确认 —— 长按 / swipe 都打到这个 sheet（docs/longpress-system.md）。
+    @State private var pendingDeleteTask: TaskModel? = nil
 
     /// Phase 3 isEmbedded：当父容器（例如 MainTabView tab / ActionItemHelper
     /// NavigationLink destination / Dashboard quick-action tile）已经持有
@@ -120,7 +122,7 @@ public struct TaskListView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 viewModeToggleButton
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈按钮过密震动
                     isShowingCreateTask = true
                 } label: {
                     Image(systemName: "plus")
@@ -130,7 +132,7 @@ public struct TaskListView: View {
             }
         }
         .refreshable {
-            Haptic.soft()
+            // Haptic removed: 用户反馈滑动场景不应震动
             await viewModel.fetchTasks()
             await viewModel.fetchProjects()
         }
@@ -141,6 +143,25 @@ public struct TaskListView: View {
         }
         .sheet(isPresented: $isShowingCreateTask) {
             CreateTaskView(viewModel: viewModel)
+        }
+        // 单一 destructive confirm —— 长按 / 横滑都打到这个 dialog。
+        .confirmationDialog(
+            "删除该任务？",
+            isPresented: Binding(
+                get: { pendingDeleteTask != nil },
+                set: { if !$0 { pendingDeleteTask = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeleteTask
+        ) { target in
+            Button("删除", role: .destructive) {
+                Haptic.warning() // destructive 真删确认完成
+                Task { await viewModel.deleteTask(task: target) }
+                pendingDeleteTask = nil
+            }
+            Button("取消", role: .cancel) { pendingDeleteTask = nil }
+        } message: { target in
+            Text("「\(target.title)」将被永久删除")
         }
     }
 
@@ -193,13 +214,16 @@ public struct TaskListView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: BsSpacing.lg, bottom: 4, trailing: BsSpacing.lg))
                     .listRowSeparator(.hidden)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    // Trailing swipe —— delete 走二次确认；快速完成无确认。
+                    // allowsFullSwipe 关掉避免误删（用户反馈过手滑）。
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
-                            Task { await viewModel.deleteTask(task: task) }
+                            pendingDeleteTask = task
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
                         Button {
+                            // Haptic removed: swipe action 系统自带反馈
                             Task { await viewModel.toggleTaskCompletion(task.id) }
                         } label: {
                             Label(task.progress >= 100 ? "撤销完成" : "标记完成",
@@ -207,24 +231,39 @@ public struct TaskListView: View {
                         }
                         .tint(BsColor.success)
                     }
+                    // 长按系统设计 (docs/longpress-system.md)：
+                    //   • 顶部：主要 mutation —— 标完成 / 撤销完成
+                    //   • 中部：编辑（状态切换 submenu）
+                    //   • 底部：destructive —— 删除（confirmationDialog 二次确认）
                     .contextMenu {
-                        ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
-                            Button {
-                                Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
-                            } label: {
-                                Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
-                            }
-                            .disabled(s == task.status)
-                        }
-                        Divider()
                         Button {
+                            Haptic.success()
                             Task { await viewModel.toggleTaskCompletion(task.id) }
                         } label: {
-                            Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
+                            Label(task.progress >= 100 ? "撤销完成" : "标完成",
+                                  systemImage: task.progress >= 100 ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
                         }
+
+                        // 状态切换作为 "编辑" 的轻量入口 —— TaskEditSheet 待新
+                        // sprint，状态是当前 ios 端唯一可改字段。
+                        Menu {
+                            ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
+                                Button {
+                                    Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
+                                } label: {
+                                    Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "circle")
+                                }
+                                .disabled(s == task.status)
+                            }
+                        } label: {
+                            Label("修改状态", systemImage: "slider.horizontal.3")
+                        }
+
                         Divider()
+
                         Button(role: .destructive) {
-                            Task { await viewModel.deleteTask(task: task) }
+                            // Haptic removed: 仅打开 confirm dialog，真删确认时再震
+                            pendingDeleteTask = task
                         } label: {
                             Label("删除任务", systemImage: "trash")
                         }
@@ -262,9 +301,7 @@ public struct TaskListView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: selectedFilter) { _, _ in
-            Haptic.rigid()
-        }
+        // Haptic removed: 用户反馈 picker 切换过密震动
     }
 
     // MARK: - Stats row (preserved)
@@ -304,7 +341,7 @@ public struct TaskListView: View {
     private var projectFilterMenu: some View {
         Menu {
             Button {
-                Haptic.selection()
+                // Haptic removed: 用户反馈 menu 切换过密震动
                 viewModel.projectFilter = nil
             } label: {
                 Label("全部项目", systemImage: viewModel.projectFilter == nil ? "checkmark" : "folder")
@@ -312,7 +349,7 @@ public struct TaskListView: View {
             Divider()
             ForEach(viewModel.projects) { project in
                 Button {
-                    Haptic.selection()
+                    // Haptic removed: 用户反馈 menu 切换过密震动
                     viewModel.projectFilter = project.id
                 } label: {
                     Label(project.name, systemImage: viewModel.projectFilter == project.id ? "checkmark" : "folder")
@@ -328,7 +365,7 @@ public struct TaskListView: View {
     /// List/Kanban toggle — single button that flips modes, uses SF symbol to convey state.
     private var viewModeToggleButton: some View {
         Button {
-            Haptic.rigid()
+            // Haptic removed: 用户反馈 toolbar toggle 过密震动
             withAnimation(BsMotion.Anim.overshoot) {
                 viewMode = (viewMode == .list) ? .kanban : .list
             }
@@ -339,105 +376,125 @@ public struct TaskListView: View {
         .accessibilityLabel(viewMode == .list ? "切换看板视图" : "切换列表视图")
     }
 
-    // MARK: - Kanban mode body (UNCHANGED logic, only dropped the old header wrapper)
+    // MARK: - Kanban mode body (Phase 12 重写)
+    //
+    // Bug-fix(Kanban 横向视图奇怪) v3:
+    //
+    // Root cause:
+    //   1. 列宽固定 280pt → iPhone (393pt 屏) 一次只能看 1.4 列,半列被切边
+    //      不舒服;小屏 (iPhone SE 320pt) 几乎看不全单列。
+    //   2. 外横 ScrollView + 每列内部 vertical ScrollView 双层手势冲突 ——
+    //      横向滑的时候经常被列内竖滚抢手,要先把手指放对位置才能横滑。
+    //   3. 卡片用 TaskKanbanCardView 跟 list mode 视觉差异大,两个 mode 切换
+    //      像换了个 app。
+    //   4. 列 header 不 sticky,滚到底部看不到当前在哪列。
+    //
+    // 修法 v3 (按用户 spec):
+    //   • 列宽 = 屏宽 / 1.5 → 一次能完整看一列 + 下一列预览 ~33%。
+    //   • 外层 ScrollView(.horizontal) + LazyHStack —— 列 lazy 渲染,空列零代价。
+    //   • 列内不再嵌 ScrollView ——> 改用 LazyVStack。如果某列卡片超过屏高,
+    //     整个 kanban 一起垂直滚 (我们再加一层 vertical ScrollView 在外层
+    //     嵌套时 gesture 会冲突 —— iOS 不允许两轴 ScrollView 嵌套同方向)。
+    //   • 卡片用本文件下面定义的 KanbanCompactCard —— 一行标题 + 优先级
+    //     小点 + due date,跟 list mode 视觉同源 (复用 BsContentCard token)。
 
     private var kanbanBody: some View {
-        // Bug-fix(Kanban 横向视图奇怪):
-        // 问题 1 — 每列宽 280 但整行 HStack 内 column 高度由各自内容决定,
-        //          .alignment(.top) 让顶部对齐,但空列 vs 满列会有强烈锯齿。
-        // 问题 2 — column 内套 ScrollView(垂直) + .frame(minHeight: 200) 造成
-        //          双层 ScrollView (外横/内竖) 嵌套,iPhone 17 Pro Max 触摸
-        //          手势冲突,横向拖拽偶尔抢不到。
-        // 修法:外层 GeometryReader 取可用高度作为 column maxHeight,column 内部
-        //       改用 LazyVStack 不再嵌 ScrollView —— 让外层横向 ScrollView
-        //       只管横向滚,垂直滚交给每列自己的 ScrollView(但由 maxHeight 锚定)。
         GeometryReader { proxy in
+            let columnWidth = max(min(proxy.size.width / 1.5, 360), 240)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
+                LazyHStack(alignment: .top, spacing: 12) {
                     ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { column in
-                        kanbanColumn(for: column)
-                            .frame(width: 280)
-                            .frame(height: max(proxy.size.height - 24, 200), alignment: .top)
+                        kanbanColumn(for: column, width: columnWidth)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .padding(.top, BsSpacing.md)
-                .padding(.bottom, 100)
+                .padding(.bottom, BsSpacing.xxl)
             }
+            .scrollIndicators(.hidden)
         }
     }
 
     @ViewBuilder
-    private func kanbanColumn(for column: TaskModel.TaskStatus) -> some View {
+    private func kanbanColumn(for column: TaskModel.TaskStatus, width: CGFloat) -> some View {
         let tasks = viewModel.filteredTasks.filter { $0.status == column }
 
         VStack(alignment: .leading, spacing: 10) {
-            // Column header: dot + label + count pill.
+            // Column header — dot + label + count pill,跟 list mode statsRow 视觉同步。
             HStack(spacing: BsSpacing.sm) {
                 Circle()
                     .fill(column.tint)
                     .frame(width: 8, height: 8)
                 Text(column.cnLabel)
-                    .font(Font.custom("Inter-SemiBold", size: 14, relativeTo: .subheadline))
+                    .font(BsTypography.cardSubtitle)
                     .foregroundColor(BsColor.ink)
                 Spacer()
                 Text("\(tasks.count)")
-                    .font(BsTypography.captionSmall)
+                    .font(BsTypography.captionSmall.weight(.semibold))
                     .foregroundColor(BsColor.inkMuted)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(BsColor.inkFaint.opacity(0.2))
-                    .clipShape(Capsule())
+                    .background(column.tint.opacity(0.15), in: Capsule())
             }
-            .padding(.horizontal, BsSpacing.xs)
-
-            // Droppable body — iOS 16+ `.dropDestination` receives the
-            // task id (String). Body keeps a minimum height so empty
-            // columns can still accept drops.
-            ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(tasks) { task in
-                        TaskKanbanCardView(
-                            task: task,
-                            onChangeStatus: { newStatus in
-                                Task { await viewModel.updateTaskStatus(task: task, newStatus: newStatus) }
-                            },
-                            onToggleComplete: {
-                                Task { await viewModel.toggleTaskCompletion(task.id) }
-                            },
-                            onDelete: {
-                                Task { await viewModel.deleteTask(task: task) }
-                            }
-                        )
-                        .draggable(task.id.uuidString) {
-                            // Lightweight drag preview.
-                            TaskKanbanCardView(
-                                task: task,
-                                onChangeStatus: { _ in },
-                                onToggleComplete: {},
-                                onDelete: {}
-                            )
-                            .frame(width: 260)
-                            .opacity(0.85)
-                        }
-                    }
-                    if tasks.isEmpty {
-                        Text("暂无任务")
-                            .font(BsTypography.caption)
-                            .foregroundColor(BsColor.inkMuted.opacity(0.7))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, BsSpacing.xxxl - 8)
-                    }
-                }
-                .padding(BsSpacing.sm)
-            }
-            .frame(maxHeight: .infinity)
-            .background(BsColor.surfaceSecondary.opacity(0.3))
+            .padding(.horizontal, BsSpacing.sm)
+            .padding(.vertical, BsSpacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(BsColor.surfacePrimary)
             .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
-                    .stroke(BsColor.borderSubtle, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                    .stroke(BsColor.borderSubtle, lineWidth: 0.5)
             )
+
+            // Body —— LazyVStack 不嵌 ScrollView。横/竖手势分离。
+            LazyVStack(spacing: 10) {
+                ForEach(tasks) { task in
+                    KanbanCompactCard(task: task)
+                        .draggable(task.id.uuidString) {
+                            KanbanCompactCard(task: task)
+                                .frame(width: width - 24)
+                                .opacity(0.85)
+                        }
+                        .contextMenu {
+                            ForEach([TaskModel.TaskStatus.todo, .inProgress, .review, .done], id: \.self) { s in
+                                Button {
+                                    Task { await viewModel.updateTaskStatus(task: task, newStatus: s) }
+                                } label: {
+                                    Label(s.cnLabel, systemImage: s == task.status ? "checkmark" : "")
+                                }
+                                .disabled(s == task.status)
+                            }
+                            Divider()
+                            Button {
+                                Task { await viewModel.toggleTaskCompletion(task.id) }
+                            } label: {
+                                Label(task.progress >= 100 ? "撤销完成" : "标记完成", systemImage: "checkmark.circle")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                pendingDeleteTask = task
+                            } label: {
+                                Label("删除任务", systemImage: "trash")
+                            }
+                        }
+                }
+
+                if tasks.isEmpty {
+                    Text("暂无任务")
+                        .font(BsTypography.caption)
+                        .foregroundColor(BsColor.inkMuted.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, BsSpacing.xxl)
+                        .background(
+                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                .fill(BsColor.surfaceSecondary.opacity(0.4))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                                .stroke(BsColor.borderSubtle, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                }
+            }
             .dropDestination(for: String.self) { ids, _ in
                 guard let first = ids.first, let uuid = UUID(uuidString: first) else { return false }
                 guard let task = viewModel.tasks.first(where: { $0.id == uuid }) else { return false }
@@ -447,6 +504,7 @@ public struct TaskListView: View {
                 return true
             }
         }
+        .frame(width: width, alignment: .top)
     }
 
     // MARK: - Empty state
@@ -548,7 +606,7 @@ public struct CreateTaskView: View {
                                 } else {
                                     selectedParticipants.insert(member.id)
                                 }
-                                Haptic.rigid()
+                                // Haptic removed: 用户反馈 chip 切换过密震动
                             } label: {
                                 HStack {
                                     Image(systemName: selectedParticipants.contains(member.id) ? "checkmark.square.fill" : "square")
@@ -592,7 +650,7 @@ public struct CreateTaskView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .font(Font.custom("Inter-Medium", size: 16, relativeTo: .body))
@@ -602,7 +660,7 @@ public struct CreateTaskView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("创建") {
-                        Haptic.medium()
+                        // Haptic 由 submitTask() 内部统一触发
                         submitTask()
                     }
                     .font(Font.custom("Inter-SemiBold", size: 16, relativeTo: .body))
@@ -621,7 +679,7 @@ public struct CreateTaskView: View {
 
         isSubmitting = true
         submissionError = nil
-        Haptic.rigid()
+        Haptic.medium() // 关键 mutation：创建任务
 
         Task {
             do {
@@ -641,5 +699,69 @@ public struct CreateTaskView: View {
                 isSubmitting = false
             }
         }
+    }
+}
+
+// MARK: - Kanban Compact Card
+
+/// 看板模式专用紧凑卡片 —— 一行能看清的最小信息密度:
+///   • 优先级小圆点 (左侧 4pt 色条 + 顶部小点) —— 一眼颜色判断紧急程度
+///   • 标题 (最多 2 行截断) —— 主要识别符
+///   • 截止日期 + 是否逾期 (caption2) —— 时间感知
+///
+/// 跟 TaskCardView (list mode) 视觉同源:都用 BsContentCard token,
+/// 都用 BsColor 调色板,但布局更紧凑 (适合横滑卡片)。
+private struct KanbanCompactCard: View {
+    let task: TaskModel
+
+    private var isOverdue: Bool {
+        guard let due = task.dueDate else { return false }
+        return task.progress < 100 && due < Date()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            // 左侧 3pt 优先级色条 —— 直观判断紧急程度
+            Rectangle()
+                .fill(task.priority.tint)
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 6) {
+                // 标题 + 优先级小点
+                HStack(alignment: .top, spacing: 6) {
+                    Circle()
+                        .fill(task.priority.tint)
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 5)
+                    Text(task.title)
+                        .font(BsTypography.bodySmall.weight(.medium))
+                        .foregroundColor(BsColor.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                // Due date 行 —— 没有 due 也不强行渲染,保持紧凑
+                if let due = task.dueDate {
+                    HStack(spacing: 4) {
+                        Image(systemName: isOverdue ? "exclamationmark.circle.fill" : "calendar")
+                            .font(.caption2)
+                            .foregroundColor(isOverdue ? BsColor.danger : BsColor.inkMuted)
+                        Text(due, format: .dateTime.month(.abbreviated).day())
+                            .font(BsTypography.captionSmall)
+                            .foregroundColor(isOverdue ? BsColor.danger : BsColor.inkMuted)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+        }
+        .background(BsColor.surfacePrimary)
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.md, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

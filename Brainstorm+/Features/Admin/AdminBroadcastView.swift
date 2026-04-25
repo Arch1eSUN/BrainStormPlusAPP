@@ -135,7 +135,7 @@ public struct AdminBroadcastView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: vm.type) { _, _ in Haptic.selection() }
+                // Haptic removed: 用户反馈 picker 切换过密震动
             }
 
             if let info = vm.info {

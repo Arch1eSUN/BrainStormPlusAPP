@@ -84,7 +84,7 @@ public struct ProjectDetailView: View {
             if viewModel.accessOutcome != .denied, let _ = viewModel.project {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈 toolbar 按钮过密震动
                         isShowingEditSheet = true
                     } label: {
                         Image(systemName: "pencil")
@@ -98,7 +98,7 @@ public struct ProjectDetailView: View {
                 // must never see a destructive affordance for a project they can't read.
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Haptic.warning()
+                        // Haptic removed: 仅打开 confirm dialog，不是真删
                         isShowingDeleteConfirm = true
                     } label: {
                         Image(systemName: "trash")
@@ -837,7 +837,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
-                Haptic.medium()
+                // Haptic removed: AI 生成按钮非关键 mutation
                 Task { await viewModel.generateSummary() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -998,7 +998,7 @@ public struct ProjectDetailView: View {
             HStack {
                 Spacer()
                 Button {
-                    Haptic.warning()
+                    // Haptic removed: 仅打开 confirm dialog，不是真同步
                     // Snapshot the draft at tap-time so a concurrent `fetchDetail()` can't
                     // mutate the preview between the tap and the confirmation.
                     guard let draft = viewModel.riskActionSyncDraft() else { return }
@@ -1210,7 +1210,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
-                Haptic.medium()
+                // Haptic removed: 风险分析刷新非关键 mutation
                 Task { await viewModel.refreshRiskAnalysis() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -1329,7 +1329,7 @@ public struct ProjectDetailView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, BsSpacing.xxl)
             Button {
-                Haptic.medium()
+                // Haptic removed: 用户反馈辅助按钮过密震动
                 Task { await reload() }
             } label: {
                 Text("重试")
@@ -1523,7 +1523,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
-                Haptic.medium()
+                // Haptic removed: 刷新非关键 mutation
                 Task { await viewModel.refreshLinkedRiskActions() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {
@@ -1855,7 +1855,7 @@ public struct ProjectDetailView: View {
         HStack {
             Spacer()
             Button {
-                Haptic.medium()
+                // Haptic removed: 刷新非关键 mutation
                 Task { await viewModel.refreshResolutionFeedback() }
             } label: {
                 HStack(spacing: BsSpacing.sm) {

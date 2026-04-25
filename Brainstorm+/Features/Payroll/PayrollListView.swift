@@ -73,11 +73,11 @@ public struct PayrollListView: View {
                                 .modifier(AdminRowActions(
                                     isEnabled: viewModel.canEdit,
                                     onEdit: {
-                                        Haptic.light()
+                                        // Haptic removed: 用户反馈菜单选项过密震动
                                         editorTarget = .edit(payroll)
                                     },
                                     onDelete: {
-                                        Haptic.light()
+                                        // Haptic removed: 仅打开 confirm dialog，非真删
                                         pendingDelete = payroll
                                     }
                                 ))
@@ -96,7 +96,7 @@ public struct PayrollListView: View {
             if viewModel.canEdit && viewModel.scope == .all {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈 toolbar 按钮过密震动
                         editorTarget = .create
                     } label: {
                         Image(systemName: "plus")
@@ -159,7 +159,7 @@ public struct PayrollListView: View {
                         period: target.period
                     )
                     if ok {
-                        Haptic.rigid()
+                        Haptic.warning() // destructive 真删确认完成
                     } else {
                         Haptic.warning()
                     }
@@ -178,7 +178,7 @@ public struct PayrollListView: View {
         Picker("查看范围", selection: Binding(
             get: { viewModel.scope },
             set: { newValue in
-                Haptic.selection()
+                // Haptic removed: 用户反馈 picker 切换过密震动
                 Task { await viewModel.setScope(newValue) }
             }
         )) {

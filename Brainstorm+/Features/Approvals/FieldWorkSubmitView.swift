@@ -84,7 +84,7 @@ public struct FieldWorkSubmitView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .disabled(viewModel.isSubmitting)

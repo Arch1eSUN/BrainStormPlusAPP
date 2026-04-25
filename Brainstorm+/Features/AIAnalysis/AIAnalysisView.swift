@@ -226,7 +226,7 @@ public struct AIAnalysisView: View {
                 HStack {
                     Spacer()
                     Button {
-                        Haptic.medium()
+                        // Haptic removed: AI 分析触发非关键 mutation
                         viewModel.submit()
                     } label: {
                         HStack(spacing: BsSpacing.xs + 2) { // 6pt
@@ -257,7 +257,7 @@ public struct AIAnalysisView: View {
     private func platformTile(_ p: MediaPlatform) -> some View {
         let selected = viewModel.platform == p
         return Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             viewModel.platform = p
         } label: {
             VStack(spacing: BsSpacing.xs + 2) { // 6pt
@@ -305,7 +305,7 @@ public struct AIAnalysisView: View {
             }
             Spacer()
             Button {
-                Haptic.light()
+                // Haptic removed: 用户反馈辅助按钮过密震动
                 viewModel.reset()
             } label: {
                 HStack(spacing: BsSpacing.xs) {
@@ -522,7 +522,7 @@ public struct AIAnalysisView: View {
             Spacer()
             if viewModel.pageState == .streaming {
                 Button(role: .destructive) {
-                    Haptic.warning()
+                    // Haptic removed: 停止生成非真删 mutation
                     viewModel.stop()
                 } label: {
                     HStack(spacing: BsSpacing.xs + 2) {
@@ -538,7 +538,7 @@ public struct AIAnalysisView: View {
                 .accessibilityLabel("停止当前分析")
             }
             Button {
-                Haptic.light()
+                // Haptic removed: 用户反馈辅助按钮过密震动
                 viewModel.reset()
             } label: {
                 HStack(spacing: BsSpacing.xs + 2) {

@@ -84,7 +84,7 @@ public struct HiringCenterView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 8)
-            .onChange(of: selectedTab) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker 切换过密震动
 
             Group {
                 switch selectedTab {

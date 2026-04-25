@@ -169,8 +169,7 @@ public struct AdminHolidaysView: View {
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            Haptic.rigid()
-                            Haptic.warning()
+                            // Haptic removed: swipe action 系统自带反馈
                             Task { await vm.delete(id: row.id) }
                         } label: {
                             Label("删除", systemImage: "trash")
@@ -184,7 +183,7 @@ public struct AdminHolidaysView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showAddSheet = true
                 } label: {
                     Image(systemName: "plus")

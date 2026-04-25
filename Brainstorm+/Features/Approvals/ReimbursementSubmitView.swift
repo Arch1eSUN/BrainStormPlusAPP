@@ -127,7 +127,7 @@ public struct ReimbursementSubmitView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
+                    // Haptic removed: 用户反馈 picker 切换过密震动
                 }
                 }
                 .scrollContentBackground(.hidden)
@@ -138,7 +138,7 @@ public struct ReimbursementSubmitView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .disabled(viewModel.isSubmitting || viewModel.isUploading)
@@ -152,9 +152,7 @@ public struct ReimbursementSubmitView: View {
                 }
             }
             .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
-            .onChange(of: viewModel.category) { _, _ in Haptic.selection() }
-            .onChange(of: viewModel.paymentMethod) { _, _ in Haptic.selection() }
-            .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker onChange 过密震动
             .onChange(of: photoItems) { _, newValue in
                 guard !newValue.isEmpty else { return }
                 Task { await viewModel.ingestPhotoItems(newValue) }
@@ -272,7 +270,7 @@ public struct ReimbursementSubmitView: View {
             // Delete overlay — long-press avoids accidental tap-removal
             // in a compact grid, mirroring the hover-on-desktop Web UI.
             Button(role: .destructive) {
-                Haptic.rigid()
+                // Haptic removed: 本地 receipt 删除非关键 mutation
                 viewModel.removeReceipt(at: index)
             } label: {
                 Image(systemName: "xmark.circle.fill")

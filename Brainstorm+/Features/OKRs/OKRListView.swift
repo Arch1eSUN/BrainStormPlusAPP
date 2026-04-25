@@ -57,7 +57,7 @@ public struct OKRListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showingCreate = true
                 } label: {
                     Image(systemName: "plus")
@@ -167,7 +167,7 @@ public struct OKRListView: View {
                 Menu {
                     ForEach(viewModel.availableYears, id: \.self) { year in
                         Button(String(year)) {
-                            Haptic.selection()
+                            // Haptic removed: 用户反馈 picker 切换过密震动
                             viewModel.period = OKRListViewModel.formatPeriod(
                                 year: year, quarter: parsed.quarter
                             )
@@ -193,7 +193,7 @@ public struct OKRListView: View {
                 ForEach(viewModel.availableQuarters, id: \.self) { q in
                     let active = parsed.quarter == q
                     Button {
-                        Haptic.selection()
+                        // Haptic removed: 用户反馈 quarter 切换过密震动
                         viewModel.period = OKRListViewModel.formatPeriod(
                             year: parsed.year, quarter: q
                         )
@@ -317,7 +317,7 @@ public struct OKRListView: View {
             // Header row — tap chevron to expand, tap title area to push detail.
             HStack(spacing: BsSpacing.md) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈展开/收起辅助按钮过密震动
                     withAnimation(BsMotion.Anim.smooth) {
                         if isOpen { expanded.remove(obj.id) } else { expanded.insert(obj.id) }
                     }
@@ -402,7 +402,7 @@ public struct OKRListView: View {
         let transitions = OKRListViewModel.validStatusTransitions[obj.status] ?? []
         ForEach(transitions, id: \.self) { target in
             Button {
-                Haptic.selection()
+                // Haptic removed: 用户反馈 contextMenu 选择过密震动；mutation 时再震
                 pendingStatus = PendingStatusChange(objective: obj, target: target)
             } label: {
                 Label(statusActionLabel(target), systemImage: statusActionIcon(target))
@@ -412,7 +412,7 @@ public struct OKRListView: View {
             Divider()
         }
         Button(role: .destructive) {
-            Haptic.selection()
+            // Haptic removed: 用户反馈菜单选择过密震动；真删确认时再震
             pendingDelete = obj
         } label: {
             Label("删除目标", systemImage: "trash")
@@ -444,7 +444,10 @@ public struct OKRListView: View {
                     objectiveId: change.objective.id,
                     newStatus: change.target
                 )
-                Haptic.soft()
+                // 仅 .completed 这种 terminal action 触发 haptic（按用户规则）
+                if change.target == .completed {
+                    Haptic.medium()
+                }
             } catch {
                 Haptic.warning()
                 actionError = ErrorLocalizer.localize(error)
@@ -456,7 +459,7 @@ public struct OKRListView: View {
         Task { @MainActor in
             do {
                 try await viewModel.deleteObjective(objectiveId: obj.id)
-                Haptic.rigid()
+                Haptic.warning() // destructive 确认完成
             } catch {
                 Haptic.warning()
                 actionError = ErrorLocalizer.localize(error)

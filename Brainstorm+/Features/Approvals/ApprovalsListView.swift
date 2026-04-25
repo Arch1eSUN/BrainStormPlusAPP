@@ -38,6 +38,31 @@ public struct ApprovalsListView: View {
     /// embeddings without a namespace still compile.
     private let zoomNamespace: Namespace.ID?
 
+    /// Bug-fix(审批中心也没有分类):
+    /// "我提交的" tab 之前是一条 flat list,所有 type 混在一起 —— 用户提了几次
+    /// 不同类型的审批后,要在一堆里翻找。加一个横向 chip 行做 in-tab filter,
+    /// 切换不重新拉数据(本地按 requestType 过滤),保持顺滑。
+    /// chip 顺序按用户 spec:全部 / 请假 / 差旅 / 报销 / 采购 / 外勤 / 通用。
+    /// 日报/周报已不再走 approval_requests 表(migration 20260421190000),
+    /// 历史 row 仍可在"全部"里看到 + 按 request_type fallback 渲染。
+    @State private var typeFilter: ApprovalRequestType? = nil
+
+    /// chip 行的 type 顺序 —— nil = "全部"
+    private static let typeFilterOrder: [ApprovalRequestType?] = [
+        nil,
+        .leave,
+        .businessTrip,
+        .reimbursement,
+        .procurement,
+        .fieldWork,
+        .generic,
+    ]
+
+    private var filteredRows: [ApprovalMySubmissionRow] {
+        guard let f = typeFilter else { return viewModel.rows }
+        return viewModel.rows.filter { $0.requestType == f }
+    }
+
     public init(
         viewModel: MySubmissionsViewModel,
         client: SupabaseClient,
@@ -49,22 +74,30 @@ public struct ApprovalsListView: View {
     }
 
     public var body: some View {
-        Group {
-            if viewModel.isLoading && viewModel.rows.isEmpty {
-                ProgressView()
-                    .controlSize(.large)
+        VStack(spacing: 0) {
+            // Type filter chip row —— 始终可见,放 list 之上 stats / segment 类似
+            // 位置。即使下面是 empty state,filter 行也保留以便用户切回"全部"。
+            typeFilterChipRow
+
+            Group {
+                if viewModel.isLoading && viewModel.rows.isEmpty {
+                    ProgressView()
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredRows.isEmpty {
+                    // Bug-fix(审批中心视图奇怪): 同 ApprovalQueueView，empty 撑满避免
+                    // pillBar 被居中推位。
+                    BsEmptyState(
+                        title: typeFilter == nil ? "暂无提交记录" : "暂无\(typeFilter!.displayLabel)记录",
+                        systemImage: "tray",
+                        description: typeFilter == nil
+                            ? "你还没有提交过审批申请。"
+                            : "切换到「全部」查看其他类型,或点击右上角「+」新建一条。"
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.rows.isEmpty {
-                // Bug-fix(审批中心视图奇怪): 同 ApprovalQueueView，empty 撑满避免
-                // pillBar 被居中推位。
-                BsEmptyState(
-                    title: "暂无提交记录",
-                    systemImage: "tray",
-                    description: "你还没有提交过审批申请。"
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                submissionsList
+                } else {
+                    submissionsList
+                }
             }
         }
         // Nav title + UUID deep-link destination are owned by the outer
@@ -79,12 +112,62 @@ public struct ApprovalsListView: View {
         }
     }
 
+    // MARK: - Type filter chip row
+
+    @ViewBuilder
+    private var typeFilterChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: BsSpacing.sm) {
+                ForEach(Self.typeFilterOrder, id: \.self) { type in
+                    typeChipButton(type)
+                }
+            }
+            .padding(.horizontal, BsSpacing.lg)
+            .padding(.vertical, BsSpacing.sm)
+        }
+        .background(BsColor.pageBackground)
+    }
+
+    @ViewBuilder
+    private func typeChipButton(_ type: ApprovalRequestType?) -> some View {
+        let isSelected = type == typeFilter
+        let label = type?.displayLabel ?? "全部"
+        let count = type == nil ? viewModel.rows.count : viewModel.rows.filter { $0.requestType == type }.count
+
+        Button {
+            // Haptic removed: 用户反馈 chip 切换过密震动
+            typeFilter = type
+        } label: {
+            HStack(spacing: 5) {
+                Text(label)
+                    .font(BsTypography.captionSmall.weight(isSelected ? .semibold : .medium))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption2)
+                        .foregroundStyle(isSelected ? .white.opacity(0.85) : BsColor.inkFaint)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .foregroundStyle(isSelected ? .white : BsColor.ink)
+            .background(
+                Capsule().fill(isSelected ? BsColor.brandAzure : BsColor.surfaceSecondary)
+            )
+            .overlay(
+                Capsule().stroke(BsColor.borderSubtle.opacity(isSelected ? 0 : 1), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - List
 
     @ViewBuilder
     private var submissionsList: some View {
         List {
-            ForEach(Array(viewModel.rows.enumerated()), id: \.element.id) { index, row in
+            // 用 filteredRows 而非 viewModel.rows —— filter chip 应用本地过滤,
+            // 不重新拉数据。chip 切换瞬时,refreshable 仍然走原始 vm.list*。
+            ForEach(Array(filteredRows.enumerated()), id: \.element.id) { index, row in
             NavigationLink(value: row.id) {
                 Group {
                     if let ns = zoomNamespace {
@@ -105,11 +188,7 @@ public struct ApprovalsListView: View {
                 bottom: BsSpacing.xs,
                 trailing: BsSpacing.lg
             ))
-            // Light haptic on tap so the push into detail has the same
-            // feel as Dashboard cards (DashboardRoleSections.swift:217).
-            .simultaneousGesture(
-                TapGesture().onEnded { Haptic.light() }
-            )
+            // Haptic removed: 用户反馈列表行点击期待静默
             // iOS 26 native swipe — destructive withdraw is the Web parity
             // action here, but MySubmissionsViewModel doesn't own it yet
             // (withdraw lives in ApprovalDetailViewModel). Leaving the

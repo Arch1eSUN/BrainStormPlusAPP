@@ -240,7 +240,7 @@ public struct PayrollEditSheet: View {
                         ForEach(viewModel.employeeDirectory) { entry in
                             Button(entry.fullName ?? entry.id.uuidString) {
                                 selectedUserId = entry.id
-                                Haptic.selection()
+                                // Haptic removed: menu 选项过密震动
                             }
                         }
                     }
@@ -393,7 +393,7 @@ public struct PayrollEditSheet: View {
             let ok = await viewModel.adminSavePayroll(record: input)
             isSubmitting = false
             if ok {
-                Haptic.soft()
+                Haptic.medium() // 保存薪资 mutation 成功
                 onDismiss()
             } else {
                 Haptic.warning()

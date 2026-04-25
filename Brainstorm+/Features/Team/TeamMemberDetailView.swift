@@ -82,7 +82,7 @@ public struct TeamMemberDetailView: View {
 
     private var startChatButton: some View {
         Button {
-            Haptic.medium()
+            // Haptic removed: BsSecondaryButtonStyle 内部已含按压 haptic，避免双重震动
             Task { await startChatTapped() }
         } label: {
             HStack(spacing: BsSpacing.sm + 2) {

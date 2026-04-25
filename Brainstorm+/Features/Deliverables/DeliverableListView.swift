@@ -55,7 +55,7 @@ public struct DeliverableListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showCreateSheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -64,7 +64,7 @@ public struct DeliverableListView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar toggle 过密震动
                     withAnimation(BsMotion.Anim.smooth) {
                         showFilters.toggle()
                     }
@@ -128,7 +128,7 @@ public struct DeliverableListView: View {
                         // empty state gives users a direct entry into the
                         // create flow without hunting for the toolbar.
                         Button {
-                            Haptic.medium()
+                            // Haptic removed: 仅打开 create sheet，不是真创建
                             showCreateSheet = true
                         } label: {
                             Label("新建交付物", systemImage: "plus")
@@ -204,10 +204,10 @@ public struct DeliverableListView: View {
                         .foregroundStyle(BsColor.inkMuted)
                     Spacer()
                     Menu {
-                        Button("所有项目") { Haptic.selection(); viewModel.projectFilter = nil }
+                        Button("所有项目") { /* Haptic removed: filter menu */ viewModel.projectFilter = nil }
                         ForEach(viewModel.projects, id: \.id) { p in
                             if let pid = p.id {
-                                Button(p.name ?? "(未命名)") { Haptic.selection(); viewModel.projectFilter = pid }
+                                Button(p.name ?? "(未命名)") { /* Haptic removed: filter menu */ viewModel.projectFilter = pid }
                             }
                         }
                     } label: {
@@ -225,10 +225,10 @@ public struct DeliverableListView: View {
                         .foregroundStyle(BsColor.inkMuted)
                     Spacer()
                     Menu {
-                        Button("所有人") { Haptic.selection(); viewModel.assigneeFilter = nil }
+                        Button("所有人") { /* Haptic removed: filter menu */ viewModel.assigneeFilter = nil }
                         ForEach(viewModel.members, id: \.id) { m in
                             if let mid = m.id {
-                                Button(m.fullName ?? "未命名") { Haptic.selection(); viewModel.assigneeFilter = mid }
+                                Button(m.fullName ?? "未命名") { /* Haptic removed: filter menu */ viewModel.assigneeFilter = mid }
                             }
                         }
                     } label: {
@@ -267,7 +267,7 @@ public struct DeliverableListView: View {
                     if viewModel.dateFrom != nil || viewModel.dateTo != nil
                         || viewModel.projectFilter != nil || viewModel.assigneeFilter != nil {
                         Button("清除") {
-                            Haptic.light()
+                            // Haptic removed: filter 清除按钮过密震动
                             viewModel.dateFrom = nil
                             viewModel.dateTo = nil
                             viewModel.projectFilter = nil
@@ -324,13 +324,13 @@ public struct DeliverableListView: View {
                 .buttonStyle(.plain)
                 .contextMenu {
                     Button {
-                        Haptic.light()
+                        // Haptic removed: contextMenu 选项过密震动
                         editTarget = d
                     } label: {
                         Label("编辑", systemImage: "pencil")
                     }
                     Button(role: .destructive) {
-                        Haptic.warning()
+                        // Haptic removed: 仅打开 confirm dialog，不是真删
                         deleteTarget = d
                     } label: {
                         Label("删除", systemImage: "trash")
@@ -350,7 +350,7 @@ public struct DeliverableListView: View {
     @ViewBuilder
     private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             action()
         } label: {
             Text(label)

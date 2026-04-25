@@ -60,7 +60,7 @@ public struct DeliverableCreateSheet: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .font(BsTypography.inter(16, weight: "Medium", relativeTo: .callout))
@@ -148,13 +148,13 @@ public struct DeliverableCreateSheet: View {
         Section(header: sectionHeader("关联项目")) {
             Menu {
                 Button("不关联项目") {
-                    Haptic.selection()
+                    // Haptic removed: menu 选项过密震动
                     projectId = nil
                 }
                 ForEach(viewModel.projects, id: \.id) { p in
                     if let pid = p.id {
                         Button(p.name ?? "(未命名)") {
-                            Haptic.selection()
+                            // Haptic removed: menu 选项过密震动
                             projectId = pid
                         }
                     }

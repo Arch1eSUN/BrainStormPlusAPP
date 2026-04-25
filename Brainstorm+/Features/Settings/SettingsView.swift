@@ -182,7 +182,7 @@ public struct SettingsView: View {
                     // ── 退出登录 ─────────────────────────────────────────
                     Section {
                         Button(role: .destructive) {
-                            Haptic.light()
+                            // Haptic removed: 用户反馈辅助按钮过密震动
                             showingSignOutAlert = true
                         } label: {
                             Label {
@@ -285,7 +285,7 @@ public struct SettingsRowView: View {
 
     public var body: some View {
         Button {
-            Haptic.light()
+            // Haptic removed: 用户反馈列表行点击过密震动
         } label: {
             SettingsRowContent(
                 icon: icon,
@@ -375,7 +375,7 @@ public struct SettingsAppearanceView: View {
             Section {
                 ForEach(BsAppearanceMode.allCases) { mode in
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈 picker 切换过密震动
                         appearanceRaw = mode.rawValue
                     } label: {
                         HStack {

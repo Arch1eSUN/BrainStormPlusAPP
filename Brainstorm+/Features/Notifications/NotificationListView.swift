@@ -4,6 +4,8 @@ import Combine
 public struct NotificationListView: View {
     @StateObject private var viewModel: NotificationListViewModel
     @State private var filter: Filter = .all
+    /// 删除二次确认 —— destructive 动作走 confirmationDialog（iOS 26 习惯）。
+    @State private var pendingDelete: AppNotification? = nil
 
     public enum Filter: String, CaseIterable, Identifiable {
         case all
@@ -133,6 +135,27 @@ public struct NotificationListView: View {
             await viewModel.fetchNotifications()
         }
         .zyErrorBanner($viewModel.errorMessage)
+        // Single source of truth for the destructive delete dialog —— hoisted
+        // here (vs. attached per-row) so SwiftUI doesn't render N dialog
+        // bindings, and dismissal is unambiguous (set pendingDelete = nil).
+        .confirmationDialog(
+            "删除该通知？",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { target in
+            Button("删除", role: .destructive) {
+                Haptic.warning() // destructive 真删确认完成
+                Task { await viewModel.delete(target) }
+                pendingDelete = nil
+            }
+            Button("取消", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("此操作不可撤销")
+        }
     }
 
     /// Loading skeleton —— 行高对齐 NotificationCardView 视觉密度
@@ -172,8 +195,7 @@ public struct NotificationListView: View {
                     label: f == .unread && unreadCount > 0 ? "未读 · \(unreadCount)" : f.displayLabel,
                     isSelected: filter == f
                 ) {
-                    // rigid → light：filter 切换是轻量操作，rigid 在这里偏重
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 chip filter 切换过密震动
                     filter = f
                 }
             }
@@ -202,20 +224,25 @@ public struct NotificationListView: View {
 
     // MARK: - Notification row
 
-    /// 一个通知行 —— glass envelope + swipe "已读" + bsContextMenu + stagger。
-    /// 删除动作缺服务端接口（VM 没 delete 方法），所以 trailing swipe 留空
-    /// —— 不通过客户端 optimistic 删行，避免与 supabase 状态不一致。
+    /// 一个通知行 —— glass envelope + swipe "已读" + 长按 contextMenu + stagger。
+    ///
+    /// 长按菜单（docs/longpress-system.md）：
+    ///   • 标已读 / 标未读（互斥，按当前 read 状态显示）
+    ///   • 打开来源（如 link 非空）
+    ///   • 删除（destructive，confirmationDialog 二次确认）
     @ViewBuilder
     private func notificationRow(_ notification: AppNotification, index: Int) -> some View {
         Button {
-            Haptic.light()
+            // Haptic removed: 用户反馈列表行点击期待静默
             Task { await viewModel.markAsRead(notification) }
         } label: {
             NotificationCardView(notification: notification)
         }
         .buttonStyle(.plain)
         .bsAppearStagger(index: index)
-        // Leading swipe 只在未读时有意义 —— 已读再 mark 无动作。
+        // Leading swipe：未读 → 标已读。Mail.app 镜像。
+        // Trailing swipe：删除（走 pendingDelete confirmation，避免 fullSwipe 误触）。
+        // contextMenu 与 swipe 共享同一 destructive state —— 双入口同终点。
         .bsSwipeActions(
             leading: notification.isEffectivelyRead
                 ? []
@@ -223,21 +250,57 @@ public struct NotificationListView: View {
                     BsSwipeAction.markRead {
                         Task { await viewModel.markAsRead(notification) }
                     }
-                  ]
+                  ],
+            trailing: [
+                BsSwipeAction.delete {
+                    pendingDelete = notification
+                }
+            ],
+            allowsFullSwipe: false
         )
-        .bsContextMenu(
-            notification.isEffectivelyRead
-                ? []
-                : [
-                    BsContextMenuItem(
-                        label: "标记已读",
-                        systemImage: "envelope.open.fill",
-                        haptic: { Haptic.light() }
-                    ) {
-                        Task { await viewModel.markAsRead(notification) }
-                    }
-                  ]
-        )
+        .contextMenu {
+            // —— 顶部：read-state toggle（按当前状态选择 mark）
+            if notification.isEffectivelyRead {
+                Button {
+                    // Haptic removed: contextMenu 选项过密震动
+                    Task { await viewModel.markAsUnread(notification) }
+                } label: {
+                    Label("标为未读", systemImage: "envelope.badge")
+                }
+            } else {
+                Button {
+                    // Haptic removed: contextMenu 选项过密震动
+                    Task { await viewModel.markAsRead(notification) }
+                } label: {
+                    Label("标为已读", systemImage: "envelope.open.fill")
+                }
+            }
+
+            // —— 中部：跳转到来源（link 非空时）
+            // notification.link 通常是 web 路径（"/dashboard/tasks/..."）；
+            // 这里用 UIApplication.open 让系统自动决定（universal link 走 in-app，
+            // 否则 fallback Safari）。
+            if let link = notification.link, !link.isEmpty,
+               let url = URL(string: link)
+            {
+                Button {
+                    // Haptic removed: contextMenu 选项过密震动
+                    #if canImport(UIKit)
+                    UIApplication.shared.open(url)
+                    #endif
+                } label: {
+                    Label("打开来源", systemImage: "arrow.up.forward.app")
+                }
+            }
+
+            // —— 底部：destructive
+            Button(role: .destructive) {
+                // Haptic removed: 仅打开 confirm dialog，真删确认时再震
+                pendingDelete = notification
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
     }
 }
 

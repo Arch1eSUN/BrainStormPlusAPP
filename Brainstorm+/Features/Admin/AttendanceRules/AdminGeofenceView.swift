@@ -49,7 +49,7 @@ public struct AdminGeofenceView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showingAdd = true
                 } label: {
                     Image(systemName: "plus")

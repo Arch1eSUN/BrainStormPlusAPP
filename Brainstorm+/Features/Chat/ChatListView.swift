@@ -72,7 +72,7 @@ public struct ChatListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showNewConversation = true
                 } label: {
                     Image(systemName: "square.and.pencil")
@@ -162,6 +162,10 @@ public struct ChatListView: View {
                     channelRow(channel)
                 }
                 .bsAppearStagger(index: index)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 4, leading: BsSpacing.lg, bottom: 4, trailing: BsSpacing.lg))
+                .buttonStyle(.plain)
             }
         }
         .listStyle(.plain)
@@ -170,51 +174,56 @@ public struct ChatListView: View {
         .scrollContentBackground(.hidden)
     }
 
+    /// Bug-fix(视图割裂): channel row 之前是裸 HStack + system list 默认背景,
+    /// 跟 Approvals/Tasks 等模块的 BsContentCard row 视觉断层。包一层
+    /// BsContentCard,token 跟全 app 同步。
     @ViewBuilder
     private func channelRow(_ channel: ChatChannel) -> some View {
-        HStack(spacing: BsSpacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(channelColor(channel.type).opacity(0.15))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        // Hairline ring for a subtle glass/linear treatment —
-                        // matches the Dashboard attendance ring aesthetic.
-                        Circle()
-                            .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
-                    )
-                Image(systemName: channelIcon(channel.type))
-                    .font(.system(.title3))
-                    .foregroundStyle(channelColor(channel.type))
-            }
-
-            VStack(alignment: .leading, spacing: BsSpacing.xs) {
-                HStack(spacing: BsSpacing.xs) {
-                    Text(channel.name)
-                        .font(BsTypography.cardTitle)
-                        .foregroundStyle(BsColor.ink)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: BsSpacing.xs)
-                    Text(ChatDateFormatter.format(channel.lastMessageAt))
-                        .font(BsTypography.captionSmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                        .monospacedDigit()
-                        .layoutPriority(1)
+        BsContentCard(padding: .none) {
+            HStack(spacing: BsSpacing.lg) {
+                ZStack {
+                    Circle()
+                        .fill(channelColor(channel.type).opacity(0.15))
+                        .frame(width: 48, height: 48)
+                        .overlay(
+                            Circle()
+                                .stroke(channelColor(channel.type).opacity(0.25), lineWidth: 0.5)
+                        )
+                    Image(systemName: channelIcon(channel.type))
+                        .font(.system(.title3))
+                        .foregroundStyle(channelColor(channel.type))
                 }
 
-                Text(channel.lastMessage?.isEmpty == false
-                     ? channel.lastMessage!
-                     : "尚无消息 · 发一条开始聊天")
-                    .font(BsTypography.bodySmall)
-                    .foregroundStyle(channel.lastMessage?.isEmpty == false
-                                      ? BsColor.inkMuted
-                                      : BsColor.inkFaint)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                VStack(alignment: .leading, spacing: BsSpacing.xs) {
+                    HStack(spacing: BsSpacing.xs) {
+                        Text(channel.name)
+                            .font(BsTypography.cardTitle)
+                            .foregroundStyle(BsColor.ink)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: BsSpacing.xs)
+                        Text(ChatDateFormatter.format(channel.lastMessageAt))
+                            .font(BsTypography.captionSmall)
+                            .foregroundStyle(BsColor.inkMuted)
+                            .monospacedDigit()
+                            .layoutPriority(1)
+                    }
+
+                    Text(channel.lastMessage?.isEmpty == false
+                         ? channel.lastMessage!
+                         : "尚无消息 · 发一条开始聊天")
+                        .font(BsTypography.bodySmall)
+                        .foregroundStyle(channel.lastMessage?.isEmpty == false
+                                          ? BsColor.inkMuted
+                                          : BsColor.inkFaint)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
+            .padding(.horizontal, BsSpacing.md)
+            .padding(.vertical, BsSpacing.sm + 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, BsSpacing.xs)
         .contentShape(Rectangle())
     }
 

@@ -33,7 +33,7 @@ public struct HiringCandidatesView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Haptic.rigid()
+                                // Haptic removed: swipe action 系统自带反馈
                                 Task { await viewModel.delete(c) }
                             } label: {
                                 Label("删除", systemImage: "trash")
@@ -51,7 +51,7 @@ public struct HiringCandidatesView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showCreate = true
                 } label: {
                     Label("添加候选人", systemImage: "person.badge.plus")

@@ -114,7 +114,7 @@ struct DashboardView: View {
                     BsCommandPalette()
                 }
                 .refreshable {
-                    Haptic.soft()
+                    // Haptic removed: 用户反馈滑动场景不应震动
                     await viewModel.loadData()
                     await widgets.fetchAll(isManager: isManagerTier)
                     await attendance.loadToday()
@@ -151,8 +151,7 @@ struct DashboardView: View {
             Section {
                 BsWeeklyCadenceStrip(days: weekDays) { day in
                     // Phase 4c 已接入：长按 → 展示该日摘要 sheet
-                    // （haptic 在长按成功时发一次，sheet 手动 dismiss 不加 haptic）
-                    Haptic.light()
+                    // Haptic removed: BsWeeklyCadenceStrip 内部已含按压 haptic，避免双重震动
                     dayPeek = makeDayPeek(for: day)
                 }
                 .listRowBackground(Color.clear)
@@ -163,7 +162,7 @@ struct DashboardView: View {
             // —— 3. 所有应用 启动卡 ——
             Section {
                 BsAllAppsTile(previewIcons: BsAllAppsTile.sampleIcons) {
-                    Haptic.light()
+                    // Haptic removed: BsAllAppsTile 内部已含按压 haptic，避免双重震动
                     showCommandPalette = true
                 }
                 .listRowBackground(Color.clear)
@@ -269,7 +268,7 @@ struct DashboardView: View {
     /// 点击 = 打开命令面板。首次 onboarding 后 3 次脉冲发光环提示用户"这里可点"。
     private var wordmarkButton: some View {
         Button {
-            Haptic.light()
+            // Haptic removed: 用户反馈 navbar 按钮过密震动
             // 任何一次手动点击都停止 pulse 提示，算任务达成
             if !hasPulsedWordmark { hasPulsedWordmark = true }
             showCommandPalette = true
@@ -327,7 +326,7 @@ struct DashboardView: View {
     /// Trailing: 头像入口，点击打开个人设置 sheet。
     private var avatarButton: some View {
         Button {
-            Haptic.light()
+            // Haptic removed: 用户反馈 avatar 按钮过密震动
             showProfileSheet = true
         } label: {
             ZStack {

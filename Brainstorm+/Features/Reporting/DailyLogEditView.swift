@@ -70,7 +70,7 @@ public struct DailyLogEditView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: mood) { _, _ in Haptic.selection() }
+                    // Haptic removed: 用户反馈 picker 切换过密震动
                 }
 
                 Section("内容") {

@@ -114,11 +114,17 @@ public class ChatListViewModel: ObservableObject {
     /// index on `chat_channels(participant_pair_key) WHERE type='direct'`.
     public func findOrCreateDirectChannel(with otherUserId: UUID) async throws -> UUID {
         struct Params: Encodable { let p_other_user_id: String }
-        return try await client
+        // Bug-fix(新建对话失败): 之前 `return try await ...execute().value` 让 Swift
+        // 从函数返回类型推 UUID,iOS 26 / Supabase Swift 2.x 在 generic call site
+        // 上的类型推断有时会反推成 Void / Data,触发 noResults。改成显式
+        // `let id: UUID = ...` 把类型写死,跟 LeaveSubmitViewModel 等其他成功
+        // RPC 调用对齐。
+        let id: UUID = try await client
             .rpc("chat_find_or_create_direct_channel",
                  params: Params(p_other_user_id: otherUserId.uuidString))
             .execute()
             .value
+        return id
     }
 
     /// Creates a new group channel with the current user as owner and
@@ -133,7 +139,8 @@ public class ChatListViewModel: ObservableObject {
             let p_description: String?
             let p_member_ids: [String]
         }
-        return try await client
+        // 同 findOrCreateDirectChannel —— 显式 UUID binding 避免推断陷阱
+        let id: UUID = try await client
             .rpc("chat_create_group_channel",
                  params: Params(
                     p_name: name,
@@ -142,6 +149,7 @@ public class ChatListViewModel: ObservableObject {
                  ))
             .execute()
             .value
+        return id
     }
 
     /// Fetches a channel by id after a create/find RPC, so the caller can

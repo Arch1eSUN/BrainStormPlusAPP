@@ -220,7 +220,7 @@ private struct QuickActionTile: View {
             .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, perform: {}, onPressingChanged: { pressing in
                 if pressing != isPressed {
                     isPressed = pressing
-                    if pressing { Haptic.light() }
+                    // Haptic removed: 用户反馈手势 onPressingChanged 过密震动
                 }
             })
         }
@@ -479,59 +479,88 @@ private struct ProjectRowCard: View {
         NavigationLink(destination: ProjectDetailView(
             viewModel: ProjectDetailViewModel(client: supabase, projectId: project.id)
         )) {
-            VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
-                HStack(spacing: BsSpacing.sm + 2) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous)
-                            .fill(accent.opacity(0.15))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "folder")
-                            .font(.system(.subheadline, weight: .medium))
-                            .foregroundStyle(accent)
-                    }
-                    Text(project.name)
-                        .font(BsTypography.cardSubtitle)
-                        .foregroundStyle(BsColor.ink)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(project.progress)%")
-                        .font(BsTypography.captionSmall)
-                        .foregroundStyle(BsColor.inkMuted)
-                        .monospacedDigit()
-                }
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(BsColor.inkFaint.opacity(0.2))
-                        Capsule()
-                            .fill(accent)
-                            .frame(width: geo.size.width * CGFloat(min(max(project.progress, 0), 100)) / 100)
-                    }
-                }
-                .frame(height: 6)
-
-                HStack {
-                    Text("\(project.taskDone)/\(project.taskTotal) 完成")
-                        .font(BsTypography.meta)
-                        .foregroundStyle(BsColor.inkMuted)
-                    Spacer()
-                    if let date = project.targetDate {
-                        Text(date)
-                            .font(BsTypography.meta)
-                            .foregroundStyle(BsColor.inkMuted)
-                    }
-                }
-            }
-            .padding(BsSpacing.md + 2)
-            .background(BsColor.surfacePrimary.opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
-                    .stroke(BsColor.borderSubtle, lineWidth: 0.5)
-            )
+            rowBody
         }
         .buttonStyle(.plain)
+        // 长按系统设计 (docs/longpress-system.md)：
+        //   • 打开项目详情（与 default tap 等价，长按用户也常按习惯走 menu）
+        //   • 查看相关任务（跳到 TaskList 全量；项目筛选待 sprint）
+        //   • 拷贝项目名（轻量分享 helper）
+        //
+        // 编辑项目入口暂缺 ProjectEditSheet —— 待新 sprint 接入后挂在最底
+        // （destructive role 给"归档/删除"另开）。
+        .contextMenu {
+            NavigationLink(destination: ProjectDetailView(
+                viewModel: ProjectDetailViewModel(client: supabase, projectId: project.id)
+            )) {
+                Label("打开项目详情", systemImage: "arrow.up.forward.app")
+            }
+            NavigationLink(destination: ActionItemHelper.destination(for: .tasks)) {
+                Label("查看相关任务", systemImage: "checklist")
+            }
+            Button {
+                UIPasteboard.general.string = project.name
+                Haptic.light()
+            } label: {
+                Label("复制项目名", systemImage: "doc.on.doc")
+            }
+        }
+    }
+
+    /// 提取的视觉主体 —— 长按预览也会用同一份 body 渲染。
+    @ViewBuilder
+    private var rowBody: some View {
+        VStack(alignment: .leading, spacing: BsSpacing.sm + 2) {
+            HStack(spacing: BsSpacing.sm + 2) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: BsRadius.md - 2, style: .continuous)
+                        .fill(accent.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "folder")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(accent)
+                }
+                Text(project.name)
+                    .font(BsTypography.cardSubtitle)
+                    .foregroundStyle(BsColor.ink)
+                    .lineLimit(1)
+                Spacer()
+                Text("\(project.progress)%")
+                    .font(BsTypography.captionSmall)
+                    .foregroundStyle(BsColor.inkMuted)
+                    .monospacedDigit()
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(BsColor.inkFaint.opacity(0.2))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: geo.size.width * CGFloat(min(max(project.progress, 0), 100)) / 100)
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text("\(project.taskDone)/\(project.taskTotal) 完成")
+                    .font(BsTypography.meta)
+                    .foregroundStyle(BsColor.inkMuted)
+                Spacer()
+                if let date = project.targetDate {
+                    Text(date)
+                        .font(BsTypography.meta)
+                        .foregroundStyle(BsColor.inkMuted)
+                }
+            }
+        }
+        .padding(BsSpacing.md + 2)
+        .background(BsColor.surfacePrimary.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BsRadius.lg, style: .continuous)
+                .stroke(BsColor.borderSubtle, lineWidth: 0.5)
+        )
     }
 }
 

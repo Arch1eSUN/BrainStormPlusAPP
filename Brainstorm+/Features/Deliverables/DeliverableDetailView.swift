@@ -73,7 +73,7 @@ public struct DeliverableDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 菜单选项过密震动
                         showEditSheet = true
                     } label: {
                         Label("编辑交付物", systemImage: "pencil")
@@ -81,7 +81,7 @@ public struct DeliverableDetailView: View {
                     .disabled(viewModel.listViewModel == nil)
 
                     Button(role: .destructive) {
-                        Haptic.warning()
+                        // Haptic removed: 仅打开 confirm dialog，不是真删
                         showDeleteConfirm = true
                     } label: {
                         Label("删除交付物", systemImage: "trash")
@@ -161,7 +161,7 @@ public struct DeliverableDetailView: View {
             Menu {
                 ForEach(Deliverable.DeliverableStatus.primaryCases, id: \.self) { s in
                     Button {
-                        Haptic.selection()
+                        // Haptic removed: 菜单 status 切换过密震动
                         Task { await viewModel.updateStatus(s) }
                     } label: {
                         HStack {

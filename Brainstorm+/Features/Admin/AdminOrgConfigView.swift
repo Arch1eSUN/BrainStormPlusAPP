@@ -118,7 +118,7 @@ public struct AdminOrgConfigView: View {
                         Text(dept)
                         Spacer()
                         Button(role: .destructive) {
-                            Haptic.rigid()
+                            // Haptic removed: 本地数组编辑非关键 mutation；保存时再震
                             vm.departments.remove(at: idx)
                         } label: {
                             Image(systemName: "trash")
@@ -148,7 +148,7 @@ public struct AdminOrgConfigView: View {
                         Text(pos)
                         Spacer()
                         Button(role: .destructive) {
-                            Haptic.rigid()
+                            // Haptic removed: 本地数组编辑非关键 mutation；保存时再震
                             vm.positions.remove(at: idx)
                         } label: {
                             Image(systemName: "trash")

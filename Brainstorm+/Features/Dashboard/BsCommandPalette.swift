@@ -221,18 +221,28 @@ public struct BsCommandPalette: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    // Bug-fix(右上 X 不是圆形):
+                    // 之前 28×28 inner glass + 44×44 outer hit area 双层 frame,
+                    // ToolbarItem 容器把 button label 当 rect 渲染,glass-circle
+                    // 在某些主题下视觉跟周围背景对比不足,看起来像方块。
+                    // 修法:Circle().fill 显式画一个圆,加 0.5pt border 增强边缘
+                    // 识别;icon 用 .bold 加粗,foregroundStyle 用 inkMuted 跟
+                    // surfacePrimary 形成稳定对比。同样的 X 按钮 pattern 复用
+                    // 到 ApprovalCenterView / FinanceView 等其他全屏 modal。
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈关闭按钮过密震动
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(BsColor.ink)
-                            .frame(width: 28, height: 28)
-                            .glassEffect(.regular.interactive(), in: Circle())
+                            .font(.system(.subheadline, weight: .bold))
+                            .foregroundStyle(BsColor.inkMuted)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(BsColor.surfacePrimary))
+                            .overlay(Circle().stroke(BsColor.borderSubtle, lineWidth: 0.5))
                             .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("关闭")
                 }
             }

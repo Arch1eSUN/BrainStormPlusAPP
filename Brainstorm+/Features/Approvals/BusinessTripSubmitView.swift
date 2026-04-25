@@ -117,7 +117,7 @@ public struct BusinessTripSubmitView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .disabled(viewModel.isSubmitting)
@@ -131,7 +131,7 @@ public struct BusinessTripSubmitView: View {
                 }
             }
             .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
-            .onChange(of: viewModel.transportation) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker onChange 过密震动
         }
     }
 

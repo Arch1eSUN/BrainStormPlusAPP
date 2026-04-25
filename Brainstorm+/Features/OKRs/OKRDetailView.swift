@@ -153,7 +153,10 @@ public struct OKRDetailView: View {
                     newStatus: target
                 )
                 await viewModel.load()
-                Haptic.soft()
+                // 仅 .completed terminal action 触发 haptic
+                if target == .completed {
+                    Haptic.medium()
+                }
             } catch {
                 Haptic.warning()
                 actionError = ErrorLocalizer.localize(error)
@@ -165,7 +168,7 @@ public struct OKRDetailView: View {
         Task { @MainActor in
             do {
                 try await mutator.deleteObjective(objectiveId: viewModel.objective.id)
-                Haptic.rigid()
+                Haptic.warning() // destructive 确认完成
                 dismiss()
             } catch {
                 Haptic.warning()
@@ -179,7 +182,7 @@ public struct OKRDetailView: View {
             do {
                 try await mutator.deleteKeyResult(keyResultId: kr.id)
                 await viewModel.load()
-                Haptic.rigid()
+                Haptic.warning() // destructive 确认完成
             } catch {
                 Haptic.warning()
                 actionError = ErrorLocalizer.localize(error)
@@ -201,7 +204,7 @@ public struct OKRDetailView: View {
                 unit: unit
             )
             await viewModel.load()
-            Haptic.soft()
+            // Haptic removed: KR 元信息更新非 terminal action
             editingKr = nil
         } catch {
             Haptic.warning()
@@ -409,7 +412,7 @@ public struct OKRDetailView: View {
         return Menu {
             ForEach(transitions, id: \.self) { target in
                 Button {
-                    Haptic.selection()
+                    // Haptic removed: 菜单选项触发，mutation 时再震
                     pendingStatus = target
                 } label: {
                     Label(statusActionLabel(target), systemImage: statusActionIcon(target))
@@ -419,7 +422,7 @@ public struct OKRDetailView: View {
                 Divider()
             }
             Button(role: .destructive) {
-                Haptic.selection()
+                // Haptic removed: 菜单选项触发，真删确认时再震
                 pendingDeleteObjective = true
             } label: {
                 Label("删除目标", systemImage: "trash")
@@ -463,7 +466,7 @@ public struct OKRDetailView: View {
         .opacity(isLocked ? 0.7 : 1.0)
         .contextMenu {
             Button {
-                Haptic.selection()
+                // Haptic removed: contextMenu 选项过密震动
                 editingKr = kr
             } label: {
                 Label("编辑 KR 信息", systemImage: "pencil")
@@ -471,7 +474,7 @@ public struct OKRDetailView: View {
             .disabled(isLocked)
 
             Button(role: .destructive) {
-                Haptic.selection()
+                // Haptic removed: contextMenu 选项过密震动；真删确认时再震
                 pendingDeleteKr = kr
             } label: {
                 Label("删除 KR", systemImage: "trash")

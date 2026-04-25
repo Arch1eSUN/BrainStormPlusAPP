@@ -75,7 +75,7 @@ public struct AnnouncementCreateView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: priority) { _, _ in Haptic.selection() }
+                    // Haptic removed: 用户反馈 picker 切换过密震动
                 }
             }
             .navigationTitle("发布公告")

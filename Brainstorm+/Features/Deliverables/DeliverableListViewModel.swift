@@ -549,7 +549,7 @@ public final class DeliverableListViewModel: ObservableObject {
                 entityId: id
             )
 
-            Haptic.soft()
+            // Haptic removed: update 非关键 terminal mutation
             successMessage = "交付物已更新"
             return true
         } catch {
@@ -589,7 +589,7 @@ public final class DeliverableListViewModel: ObservableObject {
                 entityId: id
             )
 
-            Haptic.rigid()
+            Haptic.warning() // destructive 真删确认完成
             successMessage = "交付物已删除"
             return true
         } catch {

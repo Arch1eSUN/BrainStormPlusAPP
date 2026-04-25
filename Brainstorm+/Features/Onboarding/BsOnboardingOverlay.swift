@@ -39,7 +39,7 @@ public struct BsOnboardingOverlay: View {
                 HStack {
                     Spacer()
                     Button {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         onDismiss()
                     } label: {
                         // Polish: step down to caption weight so the tertiary
@@ -97,7 +97,7 @@ public struct BsOnboardingOverlay: View {
                     .contentShape(Rectangle().inset(by: -8))
                     .onTapGesture {
                         guard idx != currentStep else { return }
-                        Haptic.soft()
+                        // Haptic removed: page dot 切换属于 picker 类切换，过密震动
                         withAnimation(BsMotion.Anim.overshoot) { currentStep = idx }
                     }
             }
@@ -114,7 +114,7 @@ public struct BsOnboardingOverlay: View {
             currentStep == totalSteps - 1 ? "开始使用" : "下一步",
             size: .large
         ) {
-            Haptic.medium()
+            // Haptic removed: BsPrimaryButton 内部已含按压 haptic，避免双重震动
             if currentStep < totalSteps - 1 {
                 withAnimation(BsMotion.Anim.overshoot) {
                     currentStep += 1

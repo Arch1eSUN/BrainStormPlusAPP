@@ -76,7 +76,7 @@ public struct SettingsNotificationsView: View {
                 .accessibilityElement(children: .combine)
             }
             .tint(BsColor.brandAzure)
-            .onChange(of: viewModel.pushNotifications) { _, _ in Haptic.light() }
+            // Haptic removed: 用户反馈 toggle onChange 过密震动
 
             Toggle(isOn: $viewModel.emailNotifications) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -90,7 +90,7 @@ public struct SettingsNotificationsView: View {
                 .accessibilityElement(children: .combine)
             }
             .tint(BsColor.brandAzure)
-            .onChange(of: viewModel.emailNotifications) { _, _ in Haptic.light() }
+            // Haptic removed: 用户反馈 toggle onChange 过密震动
         } header: {
             Text("通知渠道")
         } footer: {
@@ -144,7 +144,7 @@ public struct SettingsNotificationsView: View {
                 get: { viewModel.preferences.types[key] },
                 set: {
                     viewModel.preferences.types[key] = $0
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toggle 过密震动
                 }
             )
         ) {
@@ -170,7 +170,7 @@ public struct SettingsNotificationsView: View {
                     .foregroundStyle(BsColor.ink)
             }
             .tint(BsColor.brandAzure)
-            .onChange(of: viewModel.preferences.quietHours.enabled) { _, _ in Haptic.light() }
+            // Haptic removed: 用户反馈 toggle onChange 过密震动
 
             if viewModel.preferences.quietHours.enabled {
                 timePickerRow(

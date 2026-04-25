@@ -248,7 +248,7 @@ public struct HiringCandidateDetailView: View {
             Menu {
                 ForEach(viewModel.positions) { pos in
                     Button(pos.title) {
-                        Haptic.selection()
+                        // Haptic removed: menu 选项过密震动
                         scoringPositionId = pos.id
                     }
                 }
@@ -304,7 +304,7 @@ public struct HiringCandidateDetailView: View {
 
         Button {
             guard let posId = positionId else { return }
-            Haptic.medium()
+            // Haptic removed: AI 评分非关键 mutation
             Task { await viewModel.scoreResume(positionId: posId) }
         } label: {
             HStack(spacing: 6) {

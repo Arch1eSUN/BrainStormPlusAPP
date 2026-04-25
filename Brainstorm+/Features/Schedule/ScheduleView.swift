@@ -58,7 +58,7 @@ public struct ScheduleView: View {
                     .padding(.bottom, 120) // safe space for tabbar
                 }
                 .refreshable {
-                    Haptic.soft()
+                    // Haptic removed: 用户反馈滑动场景不应震动
                     await viewModel.refresh()
                 }
             }
@@ -88,7 +88,7 @@ public struct ScheduleView: View {
 
                 // Jump to Today
                 Button(action: {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈辅助按钮过密震动
                     withAnimation(BsMotion.Anim.overshoot) {
                         viewModel.selectedDate = Date()
                     }
@@ -144,7 +144,7 @@ public struct ScheduleView: View {
     private func viewModePill(_ mode: ScheduleViewMode) -> some View {
         let isActive = viewModel.viewMode == mode
         return Button {
-            Haptic.light()
+            // Haptic removed: 用户反馈 view mode 切换过密震动
             withAnimation(BsMotion.Anim.overshoot) {
                 viewModel.viewMode = mode
             }
@@ -217,13 +217,13 @@ public struct ScheduleView: View {
                                 state: viewModel.states[entry.iso],
                                 isSelected: Calendar.current.isDate(entry.date, inSameDayAs: viewModel.selectedDate),
                                 onSelect: {
-                                    Haptic.selection()
+                                    // Haptic removed: 用户反馈列表行选择过密震动
                                     withAnimation(BsMotion.Anim.overshoot) {
                                         viewModel.selectedDate = entry.date
                                     }
                                 },
                                 onQuickApply: { kind in
-                                    Haptic.light()
+                                    // Haptic removed: 用户反馈列表辅助按钮过密震动
                                     quickApply = QuickApplyRoute(kind: kind, date: entry.date)
                                 }
                             )

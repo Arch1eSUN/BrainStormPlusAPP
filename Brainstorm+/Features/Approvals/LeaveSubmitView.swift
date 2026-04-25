@@ -154,7 +154,7 @@ public struct LeaveSubmitView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
+                    // Haptic removed: 用户反馈 picker 切换过密震动
                 }
 
                 Section("事由") {
@@ -204,7 +204,7 @@ public struct LeaveSubmitView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
-                        Haptic.light()
+                        // Haptic removed: 用户反馈辅助按钮过密震动
                         dismiss()
                     }
                     .disabled(viewModel.isSubmitting)
@@ -218,9 +218,7 @@ public struct LeaveSubmitView: View {
                 }
             }
             .bsLoadingOverlay(isLoading: viewModel.isSubmitting, label: "提交中…")
-            .onChange(of: viewModel.leaveType) { _, _ in Haptic.selection() }
-            .onChange(of: viewModel.priority) { _, _ in Haptic.selection() }
-            .onChange(of: viewModel.isHalfDay) { _, _ in Haptic.light() }
+            // Haptic removed: 用户反馈 picker / toggle onChange 过密震动
             .onChange(of: photoItem) { _, newValue in
                 guard let item = newValue else { return }
                 Task {
@@ -305,7 +303,7 @@ public struct LeaveSubmitView: View {
                     }
                     Spacer()
                     Button(role: .destructive) {
-                        Haptic.rigid()
+                        // Haptic removed: 本地清理 cert 状态非关键 mutation
                         viewModel.clearMedicalCert()
                     } label: {
                         Text("删除")

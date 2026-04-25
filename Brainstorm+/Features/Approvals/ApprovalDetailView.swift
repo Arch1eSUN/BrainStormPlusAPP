@@ -128,9 +128,9 @@ public struct ApprovalDetailView: View {
     private var actionBar: some View {
         let busy = viewModel.isApplyingAction
         HStack(spacing: 12) {
-            // 拒绝 —— glass-tinted danger capsule + warning haptic
+            // 拒绝 —— glass-tinted danger capsule（haptic 在 ApprovalCommentSheet 真提交时发）
             Button(role: .destructive) {
-                Haptic.warning()
+                // Haptic removed: 仅打开 comment sheet，真 reject 时再震
                 pendingDecision = .reject
             } label: {
                 HStack(spacing: 6) {
@@ -148,9 +148,9 @@ public struct ApprovalDetailView: View {
             .buttonStyle(.plain)
             .disabled(busy)
 
-            // 批准 —— glass-tinted success capsule + success haptic
+            // 批准 —— glass-tinted success capsule（haptic 在 ApprovalCommentSheet 真提交时发）
             Button {
-                Haptic.success()
+                // Haptic removed: 仅打开 comment sheet，真 approve 时再震
                 pendingDecision = .approve
             } label: {
                 HStack(spacing: 6) {
@@ -599,7 +599,7 @@ public struct ApprovalDetailView: View {
     @ViewBuilder
     private var revokeAffordance: some View {
         Button {
-            Haptic.rigid()
+            // Haptic removed: 仅打开 revoke sheet，真撤回提交时再震
             showRevokeSheet = true
         } label: {
             HStack(spacing: 6) {

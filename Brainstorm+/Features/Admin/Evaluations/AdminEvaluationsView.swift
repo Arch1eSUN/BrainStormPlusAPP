@@ -105,7 +105,7 @@ public struct AdminEvaluationsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     showBatchSheet = true
                 } label: {
                     Image(systemName: "bolt.horizontal.circle.fill")
@@ -119,7 +119,7 @@ public struct AdminEvaluationsView: View {
     private var monthControl: some View {
         HStack(spacing: 10) {
             Button {
-                Haptic.light()
+                // Haptic removed: 用户反馈月份切换按钮过密震动
                 Task { await vm.shiftMonth(by: -1); syncMonthPickerDate() }
             } label: {
                 Image(systemName: "chevron.left")
@@ -159,7 +159,7 @@ public struct AdminEvaluationsView: View {
             }
 
             Button {
-                Haptic.light()
+                // Haptic removed: 用户反馈月份切换按钮过密震动
                 Task { await vm.shiftMonth(by: 1); syncMonthPickerDate() }
             } label: {
                 Image(systemName: "chevron.right")
@@ -198,14 +198,14 @@ public struct AdminEvaluationsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .onChange(of: vm.statusFilter) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker 切换过密震动
         }
         .padding(.vertical, 6)
     }
 
     private func chipButton(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             action()
         } label: {
             Text(title)

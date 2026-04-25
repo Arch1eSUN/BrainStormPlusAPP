@@ -100,7 +100,7 @@ public struct AdminUserEditSheet: View {
                         Text("超级管理员").tag("superadmin")
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: appRole) { _, _ in Haptic.selection() }
+                    // Haptic removed: 用户反馈 picker onChange 过密震动
                 }
             } else {
                 Section("角色") {

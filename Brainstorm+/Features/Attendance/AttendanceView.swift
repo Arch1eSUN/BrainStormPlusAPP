@@ -271,7 +271,7 @@ public struct AttendanceView: View {
                     .lineLimit(2)
                 Spacer(minLength: 0)
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈辅助按钮过密震动
                     Task { await viewModel.punch() }
                 } label: {
                     Text("重试")

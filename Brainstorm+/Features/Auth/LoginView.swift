@@ -168,9 +168,7 @@ struct LoginView: View {
                     .submitLabel(.next)
                     .focused($focusedField, equals: .account)
                     .onSubmit { focusedField = .password }
-                    .onChange(of: focusedField) { _, new in
-                        if new == .account { Haptic.soft() }
-                    }
+                    // Haptic removed: focus 切换不应震动
                     .accessibilityLabel("工作邮箱或用户名")
             }
 
@@ -178,7 +176,7 @@ struct LoginView: View {
                 label: "密码",
                 trailingLabel: "忘记密码?",
                 trailingAction: {
-                    Haptic.soft()
+                    // Haptic removed: 用户反馈辅助按钮过密震动
                     focusedField = nil
                     showForgotPassword = true
                 },
@@ -189,9 +187,7 @@ struct LoginView: View {
                     .submitLabel(.go)
                     .focused($focusedField, equals: .password)
                     .onSubmit { handleLogin() }
-                    .onChange(of: focusedField) { _, new in
-                        if new == .password { Haptic.soft() }
-                    }
+                    // Haptic removed: focus 切换不应震动
                     .accessibilityLabel("登录密码")
             }
         }

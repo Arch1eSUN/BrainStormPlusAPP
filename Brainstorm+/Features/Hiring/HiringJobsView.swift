@@ -24,7 +24,7 @@ public struct HiringJobsView: View {
                 List {
                     ForEach(viewModel.positions) { pos in
                         Button {
-                            Haptic.light()
+                            // Haptic removed: 用户反馈列表行点击过密震动
                             editTarget = .edit(pos)
                         } label: {
                             row(pos)
@@ -32,13 +32,13 @@ public struct HiringJobsView: View {
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                Haptic.rigid()
+                                // Haptic removed: swipe action 系统自带反馈
                                 Task { await viewModel.delete(pos) }
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
                             Button {
-                                Haptic.light()
+                                // Haptic removed: swipe action 系统自带反馈
                                 editTarget = .edit(pos)
                             } label: {
                                 Label("编辑", systemImage: "pencil")
@@ -57,7 +57,7 @@ public struct HiringJobsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Haptic.light()
+                    // Haptic removed: 用户反馈 toolbar 按钮过密震动
                     editTarget = .new
                 } label: {
                     Label("新建岗位", systemImage: "plus")

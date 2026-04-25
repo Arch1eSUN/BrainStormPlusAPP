@@ -125,7 +125,7 @@ public struct TeamDirectoryView: View {
 
     private func chip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            Haptic.selection()
+            // Haptic removed: 用户反馈 chip 切换过密震动
             action()
         } label: {
             Text(title)

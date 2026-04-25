@@ -71,7 +71,7 @@ public struct HiringDataView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 8)
-            .onChange(of: selectedSection) { _, _ in Haptic.selection() }
+            // Haptic removed: 用户反馈 picker 切换过密震动
 
             Group {
                 if viewModel.isLoading && viewModel.contracts.isEmpty && viewModel.seniority.isEmpty {
